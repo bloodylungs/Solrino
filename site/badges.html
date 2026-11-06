@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Badges | Solrino</title>
+<meta name="description" content="Forty-one animated star badges that everyone using Solrino can see.">
+<meta name="theme-color" content="#09060a">
+<meta property="og:title" content="Badges | Solrino">
+<meta property="og:description" content="Forty-one animated star badges that everyone using Solrino can see.">
+<meta property="og:image" content="/assets/icon.png">
+<link rel="icon" href="/assets/icon.png">
+<link rel="preload" href="/assets/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<script>
+document.documentElement.classList.add("js");
+// The logo intro plays the first time someone opens the site, then never again in that browser
+try {
+  if (!localStorage.getItem("solrino-intro") && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    localStorage.setItem("solrino-intro", "1");
+    document.documentElement.classList.add("intro-on");
+  }
+} catch {}
+</script>
+</head>
+<body>
+<div class="intro" aria-hidden="true"><img src="/assets/icon.png" alt="" width="256" height="256" decoding="sync" fetchpriority="high"></div>
+<a class="skip" href="#main">Skip to content</a>
+<div class="backdrop" aria-hidden="true"></div>
+<div class="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
+
+<header class="bar" id="bar">
+  <a class="bar-logo" href="/" aria-label="Solrino home">
+    <span class="logo-sweep"><img src="/assets/icon.png" alt="" width="30" height="30"></span>
+    <span class="bar-name">Solrino</span>
+  </a>
+  <nav class="links" id="links" aria-label="Sections">
+    <a class="link" href="/" data-tab="top">Home</a>
+    <a class="link" href="/pings" data-tab="pings">Pings</a>
+    <a class="link" href="/modding" data-tab="modding">Modding</a>
+    <a class="link" href="/badges" data-tab="badges" aria-current="true">Badges</a>
+    <a class="link" href="/updates" data-tab="updates">Updates</a>
+  </nav>
+  <div class="bar-end">
+    <button class="icon-btn menu-btn" id="menu-btn" aria-label="Open sections" aria-expanded="false" aria-controls="links">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <a class="icon-btn" href="https://github.com/bloodylungs/Solrino" aria-label="Solrino on GitHub">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.6 9.6 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>
+    </a>
+    <button type="button" class="dl-btn" data-download title="Solrino">
+      <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 4v11m0 0 4.5-4.5M12 15l-4.5-4.5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Download
+    </button>
+  </div>
+</header>
+
+<main id="main">
+<header class="page-hero">
+  <h1>Badges everyone on Solrino <em>can see.</em></h1>
+  <p class="lede">Forty-one animated stars, and what each one is for.</p>
+</header>
+<section class="shell">
+  <ul class="badge-grid">
+    <li class="badge-card glass reveal" title="Solrino Developer"><img src="/assets/badges/developer.webp" alt="" width="144" height="144" loading="lazy"><b>Developer</b><span>Helps build Solrino.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Founder"><img src="/assets/badges/founder.webp" alt="" width="144" height="144" loading="lazy"><b>Founder</b><span>Founded Solrino.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Staff"><img src="/assets/badges/staff.webp" alt="" width="144" height="144" loading="lazy"><b>Staff</b><span>Part of the Solrino team.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Moderator"><img src="/assets/badges/moderator.webp" alt="" width="144" height="144" loading="lazy"><b>Moderator</b><span>Helps moderate the Solrino community.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Contributor"><img src="/assets/badges/contributor.webp" alt="" width="144" height="144" loading="lazy"><b>Contributor</b><span>Has contributed to Solrino.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Top Bug Hunter"><img src="/assets/badges/top_bug_hunter.webp" alt="" width="144" height="144" loading="lazy"><b>Top Bug Hunter</b><span>Has reported the most bugs in Solrino.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Alpha Tester"><img src="/assets/badges/alpha_tester.webp" alt="" width="144" height="144" loading="lazy"><b>Alpha Tester</b><span>Tries the earliest, roughest Solrino builds.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Beta Tester"><img src="/assets/badges/beta_tester.webp" alt="" width="144" height="144" loading="lazy"><b>Beta Tester</b><span>Tries Solrino updates before everyone else.</span></li>
+    <li class="badge-card glass reveal" title="Solrino #1 Donor"><img src="/assets/badges/number_one_donor.webp" alt="" width="144" height="144" loading="lazy"><b>#1 Donor</b><span>The person who has donated the most to Solrino.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Donor of the Year"><img src="/assets/badges/donor_of_the_year.webp" alt="" width="144" height="144" loading="lazy"><b>Donor of the Year</b><span>This year's top Solrino donor.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Donor of the Month"><img src="/assets/badges/donor_of_the_month.webp" alt="" width="144" height="144" loading="lazy"><b>Donor of the Month</b><span>This month's top Solrino donor.</span></li>
+    <li class="badge-card glass reveal" title="Solrino First Donor"><img src="/assets/badges/first_donor.webp" alt="" width="144" height="144" loading="lazy"><b>First Donor</b><span>The very first person to donate to Solrino.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Top Donor"><img src="/assets/badges/top_donor.webp" alt="" width="144" height="144" loading="lazy"><b>Top Donor</b><span>One of Solrino's top donors.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Top Donor Alt"><img src="/assets/badges/top_donor_alt.webp" alt="" width="144" height="144" loading="lazy"><b>Top Donor Alt</b><span>One of Solrino's top donors, in a different style.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Supporter+++ Alt"><img src="/assets/badges/supporter_plus_plus_plus_alt.webp" alt="" width="144" height="144" loading="lazy"><b>Supporter+++ Alt</b><span>Solrino's highest supporter tier, in a different style.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Supporter+++"><img src="/assets/badges/supporter_plus_plus_plus.webp" alt="" width="144" height="144" loading="lazy"><b>Supporter+++</b><span>Solrino's highest supporter tier.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Early Supporter"><img src="/assets/badges/obsidian.webp" alt="" width="144" height="144" loading="lazy"><b>Early Supporter</b><span>Supported Solrino in its early days.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Veteran"><img src="/assets/badges/veteran.webp" alt="" width="144" height="144" loading="lazy"><b>Veteran</b><span>One of Solrino's longest-running users.</span></li>
+    <li class="badge-card glass reveal" title="Solrino One Year on Solrino"><img src="/assets/badges/one_year_on_solrino.webp" alt="" width="144" height="144" loading="lazy"><b>One Year on Solrino</b><span>Has been on Solrino for a full year.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Supporter++ Alt"><img src="/assets/badges/supporter_plus_plus_alt.webp" alt="" width="144" height="144" loading="lazy"><b>Supporter++ Alt</b><span>A Supporter++ on Solrino, in a different style.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Supporter++"><img src="/assets/badges/supporter_plus_plus.webp" alt="" width="144" height="144" loading="lazy"><b>Supporter++</b><span>One of Solrino's bigger supporters.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Supporter+ Alt"><img src="/assets/badges/supporter_plus_alt.webp" alt="" width="144" height="144" loading="lazy"><b>Supporter+ Alt</b><span>A Supporter+ on Solrino, in a different style.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Supporter+"><img src="/assets/badges/supporter_plus.webp" alt="" width="144" height="144" loading="lazy"><b>Supporter+</b><span>Gives extra support to Solrino.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Supporter"><img src="/assets/badges/supporter.webp" alt="" width="144" height="144" loading="lazy"><b>Supporter</b><span>Supports Solrino.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Black Hole"><img src="/assets/badges/black_hole.webp" alt="" width="144" height="144" loading="lazy"><b>Black Hole</b><span>A very rare badge from Solrino's owner.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Bug Hunter"><img src="/assets/badges/bug_hunter.webp" alt="" width="144" height="144" loading="lazy"><b>Bug Hunter</b><span>Finds and reports bugs in Solrino.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Clockwork"><img src="/assets/badges/clockwork.webp" alt="" width="144" height="144" loading="lazy"><b>Clockwork</b><span>A rare badge from Solrino's owner.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Demon"><img src="/assets/badges/demon.webp" alt="" width="144" height="144" loading="lazy"><b>Demon</b><span>A rare badge from Solrino's owner.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Friend of Solrino"><img src="/assets/badges/friend_of_solrino.webp" alt="" width="144" height="144" loading="lazy"><b>Friend of Solrino</b><span>A friend of Solrino.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Halo"><img src="/assets/badges/halo.webp" alt="" width="144" height="144" loading="lazy"><b>Halo</b><span>A rare badge from Solrino's owner.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Kaleidoscope"><img src="/assets/badges/kaleidoscope.webp" alt="" width="144" height="144" loading="lazy"><b>Kaleidoscope</b><span>A rare badge from Solrino's owner.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Katana"><img src="/assets/badges/katana.webp" alt="" width="144" height="144" loading="lazy"><b>Katana</b><span>A rare badge from Solrino's owner.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Lava Lamp"><img src="/assets/badges/lava_lamp.webp" alt="" width="144" height="144" loading="lazy"><b>Lava Lamp</b><span>A rare badge from Solrino's owner.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Matrix Rain"><img src="/assets/badges/matrix_rain.webp" alt="" width="144" height="144" loading="lazy"><b>Matrix Rain</b><span>A rare badge from Solrino's owner.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Nebula"><img src="/assets/badges/nebula.webp" alt="" width="144" height="144" loading="lazy"><b>Nebula</b><span>A rare badge from Solrino's owner.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Oil Slick"><img src="/assets/badges/oil_slick.webp" alt="" width="144" height="144" loading="lazy"><b>Oil Slick</b><span>A rare badge from Solrino's owner.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Plasma Ball"><img src="/assets/badges/plasma_ball.webp" alt="" width="144" height="144" loading="lazy"><b>Plasma Ball</b><span>A rare badge from Solrino's owner.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Special"><img src="/assets/badges/special.webp" alt="" width="144" height="144" loading="lazy"><b>Special</b><span>Someone who is special to Solrino.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Spooky 2026"><img src="/assets/badges/spooky.webp" alt="" width="144" height="144" loading="lazy"><b>Spooky 2026</b><span>Free for everyone for Halloween 2026.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Valentine's 2027"><img src="/assets/badges/valentines_2027.webp" alt="" width="144" height="144" loading="lazy"><b>Valentine's 2027</b><span>Given out for Valentine's 2027.</span></li>
+    <li class="badge-card glass reveal" title="Solrino Winter 2026"><img src="/assets/badges/winter_2026.webp" alt="" width="144" height="144" loading="lazy"><b>Winter 2026</b><span>Free for everyone from December 1st, 2026.</span></li>
+  </ul>
+  <div class="sec-title reveal"><h2>How it <em>works.</em></h2></div>
+  <ol class="steps">
+    <li class="card glass reveal"><span class="step">1</span><h3>Get a badge</h3><p>Most badges come from Solrino's owner and can't be claimed or bought. Event badges are free for everyone.</p></li>
+    <li class="card glass reveal"><span class="step">2</span><h3>Equip it</h3><p>Type <code>/vanity</code> in chat, pick your badge and save.</p></li>
+    <li class="card glass reveal"><span class="step">3</span><h3>Everyone sees it</h3><p>It appears next to your name for everyone using Solrino, with no restart.</p></li>
+  </ol>
+  <p class="note center reveal">Badges only show inside Solrino. People on the Twitch website or other chat apps won't see them.</p>
+</section>
+</main>
+
+<footer class="foot">
+  <p>Built on <a href="https://github.com/Chatterino/chatterino2">Chatterino</a> and Moltorino. Solrino is an independent project, not made by or connected to either one, or to Twitch.</p>
+  <nav class="foot-links" aria-label="Legal and help">
+    <a href="https://github.com/bloodylungs/Solrino/issues">Report a problem</a>
+    <a href="/terms">Terms of Service</a>
+    <a href="/privacy">Privacy Policy</a>
+    <a href="/licenses">Licenses</a>
+  </nav>
+</footer>
+<div class="pings pings-screen" id="screen-pings" aria-live="polite"></div>
+<script src="/nav.js" defer></script>
+<script src="/site.js" defer></script>
+</body>
+</html>

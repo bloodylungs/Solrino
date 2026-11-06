@@ -1,0 +1,2 @@
+add_subdirectory(ircmessage)
+add_subdirectory(irctextformat)

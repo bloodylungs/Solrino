@@ -1,0 +1,61 @@
+// SPDX-FileCopyrightText: 2024 Contributors to Chatterino <https://chatterino.com>
+//
+// SPDX-License-Identifier: MIT
+
+#pragma once
+
+#include "messages/Emote.hpp"
+#include "providers/twitch/TwitchBadge.hpp"
+
+#include <QString>
+#include <IrcTagsRef>
+
+#include <tuple>
+#include <unordered_map>
+#include <vector>
+
+namespace chatterino {
+
+struct TwitchEmoteOccurrence {
+    int start;
+    int end;
+    EmotePtr ptr;
+    EmoteName name;
+
+    bool operator==(const TwitchEmoteOccurrence &other) const
+    {
+        return std::tie(this->start, this->end, this->ptr, this->name) ==
+               std::tie(other.start, other.end, other.ptr, other.name);
+    }
+};
+
+struct TwitchGifOccurrence {
+    int start;
+    int end;
+    EmotePtr ptr;
+    EmoteName name;
+    QString gifId;
+    QString gifUrl;
+
+    bool operator==(const TwitchGifOccurrence &other) const
+    {
+        return std::tie(this->start, this->end, this->ptr, this->name,
+                        this->gifId, this->gifUrl) ==
+               std::tie(other.start, other.end, other.ptr, other.name,
+                        other.gifId, other.gifUrl);
+    }
+};
+
+std::unordered_map<QString, QString> parseBadgeInfoTag(Communi::TagsRef tags);
+
+std::vector<TwitchBadge> parseBadgeTag(Communi::TagsRef tags,
+                                       const QString &tagName = "badges");
+
+std::vector<TwitchEmoteOccurrence> parseTwitchEmotes(Communi::TagsRef tags,
+                                                     QStringView content,
+                                                     int messageOffset);
+
+std::vector<TwitchGifOccurrence> parseTwitchGifs(Communi::TagsRef tags,
+                                                 const QString &content,
+                                                 int messageOffset);
+}  // namespace chatterino

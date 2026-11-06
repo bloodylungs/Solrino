@@ -1,0 +1,455 @@
+cmake_minimum_required(VERSION 3.24)
+# CMake upgrade notes:
+#  - In CMake >= 3.29, we should deprecate USE_ALTERNATE_LINKER in favour of CMake's CMAKE_LINKER_TYPE
+set(CMAKE_EXPORT_NO_PACKAGE_REGISTRY On) # For rapidjson
+cmake_policy(SET CMP0087 NEW) # evaluates generator expressions in `install(CODE/SCRIPT)`
+cmake_policy(SET CMP0091 NEW) # select MSVC runtime library through `CMAKE_MSVC_RUNTIME_LIBRARY`
+if(POLICY CMP0207)
+    cmake_policy(SET CMP0207 NEW)
+endif()
+include(FeatureSummary)
+include(FetchContent)
+
+list(APPEND CMAKE_MODULE_PATH
+    "${CMAKE_SOURCE_DIR}/cmake"
+    )
+
+if(WIN32 AND NOT MINGW)
+    include(EnableSegmentHeap)
+endif()
+
+option(BUILD_APP "Build Chatterino" ON)
+option(BUILD_TESTS "Build the tests for Chatterino" OFF)
+option(BUILD_BENCHMARKS "Build the benchmarks for Chatterino" OFF)
+option(USE_SYSTEM_PAJLADA_SETTINGS "Use system pajlada settings library" OFF)
+option(USE_SYSTEM_LIBCOMMUNI "Use system communi library" OFF)
+option(USE_SYSTEM_MINIAUDIO "Build Chatterino with your system miniaudio" OFF)
+option(BUILD_WITH_CRASHPAD "Build chatterino with crashpad" OFF)
+option(USE_PRECOMPILED_HEADERS "Use precompiled headers (Temporarily not supported on macOS)" ON)
+option(BUILD_WITH_QT6 "Build with Qt6" On)
+option(BUILD_WITH_LIBNOTIFY "Build with libnotify" ON)
+option(CHATTERINO_GENERATE_COVERAGE "Generate coverage files" OFF)
+option(BUILD_SHARED_LIBS "" OFF)
+option(CHATTERINO_LTO "Enable LTO for all targets" OFF)
+option(MOLTORINO_RELEASE_HARDENING "Enable Windows release linker settings" OFF)
+option(CHATTERINO_NO_AVIF_PLUGIN "Disable AVIF plugin" OFF)
+option(CHATTERINO_PLUGINS "Enable ALPHA plugin support in Chatterino" ON)
+option(CHATTERINO_USE_GDI_FONTENGINE "Use the legacy GDI fontengine instead of the new DirectWrite one on Windows (Qt 6.8.0 and later)" ON)
+option(CHATTERINO_ALLOW_PRIVATE_QT_API "Allow uses of Qt's private API - when enabling this, Chatterino must use the EXACT Qt version it was compiled against" OFF)
+option(CHATTERINO_SPELLCHECK "Enable spellchecking in Chatterino (requires Hunspell)" OFF)
+option(CHATTERINO_NIGHTLY_BUILD "Specifies whether this is a nightly build." OFF)
+
+option(CHATTERINO_SANITIZER_SUPPORT "Attempt to enable Sanitizer support on the test and app targets. Actual sanitizers can then be enabled with the SANITIZE_* options." OFF)
+mark_as_advanced(CHATTERINO_SANITIZER_SUPPORT)
+add_feature_info("Chatterino code sanitizer support" CHATTERINO_SANITIZER_SUPPORT "")
+
+option(CHATTERINO_UPDATER "Enable legacy Chatterino update checks" OFF)
+mark_as_advanced(CHATTERINO_UPDATER)
+
+option(MOLTORINO_VELOPACK "Enable Velopack updates" OFF)
+set(MOLTORINO_WINDOWS_APP_ID "" CACHE STRING "Windows app ID")
+if(MOLTORINO_WINDOWS_APP_ID)
+    string(LENGTH "${MOLTORINO_WINDOWS_APP_ID}" _moltorino_app_id_length)
+    if(NOT MOLTORINO_WINDOWS_APP_ID MATCHES "^[A-Za-z0-9][A-Za-z0-9._-]*$" OR
+       _moltorino_app_id_length GREATER 128)
+        message(FATAL_ERROR "Invalid MOLTORINO_WINDOWS_APP_ID: use up to 128 letters, digits, dots, underscores or hyphens.")
+    endif()
+endif()
+set(MOLTORINO_UPDATE_CHANNEL "stable" CACHE STRING "Update channel")
+set_property(CACHE MOLTORINO_UPDATE_CHANNEL PROPERTY STRINGS stable internal)
+if(NOT MOLTORINO_UPDATE_CHANNEL MATCHES "^(stable|internal)$")
+    message(FATAL_ERROR "MOLTORINO_UPDATE_CHANNEL must be stable or internal.")
+endif()
+
+option(MOLTORINO_YOUTUBE_ACCOUNTS "Enable YouTube accounts" ON)
+option(MOLTORINO_TIKTOK_ACCOUNTS "Enable TikTok accounts" ON)
+option(MOLTORINO_YOUTUBE_DIRECT_READ "Enable direct YouTube chat reading" ON)
+set(MOLTORINO_YOUTUBE_OAUTH_CLIENT_ID "" CACHE STRING "YouTube OAuth client ID")
+set(MOLTORINO_YOUTUBE_OAUTH_CLIENT_SECRET "" CACHE STRING "YouTube OAuth client secret")
+set(MOLTORINO_YOUTUBE_READ_ROOT "" CACHE STRING "YouTube read relay URL")
+if(NOT MOLTORINO_YOUTUBE_OAUTH_CLIENT_ID AND DEFINED ENV{MOLTORINO_YOUTUBE_OAUTH_CLIENT_ID})
+    set(MOLTORINO_YOUTUBE_OAUTH_CLIENT_ID "$ENV{MOLTORINO_YOUTUBE_OAUTH_CLIENT_ID}"
+        CACHE STRING "YouTube OAuth client ID" FORCE)
+endif()
+if(NOT MOLTORINO_YOUTUBE_OAUTH_CLIENT_SECRET AND DEFINED ENV{MOLTORINO_YOUTUBE_OAUTH_CLIENT_SECRET})
+    set(MOLTORINO_YOUTUBE_OAUTH_CLIENT_SECRET "$ENV{MOLTORINO_YOUTUBE_OAUTH_CLIENT_SECRET}"
+        CACHE STRING "YouTube OAuth client secret" FORCE)
+endif()
+mark_as_advanced(
+    MOLTORINO_YOUTUBE_OAUTH_CLIENT_ID
+    MOLTORINO_YOUTUBE_OAUTH_CLIENT_SECRET
+    MOLTORINO_YOUTUBE_READ_ROOT
+    MOLTORINO_YOUTUBE_DIRECT_READ
+)
+
+set(CHATTERINO_EXTRA_BUILD_STRING "" CACHE STRING "Provide an extra string to show in the about page under the Chatterino version. This string allows the use of Qt's HTML subset.")
+
+set(USE_ALTERNATE_LINKER "" CACHE STRING "Use alternate linker. Leave empty for system default. CMake 3.29 users can use CMAKE_LINKER_TYPE instead.")
+
+if(CHATTERINO_SANITIZER_SUPPORT)
+    list(APPEND CMAKE_MODULE_PATH
+        "${CMAKE_SOURCE_DIR}/cmake/sanitizers-cmake/cmake"
+    )
+    find_package(Sanitizers REQUIRED)
+endif()
+
+if(BUILD_TESTS)
+    list(APPEND VCPKG_MANIFEST_FEATURES "tests")
+endif()
+
+if(BUILD_BENCHMARKS)
+    list(APPEND VCPKG_MANIFEST_FEATURES "benchmarks")
+endif()
+
+project(chatterino
+    VERSION 15.5.1
+    DESCRIPTION "Solrino chat client"
+    HOMEPAGE_URL "https://moltorino.com/"
+)
+
+if(APPLE)
+    enable_language(OBJCXX)
+endif()
+
+if(APPLE AND CHATTERINO_SPELLCHECK)
+    message(STATUS "Spellcheck is disabled on macOS builds to avoid bundling Hunspell dylibs.")
+    set(CHATTERINO_SPELLCHECK OFF CACHE BOOL "Enable spellchecking in Chatterino (requires Hunspell)" FORCE)
+endif()
+
+if(CHATTERINO_GENERATE_COVERAGE)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        add_compile_options(-fprofile-instr-generate -fcoverage-mapping)
+        add_link_options(-fprofile-instr-generate -fcoverage-mapping)
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+        add_compile_options(-coverage)
+        add_link_options(-coverage)
+    endif()
+endif()
+
+if(CHATTERINO_LTO)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT CHATTERINO_ENABLE_LTO OUTPUT IPO_ERROR)
+    message(STATUS "LTO: Enabled (Supported: ${CHATTERINO_ENABLE_LTO} - ${IPO_ERROR})")
+else()
+    message(STATUS "LTO: Disabled")
+endif()
+
+if(MOLTORINO_RELEASE_HARDENING)
+    if(NOT WIN32 OR NOT MSVC)
+        message(FATAL_ERROR "MOLTORINO_RELEASE_HARDENING requires the Windows MSVC toolchain")
+    endif()
+    if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+        message(FATAL_ERROR "MOLTORINO_RELEASE_HARDENING requires a Release build")
+    endif()
+    if(NOT CHATTERINO_LTO OR NOT CHATTERINO_ENABLE_LTO)
+        message(FATAL_ERROR "MOLTORINO_RELEASE_HARDENING requires supported CHATTERINO_LTO=ON")
+    endif()
+    set(CMAKE_PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/private-symbols/$<CONFIG>")
+    set_property(GLOBAL APPEND PROPERTY JOB_POOLS moltorino_release_link=1)
+    set(CMAKE_JOB_POOL_LINK moltorino_release_link)
+    add_link_options("$<$<CONFIG:Release>:/DEBUG:FULL;/OPT:REF,ICF;/INCREMENTAL:NO;/CGTHREADS:1>")
+endif()
+
+if(BUILD_WITH_QT6)
+    set(MAJOR_QT_VERSION "6")
+else()
+    message(WARNING "Qt5 is not supported, continue building at your own risk")
+    set(MAJOR_QT_VERSION "5")
+endif()
+
+find_program(CCACHE_PROGRAM ccache)
+find_program(SCCACHE_PROGRAM sccache)
+if(SCCACHE_PROGRAM)
+    set(_compiler_launcher ${SCCACHE_PROGRAM})
+elseif(CCACHE_PROGRAM)
+    set(_compiler_launcher ${CCACHE_PROGRAM})
+endif()
+
+if(USE_ALTERNATE_LINKER)
+    find_program(LINKER_EXECUTABLE ld.${USE_ALTERNATE_LINKER} ${USE_ALTERNATE_LINKER})
+    if(LINKER_EXECUTABLE)
+        message(STATUS "Using alternate linker '${USE_ALTERNATE_LINKER}'")
+        add_link_options("-fuse-ld=${USE_ALTERNATE_LINKER}")
+    else()
+        message(FATAL_ERROR "Alternate linker ${USE_ALTERNATE_LINKER} could not be found under ld.${USE_ALTERNATIVE_LINKER} or ${USE_ALTERNATE_LINKER}")
+    endif()
+endif()
+
+if(_compiler_launcher)
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${_compiler_launcher}" CACHE STRING "CXX compiler launcher")
+    message(STATUS "Using ${_compiler_launcher} for speeding up build")
+
+    if(MSVC)
+        # /Zi can't be used with (s)ccache
+        # Use /Z7 instead (debug info in object files)
+        if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+            string(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+        elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+            string(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+        elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+            string(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+        endif()
+    endif()
+endif()
+
+set(_moltorino_pathmap_pairs "${CMAKE_SOURCE_DIR}=." "${CMAKE_BINARY_DIR}=./build")
+if(DEFINED ENV{USERPROFILE} AND NOT "$ENV{USERPROFILE}" STREQUAL "")
+    file(TO_CMAKE_PATH "$ENV{USERPROFILE}" _moltorino_user_profile)
+    list(APPEND _moltorino_pathmap_pairs "${_moltorino_user_profile}=~")
+endif()
+if(DEFINED ENV{HOME} AND NOT "$ENV{HOME}" STREQUAL "")
+    file(TO_CMAKE_PATH "$ENV{HOME}" _moltorino_home)
+    list(APPEND _moltorino_pathmap_pairs "${_moltorino_home}=~")
+endif()
+
+set(_moltorino_public_config "$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>")
+
+if(MSVC)
+    add_compile_options("$<${_moltorino_public_config}:/experimental:deterministic>")
+endif()
+
+foreach(_moltorino_pathmap_pair IN LISTS _moltorino_pathmap_pairs)
+    if(MSVC)
+        add_compile_options("$<${_moltorino_public_config}:/pathmap:${_moltorino_pathmap_pair}>")
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        add_compile_options("$<${_moltorino_public_config}:-ffile-prefix-map=${_moltorino_pathmap_pair}>")
+        add_compile_options("$<${_moltorino_public_config}:-fdebug-prefix-map=${_moltorino_pathmap_pair}>")
+        add_compile_options("$<${_moltorino_public_config}:-fmacro-prefix-map=${_moltorino_pathmap_pair}>")
+    endif()
+endforeach()
+
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/GIT.cmake)
+
+find_package(Qt${MAJOR_QT_VERSION} REQUIRED
+    COMPONENTS
+    Core
+    Widgets
+    Gui
+    Network
+    Svg
+    SvgWidgets
+    Concurrent
+    Sql
+)
+
+find_package(Qt${MAJOR_QT_VERSION} COMPONENTS WidgetsPrivate QUIET)
+find_package(Qt${MAJOR_QT_VERSION} COMPONENTS NetworkPrivate QUIET)
+if(CHATTERINO_ALLOW_PRIVATE_QT_API)
+    # Only exists since 6.10 and prints a warning regarding private headers
+    find_package(Qt${MAJOR_QT_VERSION} COMPONENTS GuiPrivate)
+endif()
+
+message(STATUS "Qt version: ${Qt${MAJOR_QT_VERSION}_VERSION}")
+
+if(APPLE AND TARGET WrapOpenGL::WrapOpenGL)
+    get_target_property(_qt_opengl_libraries WrapOpenGL::WrapOpenGL INTERFACE_LINK_LIBRARIES)
+    list(FILTER _qt_opengl_libraries EXCLUDE REGEX "(^-framework AGL$|/AGL[.]framework(/AGL)?$)")
+    set_property(TARGET WrapOpenGL::WrapOpenGL PROPERTY INTERFACE_LINK_LIBRARIES "${_qt_opengl_libraries}")
+    unset(_qt_opengl_libraries)
+endif()
+
+if(WIN32)
+    add_subdirectory(lib/WinToast EXCLUDE_FROM_ALL)
+    include(${CMAKE_CURRENT_LIST_DIR}/cmake/WinToast.cmake)
+endif()
+
+if(BUILD_APP)
+    include(${CMAKE_CURRENT_LIST_DIR}/cmake/Velopack.cmake)
+endif()
+
+# Find boost on the system
+set(BOOST_REQUIRED_COMPONENTS "")
+if (VCPKG_TARGET_TRIPLET)
+    list(APPEND BOOST_REQUIRED_COMPONENTS json)
+endif ()
+find_package(Boost REQUIRED CONFIG COMPONENTS ${BOOST_REQUIRED_COMPONENTS} OPTIONAL_COMPONENTS headers)
+
+# Find OpenSSL on the system
+find_package(OpenSSL REQUIRED)
+if(MOLTORINO_YOUTUBE_ACCOUNTS OR MOLTORINO_TIKTOK_ACCOUNTS)
+    include(Keychain)
+endif()
+if(WIN32 AND MOLTORINO_TIKTOK_ACCOUNTS)
+    include(WebView2)
+endif()
+find_package(Threads REQUIRED)
+
+find_package(WebP QUIET CONFIG)
+if(TARGET WebP::webpdemux AND TARGET WebP::webp)
+    set(CHATTERINO_WEBP_TARGETS WebP::webpdemux WebP::webp)
+else()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(WebP REQUIRED IMPORTED_TARGET libwebpdemux libwebp)
+    set(CHATTERINO_WEBP_TARGETS PkgConfig::WebP)
+endif()
+
+if(CHATTERINO_SPELLCHECK)
+    # Find from package manager
+    find_package(hunspell QUIET CONFIG)
+    if(NOT hunspell_FOUND)
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(hunspell REQUIRED IMPORTED_TARGET hunspell)
+        add_library(hunspell::hunspell ALIAS PkgConfig::hunspell)
+    endif()
+endif()
+
+find_package(libvpx QUIET CONFIG)
+find_package(webm QUIET CONFIG)
+find_package(libyuv QUIET CONFIG)
+if(NOT TARGET libvpx::libvpx)
+    find_path(VPX_INCLUDE_DIR vpx/vpx_decoder.h REQUIRED)
+    find_library(VPX_LIBRARY NAMES vpx REQUIRED)
+    add_library(libvpx::libvpx UNKNOWN IMPORTED)
+    set_target_properties(libvpx::libvpx PROPERTIES
+        IMPORTED_LOCATION "${VPX_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${VPX_INCLUDE_DIR}"
+    )
+endif()
+if(NOT TARGET webm::webm)
+    find_path(WEBM_INCLUDE_DIR webm/webm_parser.h REQUIRED)
+    find_library(WEBM_LIBRARY NAMES webm REQUIRED)
+    add_library(webm::webm UNKNOWN IMPORTED)
+    set_target_properties(webm::webm PROPERTIES
+        IMPORTED_LOCATION "${WEBM_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${WEBM_INCLUDE_DIR}"
+    )
+endif()
+if(NOT TARGET libyuv::libyuv)
+    find_path(YUV_INCLUDE_DIR libyuv/convert_argb.h REQUIRED)
+    find_library(YUV_LIBRARY NAMES yuv REQUIRED)
+    add_library(libyuv::libyuv UNKNOWN IMPORTED)
+    set_target_properties(libyuv::libyuv PROPERTIES
+        IMPORTED_LOCATION "${YUV_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${YUV_INCLUDE_DIR}"
+    )
+endif()
+
+find_library(LIBRT rt)
+
+if(USE_SYSTEM_LIBCOMMUNI)
+    find_package(LibCommuni REQUIRED)
+else()
+    set(LIBCOMMUNI_ROOT_LIB_FOLDER "${CMAKE_SOURCE_DIR}/lib/libcommuni")
+
+    if(NOT EXISTS "${LIBCOMMUNI_ROOT_LIB_FOLDER}/CMakeLists.txt")
+        message(FATAL_ERROR "Submodules probably not loaded, unable to find lib/libcommuni/CMakeLists.txt")
+    endif()
+
+    add_subdirectory("${LIBCOMMUNI_ROOT_LIB_FOLDER}" EXCLUDE_FROM_ALL)
+endif()
+
+if (BUILD_TESTS)
+    include(GoogleTest)
+
+    # For MSVC: Prevent overriding the parent project's compiler/linker settings
+    # See https://github.com/google/googletest/blob/main/googletest/README.md#visual-studio-dynamic-vs-static-runtimes
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+
+    add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/lib/googletest" "lib/googletest")
+
+    mark_as_advanced(
+        BUILD_GMOCK BUILD_GTEST BUILD_SHARED_LIBS
+        gmock_build_tests gtest_build_samples gtest_build_tests
+        gtest_disable_pthreads gtest_force_shared_crt gtest_hide_internal_symbols
+    )
+
+    set_target_properties(gtest PROPERTIES FOLDER lib)
+    set_target_properties(gtest_main PROPERTIES FOLDER lib)
+    set_target_properties(gmock PROPERTIES FOLDER lib)
+    set_target_properties(gmock_main PROPERTIES FOLDER lib)
+endif()
+
+if(BUILD_BENCHMARKS)
+    # Include system benchmark (Google Benchmark)
+    find_package(benchmark REQUIRED)
+endif()
+
+FetchContent_Declare(
+    RapidJSON
+    SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/lib/rapidjson
+    EXCLUDE_FROM_ALL
+    FIND_PACKAGE_ARGS
+)
+set(RAPIDJSON_BUILD_EXAMPLES Off CACHE INTERNAL "")
+set(RAPIDJSON_BUILD_TESTS Off CACHE INTERNAL "")
+
+FetchContent_Declare(
+    PajladaSignals
+    SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/lib/signals
+    EXCLUDE_FROM_ALL
+    FIND_PACKAGE_ARGS 0.1.3 CONFIG
+)
+FetchContent_Declare(
+    PajladaSerialize
+    SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/lib/serialize
+    EXCLUDE_FROM_ALL
+    FIND_PACKAGE_ARGS 0.3.0 CONFIG
+)
+FetchContent_Declare(
+    PajladaSettings
+    SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/lib/settings
+    EXCLUDE_FROM_ALL
+    FIND_PACKAGE_ARGS 0.5.1 CONFIG
+)
+
+FetchContent_MakeAvailable(RapidJSON PajladaSignals PajladaSerialize PajladaSettings)
+
+find_package(LRUCache REQUIRED)
+find_package(MagicEnum REQUIRED)
+find_package(Doxygen)
+find_package(BoostCertify REQUIRED)
+
+if (CHATTERINO_PLUGINS)
+    set(LUA_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/lib/lua/src")
+    add_subdirectory(lib/lua)
+
+    find_package(Sol2 REQUIRED)
+endif()
+
+if(BUILD_WITH_CRASHPAD)
+    add_subdirectory("${CMAKE_SOURCE_DIR}/tools/crash-handler")
+endif()
+
+if(NOT CHATTERINO_NO_AVIF_PLUGIN)
+    include(${CMAKE_SOURCE_DIR}/cmake/AVIF.cmake)
+endif()
+
+if(libavif_FOUND AND NOT CHATTERINO_NO_AVIF_PLUGIN)
+    message(STATUS "Adding AVIF plugin")
+    set(CHATTERINO_WITH_AVIF_PLUGIN ON)
+endif()
+
+add_subdirectory(lib/twitch-eventsub-ws)
+
+# Used to provide a date of build in the About page (for nightly builds). Getting the actual time of
+# compilation in CMake is a more involved, as documented in https://stackoverflow.com/q/24292898.
+# For CI runs, however, the date of build file generation should be consistent with the date of
+# compilation so this approximation is "good enough" for our purpose.
+if(DEFINED ENV{CHATTERINO_SKIP_DATE_GEN})
+    set(cmake_gen_date "1970-01-01")
+else()
+    string(TIMESTAMP cmake_gen_date "%Y-%m-%d")
+endif()
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Generate resource files
+include(cmake/resources/generate_resources.cmake)
+
+add_subdirectory(src)
+
+if(BUILD_TESTS OR BUILD_BENCHMARKS)
+    add_subdirectory(mocks)
+endif()
+
+if(BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
+
+if(BUILD_BENCHMARKS)
+    add_subdirectory(benchmarks)
+endif()
+
+feature_summary(WHAT ALL)

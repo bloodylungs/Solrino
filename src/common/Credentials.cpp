@@ -1,0 +1,287 @@
+// SPDX-FileCopyrightText: 2019 Contributors to Chatterino <https://chatterino.com>
+//
+// SPDX-License-Identifier: MIT
+
+#include "common/Credentials.hpp"
+
+#include "Application.hpp"
+#include "common/Modes.hpp"
+#include "debug/AssertInGuiThread.hpp"
+#include "singletons/Paths.hpp"
+#include "singletons/Settings.hpp"
+#include "util/CombinePath.hpp"
+#include "util/Variant.hpp"
+
+#include <QApplication>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSaveFile>
+#include <QStringBuilder>
+
+#include <variant>
+
+#ifndef NO_QTKEYCHAIN
+#    ifdef CMAKE_BUILD
+#        if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#            include "qt6keychain/keychain.h"
+#        else
+#            include "qt5keychain/keychain.h"
+#        endif
+#    else
+#        include <qtkeychain/keychain.h>
+#    endif
+#endif
+
+namespace {
+
+using namespace chatterino;
+
+QString formatName(const QString &provider, const QString &name)
+{
+    assert(!provider.contains(":"));
+    return u"solrino:" % provider % u':' % name;
+}
+
+bool useKeyring()
+{
+#ifdef NO_QTKEYCHAIN
+    return false;
+#endif
+    if (Modes::instance().isPortable)
+    {
+        return false;
+    }
+
+#ifdef Q_OS_LINUX
+    return getSettings()->useKeyring;
+#else
+    return true;
+#endif
+}
+
+QString insecurePath()
+{
+    return combinePath(getApp()->getPaths().settingsDirectory,
+                       "credentials.json");
+}
+
+QJsonDocument loadInsecure()
+{
+    QFile file(insecurePath());
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return {};
+    }
+
+    return QJsonDocument::fromJson(file.readAll());
+}
+
+void storeInsecure(const QJsonDocument &doc)
+{
+    QSaveFile file(insecurePath());
+    if (!file.open(QIODevice::WriteOnly))
+    {
+        return;
+    }
+    file.write(doc.toJson());
+    file.commit();
+}
+
+QJsonDocument &insecureInstance()
+{
+    static auto store = loadInsecure();
+    return store;
+}
+
+void queueInsecureSave()
+{
+    static bool isQueued = false;
+
+    if (!isQueued)
+    {
+        isQueued = true;
+        QTimer::singleShot(200, QApplication::instance(), [] {
+            storeInsecure(insecureInstance());
+            isQueued = false;
+        });
+    }
+}
+
+struct SetJob {
+    QString name;
+    QString credential;
+};
+
+struct EraseJob {
+    QString name;
+};
+
+using Job = std::variant<SetJob, EraseJob>;
+
+std::queue<Job> &jobQueue()
+{
+    static std::queue<Job> jobs;
+    return jobs;
+}
+
+void runNextJob()
+{
+#ifndef NO_QTKEYCHAIN
+    auto &&queue = jobQueue();
+
+    if (!queue.empty())
+    {
+
+        auto &&item = queue.front();
+
+        std::visit(
+            variant::Overloaded{
+                [](const SetJob &set) {
+                    auto *job = new QKeychain::WritePasswordJob("solrino");
+                    job->setAutoDelete(true);
+                    job->setKey(set.name);
+                    job->setTextData(set.credential);
+                    QObject::connect(job, &QKeychain::Job::finished,
+                                     QApplication::instance(), [](auto) {
+                                         runNextJob();
+                                     });
+                    job->start();
+                },
+                [](const EraseJob &erase) {
+                    auto *job = new QKeychain::DeletePasswordJob("solrino");
+                    job->setAutoDelete(true);
+                    job->setKey(erase.name);
+                    QObject::connect(job, &QKeychain::Job::finished,
+                                     QApplication::instance(), [](auto) {
+                                         runNextJob();
+                                     });
+                    job->start();
+                },
+            },
+            item);
+
+        queue.pop();
+    }
+#endif
+}
+
+void queueJob(Job &&job)
+{
+    auto &&queue = jobQueue();
+
+    queue.push(std::move(job));
+    if (queue.size() == 1)
+    {
+        runNextJob();
+    }
+}
+
+}
+
+namespace chatterino {
+
+Credentials &Credentials::instance()
+{
+    static Credentials creds;
+    return creds;
+}
+
+void Credentials::get(const QString &provider, const QString &name_,
+                      QObject *receiver,
+                      std::function<void(const QString &)> &&onLoaded)
+{
+    assertInGuiThread();
+
+    auto name = formatName(provider, name_);
+
+    if (useKeyring())
+    {
+#ifndef NO_QTKEYCHAIN
+
+        auto *job = new QKeychain::ReadPasswordJob("solrino");
+        job->setAutoDelete(true);
+        job->setKey(name);
+        QObject::connect(
+            job, &QKeychain::Job::finished, receiver,
+            [job, receiver, provider, name_,
+             onLoaded = std::move(onLoaded)](auto) mutable {
+                const auto text = job->textData();
+                if (!text.isEmpty())
+                {
+                    onLoaded(text);
+                    return;
+                }
+
+                // Nothing saved by Solrino yet, so use the login saved by
+                // Chatterino or Moltorino. This only reads it.
+                auto *legacy = new QKeychain::ReadPasswordJob("chatterino");
+                legacy->setAutoDelete(true);
+                legacy->setKey(u"chatterino:" % provider % u':' % name_);
+                QObject::connect(
+                    legacy, &QKeychain::Job::finished, receiver,
+                    [legacy, onLoaded = std::move(onLoaded)](auto) mutable {
+                        onLoaded(legacy->textData());
+                    },
+                    Qt::DirectConnection);
+                legacy->start();
+            },
+            Qt::DirectConnection);
+        job->start();
+#endif
+    }
+    else
+    {
+        const auto &instance = insecureInstance();
+
+        onLoaded(instance[name].toString());
+    }
+}
+
+void Credentials::set(const QString &provider, const QString &name_,
+                      const QString &credential)
+{
+    assertInGuiThread();
+
+    auto name = formatName(provider, name_);
+
+    if (useKeyring())
+    {
+        queueJob(SetJob{name, credential});
+    }
+    else
+    {
+        auto &instance = insecureInstance();
+
+        auto obj = instance.object();
+        obj[name] = credential;
+        instance.setObject(obj);
+
+        queueInsecureSave();
+    }
+}
+
+void Credentials::erase(const QString &provider, const QString &name_)
+{
+    assertInGuiThread();
+
+    auto name = formatName(provider, name_);
+
+    if (useKeyring())
+    {
+        queueJob(EraseJob{name});
+    }
+    else
+    {
+        auto &instance = insecureInstance();
+
+        if (auto it = instance.object().find(name);
+            it != instance.object().end())
+        {
+            instance.object().erase(it);
+        }
+
+        queueInsecureSave();
+    }
+}
+
+}

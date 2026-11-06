@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terms of Service | Solrino</title>
+<meta name="description" content="The terms for using Solrino, its website and its badge service.">
+<meta name="theme-color" content="#09060a">
+<meta property="og:title" content="Terms of Service | Solrino">
+<meta property="og:description" content="The terms for using Solrino, its website and its badge service.">
+<meta property="og:image" content="/assets/icon.png">
+<link rel="icon" href="/assets/icon.png">
+<link rel="preload" href="/assets/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<script>
+document.documentElement.classList.add("js");
+// The logo intro plays the first time someone opens the site, then never again in that browser
+try {
+  if (!localStorage.getItem("solrino-intro") && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    localStorage.setItem("solrino-intro", "1");
+    document.documentElement.classList.add("intro-on");
+  }
+} catch {}
+</script>
+</head>
+<body>
+<div class="intro" aria-hidden="true"><img src="/assets/icon.png" alt="" width="256" height="256" decoding="sync" fetchpriority="high"></div>
+<a class="skip" href="#main">Skip to content</a>
+<div class="backdrop" aria-hidden="true"></div>
+<div class="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
+
+<header class="bar" id="bar">
+  <a class="bar-logo" href="/" aria-label="Solrino home">
+    <span class="logo-sweep"><img src="/assets/icon.png" alt="" width="30" height="30"></span>
+    <span class="bar-name">Solrino</span>
+  </a>
+  <nav class="links" id="links" aria-label="Sections">
+    <a class="link" href="/" data-tab="top">Home</a>
+    <a class="link" href="/pings" data-tab="pings">Pings</a>
+    <a class="link" href="/modding" data-tab="modding">Modding</a>
+    <a class="link" href="/badges" data-tab="badges">Badges</a>
+    <a class="link" href="/updates" data-tab="updates">Updates</a>
+  </nav>
+  <div class="bar-end">
+    <button class="icon-btn menu-btn" id="menu-btn" aria-label="Open sections" aria-expanded="false" aria-controls="links">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <a class="icon-btn" href="https://github.com/bloodylungs/Solrino" aria-label="Solrino on GitHub">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.6 9.6 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>
+    </a>
+    <button type="button" class="dl-btn" data-download title="Solrino">
+      <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 4v11m0 0 4.5-4.5M12 15l-4.5-4.5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Download
+    </button>
+  </div>
+</header>
+
+<main id="main">
+<article class="page legal">
+  <header class="page-head">
+    <h1>Terms of Service</h1>
+    <p class="updated">Last updated November 4, 2026</p>
+  </header>
+  <p>These terms cover the Solrino app, this website, and Solrino's badge service. By using them, you agree to these terms. If you don't agree, don't use them.</p>
+
+  <h2>What Solrino is</h2>
+  <p>Solrino is a free Windows chat app built on the open source projects Chatterino and Moltorino. It's an independent project, and isn't made by or connected to Twitch, Chatterino, Moltorino, Discord or any other service it works with.</p>
+
+  <h2>Your use of Solrino</h2>
+  <ul>
+    <li>Follow the rules of the services you use through Solrino, including <a href="https://www.twitch.tv/p/legal/terms-of-service/">Twitch's Terms of Service</a>. You also need to meet their age requirements.</li>
+    <li>You're responsible for your accounts and what you do with them, including messages and moderator actions you send through Solrino.</li>
+    <li>Don't use Solrino to harass people, spam, break the law, or interfere with the app, its badge service, or anyone else's use of them.</li>
+    <li>Don't pretend to be someone else, or try to get or change badges in any way other than the app's normal features.</li>
+  </ul>
+
+  <h2>Badges</h2>
+  <p>Solrino badges are decorations with no monetary value. They're given and taken away at the owner's choice, and can change or stop being available at any time. They're only shown inside Solrino.</p>
+
+  <h2>Updates</h2>
+  <p>Solrino checks for new versions and downloads them automatically unless you turn that off in settings. It asks before installing, unless you've chosen to install when you quit.</p>
+
+  <h2>Open source</h2>
+  <p>Solrino includes software under open source licenses, including the MIT License. You can read them all on the <a href="/licenses">Licenses</a> page. Those licenses still apply to that software, and nothing in these terms limits your rights under them.</p>
+
+  <h2>No warranty</h2>
+  <p>Solrino is provided "as is", without warranties of any kind. It may have bugs, stop working, or lose settings, and features that rely on other services can break if those services change. Games and anti-cheat systems have their own rules, so check them if you use Solrino's on-screen popups while playing.</p>
+
+  <h2>Limit of liability</h2>
+  <p>As far as the law allows, Solrino's creator isn't liable for indirect or consequential damages, or for losses from using or not being able to use Solrino, including account actions taken by other services.</p>
+
+  <h2>Ending your use</h2>
+  <p>You can stop using Solrino at any time by uninstalling it. Access to the badge service can be removed from anyone who breaks these terms.</p>
+
+  <h2>Changes</h2>
+  <p>These terms may change. The date at the top shows the latest version, and continuing to use Solrino means you accept it.</p>
+
+  <h2>Contact</h2>
+  <p>Questions go through <a href="https://github.com/bloodylungs/Solrino/issues">Solrino's GitHub page</a>.</p>
+</article>
+</main>
+
+<footer class="foot">
+  <p>Built on <a href="https://github.com/Chatterino/chatterino2">Chatterino</a> and Moltorino. Solrino is an independent project, not made by or connected to either one, or to Twitch.</p>
+  <nav class="foot-links" aria-label="Legal and help">
+    <a href="https://github.com/bloodylungs/Solrino/issues">Report a problem</a>
+    <a href="/terms">Terms of Service</a>
+    <a href="/privacy">Privacy Policy</a>
+    <a href="/licenses">Licenses</a>
+  </nav>
+</footer>
+<div class="pings pings-screen" id="screen-pings" aria-live="polite"></div>
+<script src="/nav.js" defer></script>
+</body>
+</html>

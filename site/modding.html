@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Modding | Solrino</title>
+<meta name="description" content="Change the game in one click, show Discord you're modding, and keep your tools by the chat box.">
+<meta name="theme-color" content="#09060a">
+<meta property="og:title" content="Modding | Solrino">
+<meta property="og:description" content="Change the game in one click, show Discord you're modding, and keep your tools by the chat box.">
+<meta property="og:image" content="/assets/icon.png">
+<link rel="icon" href="/assets/icon.png">
+<link rel="preload" href="/assets/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<script>
+document.documentElement.classList.add("js");
+// The logo intro plays the first time someone opens the site, then never again in that browser
+try {
+  if (!localStorage.getItem("solrino-intro") && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    localStorage.setItem("solrino-intro", "1");
+    document.documentElement.classList.add("intro-on");
+  }
+} catch {}
+</script>
+</head>
+<body>
+<div class="intro" aria-hidden="true"><img src="/assets/icon.png" alt="" width="256" height="256" decoding="sync" fetchpriority="high"></div>
+<a class="skip" href="#main">Skip to content</a>
+<div class="backdrop" aria-hidden="true"></div>
+<div class="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
+
+<header class="bar" id="bar">
+  <a class="bar-logo" href="/" aria-label="Solrino home">
+    <span class="logo-sweep"><img src="/assets/icon.png" alt="" width="30" height="30"></span>
+    <span class="bar-name">Solrino</span>
+  </a>
+  <nav class="links" id="links" aria-label="Sections">
+    <a class="link" href="/" data-tab="top">Home</a>
+    <a class="link" href="/pings" data-tab="pings">Pings</a>
+    <a class="link" href="/modding" data-tab="modding" aria-current="true">Modding</a>
+    <a class="link" href="/badges" data-tab="badges">Badges</a>
+    <a class="link" href="/updates" data-tab="updates">Updates</a>
+  </nav>
+  <div class="bar-end">
+    <button class="icon-btn menu-btn" id="menu-btn" aria-label="Open sections" aria-expanded="false" aria-controls="links">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <a class="icon-btn" href="https://github.com/bloodylungs/Solrino" aria-label="Solrino on GitHub">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.6 9.6 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>
+    </a>
+    <button type="button" class="dl-btn" data-download title="Solrino">
+      <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 4v11m0 0 4.5-4.5M12 15l-4.5-4.5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Download
+    </button>
+  </div>
+</header>
+
+<main id="main">
+<header class="page-hero">
+  <h1>Mod without <em>leaving</em> the chat box.</h1>
+  <p class="lede">Everything you reach for while modding, right where you're already looking.</p>
+</header>
+<section class="shell">
+  <div class="split reveal">
+    <div>
+      <h2>Change the game in one click.</h2>
+      <p>Your most used games sit by the chat box as small buttons, and the ones you use most move to the front. Click one and it sends <code>!game fortnite</code>.</p>
+      <p class="note">A bot in the channel has to support the command. Some channels use a different one, so you can set a command for each channel and it stays saved for that channel. You choose the bar's position, size and alignment in settings.</p>
+    </div>
+    <div class="panel glass demo-games"><span class="chip chip-big" title="Sends !game valorant">Valorant</span><span class="chip chip-big" title="Sends !game minecraft">Minecraft</span><span class="chip chip-big" title="Sends !game fortnite">Fortnite</span><span class="chip chip-big" title="Sends !game just chatting">Just Chatting</span></div>
+  </div>
+  <div class="split split-flip reveal">
+    <div>
+      <h2>Show Discord what you're up to.</h2>
+      <p>Your Discord profile shows the chat you're in, and whether you're modding or chatting. It follows the sword button, so try it here.</p>
+      <p class="note">You can turn this off, or hide the chat name, in settings.</p>
+    </div>
+    <div class="panel glass discord-demo">
+      <button class="sword" id="sword" aria-pressed="false" aria-label="Moderation mode">&#9876;</button>
+      <div class="discord">
+        <span class="discord-playing">Watching</span>
+        <div class="discord-row">
+          <img src="/assets/icon.png" alt="" width="52" height="52">
+          <div><b>Solrino</b><span>In #emberline's chat</span><span id="discord-state">Chatting</span><span class="discord-time" id="discord-time">00:21</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="sec-title reveal"><h2>And the tools you <em>already</em> use.</h2></div>
+  <div class="cards three">
+    <article class="card glass reveal"><h3>Polls and predictions</h3><p>Start and manage them right from the chat box.</p></article>
+    <article class="card glass reveal"><h3>Mod presets</h3><p>Save the timeouts and bans you use most, one click from any message.</p></article>
+    <article class="card glass reveal"><h3>Mod history with undo</h3><p>See what you just did, and undo a mistake quickly.</p></article>
+    <article class="card glass reveal"><h3>Focus view</h3><p>Cut chat down to what you need while it's moving fast.</p></article>
+    <article class="card glass reveal"><h3>Saved messages</h3><p>Keep messages you'll want to come back to, plus quick phrases you send often.</p></article>
+    <article class="card glass reveal"><h3>Command palette</h3><p>Press <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>P</kbd> and jump straight to any tool.</p></article>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <p>Built on <a href="https://github.com/Chatterino/chatterino2">Chatterino</a> and Moltorino. Solrino is an independent project, not made by or connected to either one, or to Twitch.</p>
+  <nav class="foot-links" aria-label="Legal and help">
+    <a href="https://github.com/bloodylungs/Solrino/issues">Report a problem</a>
+    <a href="/terms">Terms of Service</a>
+    <a href="/privacy">Privacy Policy</a>
+    <a href="/licenses">Licenses</a>
+  </nav>
+</footer>
+<div class="pings pings-screen" id="screen-pings" aria-live="polite"></div>
+<script src="/nav.js" defer></script>
+<script src="/site.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+name = "solrino-badges"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+[vars]
+# Only this Twitch account can give and take badges
+OWNER_USER_ID = "798782097"
+
+# The older store, read once to carry over badges already given
+[[kv_namespaces]]
+binding = "BADGES"
+id = "14755de5b2514c9fade82ca3db369d00"
+
+[[durable_objects.bindings]]
+name = "HUB"
+class_name = "BadgeHub"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["BadgeHub"]

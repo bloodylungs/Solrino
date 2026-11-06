@@ -1,0 +1,17 @@
+[
+    {
+        "fileName" : "orientation_all.png",
+        "colorSpace" : {
+            "description" : "Linear sRGB",
+            "primaries" : "SRgb",
+            "transferFunction" : "Linear",
+            "gamma" : 1
+        },
+        "metadata" : [
+            {
+                "key" : "Software" ,
+                "value" : "GEGL"
+            }
+        ]
+    }
+]

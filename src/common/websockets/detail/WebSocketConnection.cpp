@@ -1,0 +1,67 @@
+// SPDX-FileCopyrightText: 2025 Contributors to Chatterino <https://chatterino.com>
+//
+// SPDX-License-Identifier: MIT
+
+#include "common/websockets/detail/WebSocketConnection.hpp"
+
+#include "common/DiagnosticPrivacy.hpp"
+#include "common/QLogging.hpp"
+#include "WebSocketPoolImpl.hpp"
+
+#include <boost/asio/strand.hpp>
+
+namespace chatterino::ws::detail {
+
+WebSocketConnection::WebSocketConnection(
+    WebSocketOptions options, int id,
+    std::unique_ptr<WebSocketListener> listener, WebSocketPoolImpl *pool,
+    boost::asio::io_context &ioc)
+    : options(std::move(options))
+    , listener(std::move(listener))
+    , pool(pool)
+    , resolver(boost::asio::make_strand(ioc))
+    , id(id)
+{
+    if (diagnostics::mayLogUrl(this->options.url))
+    {
+        qCDebug(chatterinoWebsocket) << *this << "Created";
+    }
+}
+
+WebSocketConnection::~WebSocketConnection()
+{
+    assert(!this->listener && !this->pool);
+    if (diagnostics::mayLogUrl(this->options.url))
+    {
+        qCDebug(chatterinoWebsocket) << *this << "Destroyed";
+    }
+}
+
+QDebug operator<<(QDebug dbg, const WebSocketConnection &conn)
+{
+    QDebugStateSaver state(dbg);
+
+    dbg.noquote().nospace()
+        << '[' << conn.id << '|' << conn.options.url.toDisplayString() << ']';
+
+    return dbg;
+}
+
+void WebSocketConnection::detach()
+{
+    if (this->listener)
+    {
+        this->listener->onClose(std::move(this->listener));
+    }
+    if (this->pool)
+    {
+        this->pool->removeConnection(this);
+        this->pool = nullptr;
+    }
+    if (diagnostics::mayLogUrl(this->options.url))
+    {
+        qCDebug(chatterinoWebsocket) << *this << "Detached";
+    }
+}
+
+}

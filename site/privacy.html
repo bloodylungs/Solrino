@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy | Solrino</title>
+<meta name="description" content="What data Solrino uses, where it goes, and how to control it.">
+<meta name="theme-color" content="#09060a">
+<meta property="og:title" content="Privacy Policy | Solrino">
+<meta property="og:description" content="What data Solrino uses, where it goes, and how to control it.">
+<meta property="og:image" content="/assets/icon.png">
+<link rel="icon" href="/assets/icon.png">
+<link rel="preload" href="/assets/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<script>
+document.documentElement.classList.add("js");
+// The logo intro plays the first time someone opens the site, then never again in that browser
+try {
+  if (!localStorage.getItem("solrino-intro") && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    localStorage.setItem("solrino-intro", "1");
+    document.documentElement.classList.add("intro-on");
+  }
+} catch {}
+</script>
+</head>
+<body>
+<div class="intro" aria-hidden="true"><img src="/assets/icon.png" alt="" width="256" height="256" decoding="sync" fetchpriority="high"></div>
+<a class="skip" href="#main">Skip to content</a>
+<div class="backdrop" aria-hidden="true"></div>
+<div class="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
+
+<header class="bar" id="bar">
+  <a class="bar-logo" href="/" aria-label="Solrino home">
+    <span class="logo-sweep"><img src="/assets/icon.png" alt="" width="30" height="30"></span>
+    <span class="bar-name">Solrino</span>
+  </a>
+  <nav class="links" id="links" aria-label="Sections">
+    <a class="link" href="/" data-tab="top">Home</a>
+    <a class="link" href="/pings" data-tab="pings">Pings</a>
+    <a class="link" href="/modding" data-tab="modding">Modding</a>
+    <a class="link" href="/badges" data-tab="badges">Badges</a>
+    <a class="link" href="/updates" data-tab="updates">Updates</a>
+  </nav>
+  <div class="bar-end">
+    <button class="icon-btn menu-btn" id="menu-btn" aria-label="Open sections" aria-expanded="false" aria-controls="links">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <a class="icon-btn" href="https://github.com/bloodylungs/Solrino" aria-label="Solrino on GitHub">
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.6 9.6 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>
+    </a>
+    <button type="button" class="dl-btn" data-download title="Solrino">
+      <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 4v11m0 0 4.5-4.5M12 15l-4.5-4.5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Download
+    </button>
+  </div>
+</header>
+
+<main id="main">
+<article class="page legal">
+  <header class="page-head">
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated November 4, 2026</p>
+  </header>
+  <p>This explains what data Solrino uses, where it goes, and how to control it. Solrino doesn't sell your data, show ads, or use analytics to track you.</p>
+
+  <h2>On your computer</h2>
+  <p>Your settings, tabs, saved messages and logs stay on your PC, in <code>%APPDATA%\Solrino</code>. Your Twitch login token is saved in that folder too, in an ordinary settings file, so never share that folder or its files with anyone. Other logins can be kept in Windows Credential Manager. Uninstalling Solrino keeps this folder so a reinstall picks up your settings, so delete it yourself if you want everything gone.</p>
+
+  <h2>Solrino's badge service</h2>
+  <p>Solrino runs a small service on Cloudflare so badges can be seen by everyone using the app.</p>
+  <ul>
+    <li><b>What it stores:</b> your Twitch user ID, the badges you've been given, the one you've equipped, and the order and visibility you chose for your badges. This list is public, because every copy of Solrino reads it to show badges. Nothing is stored for you until you're given a badge or save your badge setup.</li>
+    <li><b>Your Twitch login:</b> when you save your badges, your app sends your Twitch login token to the service, which passes it to Twitch to confirm who you are. It's used only for that check, and isn't stored or logged by Solrino's code.</li>
+    <li><b>Live updates:</b> your app keeps a connection open to the service so badge changes appear right away.</li>
+  </ul>
+  <p>To have your badge data removed, ask through <a href="https://github.com/bloodylungs/Solrino/issues">Solrino's GitHub page</a>. Cloudflare handles this traffic, and may keep its own technical logs under its <a href="https://www.cloudflare.com/privacypolicy/">privacy policy</a>.</p>
+
+  <h2>Discord</h2>
+  <p>If Discord is open on your PC, Solrino can show your activity there, including the chat you're in and whether you're modding. It talks to the Discord app on your computer, and your Discord friends can see this. You can turn it off, or hide the chat name, in <b>Settings &rarr; General</b>. Discord's <a href="https://discord.com/privacy">privacy policy</a> applies.</p>
+
+  <h2>Other services the app connects to</h2>
+  <p>Like other chat apps, Solrino connects directly to other services. They can see your IP address and whatever the feature sends them, and their own privacy policies apply:</p>
+  <ul>
+    <li><b>Chat platforms:</b> Twitch, and Kick, YouTube or TikTok if you use them.</li>
+    <li><b>Emotes and badges:</b> services such as 7TV, BetterTTV and FrankerFaceZ, plus public badge lists including Moltorino's, which Solrino only reads from.</li>
+    <li><b>Message history:</b> recent-message services that fill in chat when you join a channel.</li>
+    <li><b>Features you choose to use:</b> translation, link previews, image uploads, settings backup sharing, and signing in to Moltorino features. These go to the services that provide them, including Moltorino, which runs separately from Solrino.</li>
+    <li><b>Updates:</b> GitHub, to check for and download new versions.</li>
+  </ul>
+
+  <h2>This website</h2>
+  <p>This site doesn't use cookies, analytics or ad trackers. It loads the latest version information from GitHub, and it's hosted on Cloudflare, so both can see your IP address when you visit. The chat on the home page is a demo: what you type there stays in your browser.</p>
+
+  <h2>Children</h2>
+  <p>Solrino isn't meant for children under 13, or under the minimum age for Twitch where you live.</p>
+
+  <h2>Changes</h2>
+  <p>This policy may change. The date at the top shows the latest version.</p>
+
+  <h2>Contact</h2>
+  <p>Privacy questions go through <a href="https://github.com/bloodylungs/Solrino/issues">Solrino's GitHub page</a>. It's public, so don't post anything private there.</p>
+</article>
+</main>
+
+<footer class="foot">
+  <p>Built on <a href="https://github.com/Chatterino/chatterino2">Chatterino</a> and Moltorino. Solrino is an independent project, not made by or connected to either one, or to Twitch.</p>
+  <nav class="foot-links" aria-label="Legal and help">
+    <a href="https://github.com/bloodylungs/Solrino/issues">Report a problem</a>
+    <a href="/terms">Terms of Service</a>
+    <a href="/privacy">Privacy Policy</a>
+    <a href="/licenses">Licenses</a>
+  </nav>
+</footer>
+<div class="pings pings-screen" id="screen-pings" aria-live="polite"></div>
+<script src="/nav.js" defer></script>
+</body>
+</html>

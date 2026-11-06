@@ -1,0 +1,928 @@
+// SPDX-FileCopyrightText: 2018 Contributors to Chatterino <https://chatterino.com>
+//
+// SPDX-License-Identifier: MIT
+
+#pragma once
+
+#include "common/FlagsEnum.hpp"
+#include "messages/ImageSet.hpp"
+#include "messages/Link.hpp"
+#include "messages/MessageColor.hpp"
+#include "providers/links/LinkInfo.hpp"
+#include "singletons/Fonts.hpp"
+
+#include <magic_enum/magic_enum.hpp>
+#include <pajlada/signals/signalholder.hpp>
+#include <QRect>
+#include <QString>
+#include <QTime>
+
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <vector>
+
+class QJsonObject;
+
+namespace chatterino {
+class Channel;
+class ModerationAction;
+struct MessageLayoutContainer;
+class MessageLayoutElement;
+struct MessageLayoutContext;
+
+class Image;
+using ImagePtr = std::shared_ptr<Image>;
+
+struct Emote;
+using EmotePtr = std::shared_ptr<const Emote>;
+
+struct TwitchUser;
+
+class ChannelAvatarSource
+{
+public:
+    void setAvatarUrl(QString avatarUrl);
+    void setTwitchUserId(QString userId);
+    ImagePtr image() const;
+
+private:
+    QString currentAvatarUrl() const;
+
+    QString avatarUrl_;
+    QString twitchUserId_;
+    mutable std::shared_ptr<TwitchUser> twitchUser_;
+    mutable QString loadedAvatarUrl_;
+    mutable ImagePtr avatarImage_;
+    mutable bool avatarRequested_ = false;
+    mutable pajlada::Signals::SignalHolder avatarSignalHolder_;
+};
+
+/** @exposeenum c2.MessageElementFlag [flags] */
+enum class MessageElementFlag : int64_t {
+    None = 0LL,
+    Misc = (1LL << 0),
+    Text = (1LL << 1),
+
+    Username = (1LL << 2),
+    Timestamp = (1LL << 3),
+
+    EmoteImage = (1LL << 4),
+    EmoteText = (1LL << 5),
+    Emote = EmoteImage | EmoteText,
+
+    BadgeHomiesSupporter = (1LL << 7),
+    BadgeHomies = BadgeHomiesSupporter,
+
+    ChannelPointReward = (1LL << 8),
+    ChannelPointRewardImage = ChannelPointReward | EmoteImage,
+
+    // unused: (1LL << 9),
+    // unused: (1LL << 10),
+
+    BitsStatic = (1LL << 11),
+    BitsAnimated = (1LL << 12),
+
+    BadgeSharedChannel = (1LL << 37),
+
+    BadgeGlobalAuthority = (1LL << 13),
+
+    BadgePredictions = (1LL << 14),
+
+    BadgeChannelAuthority = (1LL << 15),
+
+    BadgeSubscription = (1LL << 16),
+
+    BadgeVanity = (1LL << 17),
+
+    BadgeChatterino = (1LL << 18),
+
+    BadgeSevenTV = (1LL << 36),
+
+    BadgeBttv = (1LL << 6),
+
+    BadgeFfz = (1LL << 19),
+
+    BadgeFfzAp = (1LL << 41),
+
+    BadgeBluzyrino = (1LL << 43),
+
+    BadgeJilChat = (1LL << 44),
+
+    BadgeWydios = (1LL << 45),
+
+    BadgeBadgeHQ = (1LL << 46),
+
+    BadgeHomiesCustom = (1LL << 35),
+    BadgeMoltorino = (1LL << 34),
+
+    Badges = BadgeGlobalAuthority | BadgePredictions | BadgeChannelAuthority |
+             BadgeSubscription | BadgeVanity | BadgeChatterino | BadgeSevenTV |
+             BadgeFfz | BadgeFfzAp | BadgeSharedChannel | BadgeBttv |
+             BadgeHomiesSupporter | BadgeHomiesCustom | BadgeMoltorino |
+             BadgeBluzyrino | BadgeJilChat | BadgeWydios | BadgeBadgeHQ,
+
+    ChannelName = (1LL << 20),
+
+    BitsAmount = (1LL << 21),
+
+    ModeratorTools = (1LL << 22),
+
+    EmojiImage = (1LL << 23),
+    EmojiText = (1LL << 24),
+    EmojiAll = EmojiImage | EmojiText,
+
+    AlwaysShow = (1LL << 25),
+
+    // used in the ChannelView class to make the collapse buttons visible if
+    // needed
+    Collapsed = (1LL << 26),
+
+    // A mention of a username that isn't the author of the message
+    Mention = (1LL << 27),
+
+    RepeatedMessageCounter = (1LL << 28),
+
+    // used to check if links should be lowercased
+    LowercaseLinks = (1LL << 29),
+
+    AutoModReviewExpanded = (1LL << 30),
+
+    AutoModReviewCompact = (1LL << 31),
+
+    // for elements of the message reply
+    RepliedMessage = (1LL << 32),
+
+    // for the reply button element
+    ReplyButton = (1LL << 33),
+
+    AbnormalClientNonce = (1LL << 38),
+
+    ChannelPointRewardHeader = (1LL << 39),
+
+    Pronouns = (1LL << 40),
+
+    IgnoreExactMatch = (1LL << 42),
+
+    /// `Username` but the username comes from Kick
+    KickUsername = (1LL << 50),
+
+    /// Always show the platform badge.
+    PlatformBadgeAlways = (1LL << 51),
+    /// Show the platform badge if the selected channel's platform is different
+    /// from the message's.
+    PlatformBadgeIfUnselected = (1LL << 52),
+
+    ChannelAvatar = (1LL << 53),
+
+    NoUsernamePaint = (1LL << 54),
+
+    /// The timestamp in the header (i.e. top part of the "Announcement" message)
+    HeaderTimestamp = (1LL << 55),
+
+    /// Applied to all elements of the announcement header
+    AnnouncementHeader = (1LL << 56),
+
+    /// Applied to all elements of subscription and resubscription headers
+    SubscriptionHeader = (1LL << 57),
+
+    /// Applied to all elements of watch streak headers
+    WatchStreakHeader = (1LL << 58),
+
+    Default = Timestamp | Badges | Username | BitsStatic | EmoteImage |
+              BitsAmount | Text | AlwaysShow,
+};
+using MessageElementFlags = FlagsEnum<MessageElementFlag>;
+
+class MessageElement
+{
+public:
+    virtual ~MessageElement();
+
+    MessageElement(const MessageElement &) = delete;
+    MessageElement &operator=(const MessageElement &) = delete;
+
+    MessageElement(MessageElement &&) = delete;
+    MessageElement &operator=(MessageElement &&) = delete;
+
+    virtual MessageElement *setLink(const Link &link);
+    MessageElement *setTooltip(const QString &tooltip);
+
+    MessageElement *setTrailingSpace(bool value);
+    const QString &getTooltip() const;
+
+    virtual Link getLink() const;
+    bool hasTrailingSpace() const;
+    MessageElementFlags getFlags() const;
+    void addFlags(MessageElementFlags flags);
+
+    virtual void addToContainer(MessageLayoutContainer &container,
+                                const MessageLayoutContext &ctx) = 0;
+
+    virtual QJsonObject toJson() const;
+
+    virtual std::unique_ptr<MessageElement> clone() const = 0;
+
+    /// When this element is added to a container, this decides whether the flag check
+    /// should require the context flags to contain all flags of this element (true), as opposed
+    /// to the context flag containing at least one of the flags of this element (false).
+    bool exhaustiveFlags = false;
+
+    /// The type name for this message element. Used for Lua plugins.
+    ///
+    /// This must be unique per element. It should return the static `TYPE`
+    /// member.
+    virtual std::string_view type() const = 0;
+
+protected:
+    MessageElement(MessageElementFlags flags);
+    bool trailingSpace = true;
+    bool hasTooltipOverride_ = false;
+
+    void cloneFrom(const MessageElement &source);
+    virtual const QString &getDefaultTooltip() const;
+
+    /// Checks if the given flags from the layout context matches the flags of this element.
+    ///
+    /// Takes `exhaustiveFlags` into consideration.
+    bool matchesFlags(MessageElementFlags contextFlags) const;
+
+private:
+    struct Metadata;
+
+    std::unique_ptr<Metadata> metadata_;
+    MessageElementFlags flags_;
+};
+
+// contains a simple image
+class ImageElement : public MessageElement
+{
+public:
+    static constexpr std::string_view TYPE = "image";
+
+    ImageElement(ImagePtr image, MessageElementFlags flags);
+    ImagePtr image() const;
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+
+    std::unique_ptr<MessageElement> clone() const override;
+
+private:
+    ImagePtr image_;
+};
+
+// contains a image with a circular background color
+class CircularImageElement : public MessageElement
+{
+public:
+    static constexpr std::string_view TYPE = "circular-image";
+
+    CircularImageElement(ImagePtr image, int padding, QColor background,
+                         MessageElementFlags flags);
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+
+    ImagePtr image() const
+    {
+        return this->image_;
+    }
+
+    int padding() const
+    {
+        return this->padding_;
+    }
+    QColor background() const
+    {
+        return this->background_;
+    }
+
+    std::unique_ptr<MessageElement> clone() const override;
+
+private:
+    ImagePtr image_;
+    int padding_;
+    QColor background_;
+};
+
+// contains a text, it will split it into words
+class TextElement : public MessageElement
+{
+    friend class LayeredEmoteElement;
+
+public:
+    static constexpr std::string_view TYPE = "text";
+
+    TextElement(const QString &text, MessageElementFlags flags,
+                const MessageColor &color = MessageColor::Text,
+                FontStyle style = FontStyle::ChatMedium);
+    TextElement(QStringList &&words, MessageElementFlags flags,
+                const MessageColor &color = MessageColor::Text,
+                FontStyle style = FontStyle::ChatMedium);
+    ~TextElement() override = default;
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+
+    std::unique_ptr<MessageElement> clone() const override;
+
+    const MessageColor &color() const noexcept;
+    FontStyle fontStyle() const noexcept;
+
+    void appendText(QStringView text);
+    void appendText(const QString &text);
+
+    void shareTextStorageWith(const QString &text);
+
+    virtual QStringList words() const;
+
+protected:
+    void setWords(QStringList words);
+    void setText(QString text);
+    void addWordsToContainer(const QStringList &words,
+                             MessageLayoutContainer &container,
+                             const MessageLayoutContext &ctx,
+                             bool spaceBetweenWords = true);
+
+    QString text_;
+    bool hasWords_ = false;
+    bool hasExplicitWordBoundaries_ = false;
+
+    MessageColor color_;
+    FontStyle style_;
+    std::unique_ptr<QStringList> wordsWithNulls_;
+};
+
+class ChannelNameElement : public TextElement
+{
+public:
+    ChannelNameElement(const QString &text,
+                       std::shared_ptr<ChannelAvatarSource> avatarSource = {});
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+    std::unique_ptr<MessageElement> clone() const override;
+
+private:
+    std::shared_ptr<ChannelAvatarSource> avatarSource_;
+};
+
+enum class AutoModActionKind : std::uint8_t {
+    Timeout,
+    Ban,
+};
+
+class AutoModActionElement : public MessageElement
+{
+public:
+    static constexpr std::string_view TYPE = "automod-action";
+
+    AutoModActionElement(AutoModActionKind kind, int timeoutSeconds = 0,
+                         MessageElementFlags flags = MessageElementFlag::Text);
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+    std::unique_ptr<MessageElement> clone() const override;
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+
+    AutoModActionKind kind() const;
+    int timeoutSeconds() const;
+
+private:
+    AutoModActionKind kind_;
+    int timeoutSeconds_ = 0;
+};
+
+class PronounElement : public TextElement
+{
+public:
+    static constexpr std::string_view TYPE = "pronouns";
+
+    explicit PronounElement(QString username);
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+    std::unique_ptr<MessageElement> clone() const override;
+
+private:
+    QString username_;
+};
+
+// contains a text that will be truncated to one line
+class SingleLineTextElement : public MessageElement
+{
+public:
+    static constexpr std::string_view TYPE = "single-line-text";
+
+    SingleLineTextElement(const QString &text, MessageElementFlags flags,
+                          const MessageColor &color = MessageColor::Text,
+                          FontStyle style = FontStyle::ChatMedium);
+    ~SingleLineTextElement() override = default;
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+
+    const MessageColor &color() const
+    {
+        return this->color_;
+    }
+    FontStyle fontStyle() const
+    {
+        return this->style_;
+    }
+    QStringList words() const
+    {
+        return this->words_;
+    }
+
+    std::unique_ptr<MessageElement> clone() const override;
+
+private:
+    MessageColor color_;
+    FontStyle style_;
+
+    QStringList words_;
+};
+
+class LinkElement : public TextElement
+{
+public:
+    static constexpr std::string_view TYPE = "link";
+
+    struct Parsed {
+        QString lowercase;
+        QString original;
+    };
+
+    /// @param parsed The link as it appeared in the message
+    /// @param fullUrl A full URL (notably with a protocol)
+    LinkElement(const Parsed &parsed, const QString &fullUrl,
+                MessageElementFlags flags,
+                const MessageColor &color = MessageColor::Text,
+                FontStyle style = FontStyle::ChatMedium);
+    ~LinkElement() override = default;
+    LinkElement(const LinkElement &) = delete;
+    LinkElement(LinkElement &&) = delete;
+    LinkElement &operator=(const LinkElement &) = delete;
+    LinkElement &operator=(LinkElement &&) = delete;
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+
+    Link getLink() const override;
+
+    [[nodiscard]] LinkInfo *linkInfo()
+    {
+        return &this->linkInfo_;
+    }
+
+    std::unique_ptr<MessageElement> clone() const override;
+
+    QStringList words() const override;
+    QStringList lowercase() const;
+    QStringList original() const;
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+
+private:
+    LinkInfo linkInfo_;
+    // these are implicitly shared
+    QString lowercase_;
+    QString original_;
+};
+
+/**
+ * @brief Contains a username mention.
+ *
+ * Examples of mentions:
+ *                      V
+ * 13:37 pajlada: hello @forsen
+ *
+ *                                           V       V
+ * 13:37 The moderators of this channel are: forsen, nuuls
+ */
+class MentionElement : public TextElement
+{
+public:
+    static constexpr std::string_view TYPE = "mention";
+
+    explicit MentionElement(
+        const QString &displayName, QString loginName_,
+        MessageColor fallbackColor_, MessageColor userColor_,
+        MessageElementFlags messageFlags = MessageElementFlags{
+            MessageElementFlag::Text, MessageElementFlag::Mention});
+    /// Deprioritized ctor allowing us to pass through a potentially invalid userColor_
+    ///
+    /// If the userColor_ is invalid, we fall back to the fallbackColor_
+    template <typename = void>
+    explicit MentionElement(const QString &displayName, QString loginName_,
+                            MessageColor fallbackColor_, QColor userColor_);
+    ~MentionElement() override = default;
+    MentionElement(const MentionElement &) = delete;
+    MentionElement(MentionElement &&) = delete;
+    MentionElement &operator=(const MentionElement &) = delete;
+    MentionElement &operator=(MentionElement &&) = delete;
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+
+    std::unique_ptr<MessageElement> clone() const override;
+
+    MessageElement *setLink(const Link &link) override;
+    Link getLink() const override;
+
+    const MessageColor &fallbackColor() const
+    {
+        return this->fallbackColor_;
+    }
+    const MessageColor &userColor() const
+    {
+        return this->userColor_;
+    }
+    QString userLoginName() const
+    {
+        return this->userLoginName_;
+    }
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+
+private:
+    MentionElement(QStringList &&words, MessageColor fallbackColor,
+                   MessageColor userColor);
+
+    /**
+     * The color of the element in case the "Colorize @usernames" is disabled
+     **/
+    MessageColor fallbackColor_;
+
+    /**
+     * The color of the element in case the "Colorize @usernames" is enabled
+     **/
+    MessageColor userColor_;
+
+    QString userLoginName_;
+};
+
+// contains emote data and will pick the emote based on :
+//   a) are images for the emote type enabled
+//   b) which size it wants
+class EmoteElement : public MessageElement
+{
+    friend class LayeredEmoteElement;
+
+public:
+    static constexpr std::string_view TYPE = "emote";
+    static constexpr int GIGANTIFIED_LOGICAL_SIZE = 112;
+    static constexpr int TWITCH_GIF_LOGICAL_SIZE = 250;
+    static constexpr int TWITCH_GIF_EMOTE_HEIGHT = 28;
+
+    EmoteElement(const EmotePtr &data, MessageElementFlags flags_,
+                 const MessageColor &textElementColor = MessageColor::Text,
+                 bool gigantified = false, qreal horizontalImagePadding = 0.0,
+                 bool isTwitchGif = false);
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+    EmotePtr getEmote() const;
+    const ImagePtr &getImageForTooltip() const;
+    bool isGigantified() const;
+    bool isTwitchGif() const;
+    void setStaticPreview(bool enabled = true);
+    void setAnimatedPreview();
+
+    std::unique_ptr<MessageElement> clone() const override;
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+
+protected:
+    const QString &getDefaultTooltip() const override;
+    virtual MessageLayoutElement *makeImageLayoutElement(const ImagePtr &image,
+                                                         QSizeF size);
+
+private:
+    void ensureText(bool asFallback);
+
+    std::unique_ptr<TextElement> textElement_;
+    MessageColor textColor_;
+    bool usingFallbackColor_ = false;
+
+    EmotePtr emote_;
+    bool gigantified_ = false;
+    bool isTwitchGif_ = false;
+
+    struct PreviewState {
+        bool enabled = true;
+        bool animated = false;
+        ImagePtr source;
+        ImagePtr image;
+        ImagePtr animation;
+        ImagePtr smoothAnimation;
+    };
+    std::unique_ptr<PreviewState> preview_;
+    qreal horizontalImagePadding_ = 0.0;
+};
+
+// A LayeredEmoteElement represents multiple Emotes layered on top of each other.
+// This class takes care of rendering animated and non-animated emotes in the
+// correct order and aligning them in the right way.
+class LayeredEmoteElement : public MessageElement
+{
+public:
+    static constexpr std::string_view TYPE = "layered-emote";
+
+    struct Emote {
+        EmotePtr ptr;
+        MessageElementFlags flags;
+    };
+
+    LayeredEmoteElement(
+        std::vector<Emote> &&emotes, MessageElementFlags flags,
+        const MessageColor &textElementColor = MessageColor::Text);
+
+    void addEmoteLayer(const Emote &emote);
+    void addModifier(const EmotePtr &modifier);
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+
+    // Returns a concatenation of each emote layer's cleaned copy string
+    QString getCleanCopyString() const;
+    const std::vector<Emote> &getEmotes() const;
+    const std::vector<EmotePtr> &getModifiers() const;
+    std::vector<Emote> getUniqueEmotes() const;
+    const std::vector<QString> &getEmoteTooltips() const;
+    const MessageColor &textElementColor() const;
+
+    std::unique_ptr<MessageElement> clone() const override;
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+
+private:
+    struct ModifierData {
+        std::vector<EmotePtr> modifiers;
+        std::vector<EmotePtr> copyTokens;
+
+        std::vector<std::shared_ptr<EmoteElement>> icons;
+    };
+
+    MessageLayoutElement *makeImageLayoutElement(
+        const std::vector<ImagePtr> &image, const std::vector<QSizeF> &sizes,
+        QSizeF largestSize);
+
+    QString getCopyString() const;
+    void updateTooltips();
+    std::vector<ImagePtr> getLoadedImages(float scale);
+
+    std::vector<Emote> emotes_;
+    std::vector<QString> emoteTooltips_;
+    std::unique_ptr<ModifierData> modifierData_;
+
+    std::unique_ptr<TextElement> textElement_;
+    MessageColor textElementColor_;
+};
+
+class BadgeElement : public MessageElement
+{
+public:
+    static constexpr std::string_view TYPE = "badge";
+
+    BadgeElement(const EmotePtr &data, MessageElementFlags flags_);
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+
+    EmotePtr getEmote() const;
+
+    void setTwitchBadge(QString setID, QString version);
+    std::optional<QString> twitchBadgeSetID() const;
+    std::optional<QString> twitchBadgeVersion() const;
+
+    std::unique_ptr<MessageElement> clone() const override;
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+
+protected:
+    const QString &getDefaultTooltip() const override;
+    virtual MessageLayoutElement *makeImageLayoutElement(const ImagePtr &image,
+                                                         QSizeF size);
+    EmotePtr emote_;
+    QString twitchBadgeSetID_;
+    QString twitchBadgeVersion_;
+};
+
+class ModBadgeElement : public BadgeElement
+{
+public:
+    static constexpr std::string_view TYPE = "mod-badge";
+
+    ModBadgeElement(const EmotePtr &data, MessageElementFlags flags_);
+
+    std::unique_ptr<MessageElement> clone() const override;
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+
+protected:
+    MessageLayoutElement *makeImageLayoutElement(const ImagePtr &image,
+                                                 QSizeF size) override;
+};
+
+class VipBadgeElement : public BadgeElement
+{
+public:
+    static constexpr std::string_view TYPE = "vip-badge";
+
+    VipBadgeElement(const EmotePtr &data, MessageElementFlags flags_);
+
+    std::unique_ptr<MessageElement> clone() const override;
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+
+protected:
+    MessageLayoutElement *makeImageLayoutElement(const ImagePtr &image,
+                                                 QSizeF size) override;
+};
+
+class FfzBadgeElement : public BadgeElement
+{
+public:
+    static constexpr std::string_view TYPE = "ffz-badge";
+
+    FfzBadgeElement(const EmotePtr &data, MessageElementFlags flags_,
+                    QColor color_);
+
+    /// The colour FFZ draws behind its (transparent) badge glyph.
+    const QColor &getColor() const
+    {
+        return this->color;
+    }
+
+    std::unique_ptr<MessageElement> clone() const override;
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+
+protected:
+    MessageLayoutElement *makeImageLayoutElement(const ImagePtr &image,
+                                                 QSizeF size) override;
+    const QColor color;
+};
+
+// contains a text, formated depending on the preferences
+class TimestampElement : public TextElement
+{
+public:
+    static constexpr std::string_view TYPE = "timestamp";
+
+    TimestampElement();
+    TimestampElement(QTime time_);
+    TimestampElement(QTime time_, MessageElementFlags extraFlags);
+    ~TimestampElement() override = default;
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+
+    std::unique_ptr<MessageElement> clone() const override;
+
+    QTime time() const
+    {
+        return this->time_;
+    }
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+
+private:
+    static QString formatTime(const QTime &time);
+
+    QTime time_;
+    QString format_;
+};
+
+// adds all the custom moderation buttons, adds a variable amount of items
+// depending on settings fourtf: implement
+class TwitchModerationElement : public MessageElement
+{
+public:
+    static constexpr std::string_view TYPE = "twitch-moderation";
+
+    TwitchModerationElement(bool canModerateUser = true,
+                            bool targetIsModOrBroadcaster = false,
+                            bool targetIsCurrentUser = false);
+    TwitchModerationElement(bool canModerateUser, bool targetIsModOrBroadcaster,
+                            bool targetIsCurrentUser,
+                            std::weak_ptr<Channel> sourceChannel);
+    TwitchModerationElement(
+        std::function<bool(const QString &)> canModerateUser,
+        QString youtubeTargetChannelID);
+    ~TwitchModerationElement() override;
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+
+    std::unique_ptr<MessageElement> clone() const override;
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+
+private:
+    bool shouldShowAction(const ModerationAction &action,
+                          bool inModerationMode, int selfDeleteMode,
+                          int pinOnModeratorsMode) const;
+    bool canModerateUserNow() const;
+    bool sourceHasModRightsNow() const;
+
+    struct YouTubeActionData;
+
+    bool canModerateUser_ = true;
+    bool targetIsModOrBroadcaster_ = false;
+    bool targetIsCurrentUser_ = false;
+    std::unique_ptr<YouTubeActionData> youtubeAction_;
+    std::weak_ptr<Channel> sourceChannel_;
+    bool sourceChannelProvided_ = false;
+};
+
+// Forces a linebreak
+class LinebreakElement : public MessageElement
+{
+public:
+    static constexpr std::string_view TYPE = "linebreak";
+
+    LinebreakElement(MessageElementFlags flags);
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+
+    std::unique_ptr<MessageElement> clone() const override;
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+};
+
+// Image element which will pick the quality of the image based on ui scale
+class ScalingImageElement : public MessageElement
+{
+public:
+    static constexpr std::string_view TYPE = "scaling-image";
+
+    ScalingImageElement(ImageSet images, MessageElementFlags flags);
+    const ImageSet &images() const;
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+
+    std::unique_ptr<MessageElement> clone() const override;
+
+private:
+    ImageSet images_;
+};
+
+class ReplyCurveElement : public MessageElement
+{
+public:
+    static constexpr std::string_view TYPE = "reply-curve";
+
+    ReplyCurveElement();
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+
+    std::unique_ptr<MessageElement> clone() const override;
+
+    QJsonObject toJson() const override;
+    std::string_view type() const override;
+};
+
+}  // namespace chatterino
+
+template <>
+struct magic_enum::customize::enum_range<chatterino::MessageElementFlag> {
+    static constexpr bool is_flags = true;  // NOLINT(readability-identifier-*)
+};
