@@ -1188,6 +1188,12 @@ public:
         "/solrino/badgeGiftsSeen", {}};
     /// How the Other Badges tab in /vanity is sorted
     QStringSetting solrinoOtherBadgeSort{"/solrino/vanity/otherBadgeSort", "az"};
+    /// Predictions started from this PC, with how often, for each channel
+    ChatterinoSetting<QStringList> solrinoPredictionUsage = {
+        "/solrino/predictions/used", {}};
+    /// Where ping popups go on screen: "screen;x;y", with x and y from 0 to 1
+    /// across the free space. Empty means the bottom right corner.
+    QStringSetting solrinoPingPlace{"/solrino/ping/place", ""};
     ChatterinoSetting<QStringList> solrinoGameUsage = {"/solrino/gameBar/usage",
                                                        {}};
     /// Each channel's own game command, for those that don't use !game

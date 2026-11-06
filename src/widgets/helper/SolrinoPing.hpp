@@ -19,4 +19,9 @@ void showSolrinoPing(const QString &sender, const QString &channel,
                      const QString &message, bool isWhisper,
                      const QString &pictureLogin);
 
+/// Shows a sample ping popup that can be dragged anywhere on any screen. Done
+/// saves the spot for the on-screen popups, and Reset puts them back in the
+/// bottom right corner.
+void moveSolrinoPingPopup();
+
 }  // namespace chatterino

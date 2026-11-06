@@ -29,6 +29,10 @@
 #include <QPointer>
 #include <QPushButton>
 #include <QIcon>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QMenu>
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QResizeEvent>
@@ -291,6 +295,131 @@ int scaledSeparatorHeight(float scale)
 }
 
 }  // namespace
+
+/// A prediction someone started, and how often, kept on this PC.
+struct UsedPrediction {
+    QString channel;
+    PredictionTemplate saved;
+    int count = 0;
+    qint64 last = 0;
+};
+
+constexpr int MOST_USED_SHOWN = 3;
+constexpr int MOST_USED_KEPT_PER_CHANNEL = 20;
+
+QString usedPredictionKey(const QString &title, const QStringList &outcomes)
+{
+    return (title.trimmed() + QChar('\n') + outcomes.join(QChar('\n')))
+        .toCaseFolded();
+}
+
+std::vector<UsedPrediction> readUsedPredictions()
+{
+    std::vector<UsedPrediction> used;
+    const QStringList entries = getSettings()->solrinoPredictionUsage.getValue();
+    for (const auto &entry : entries)
+    {
+        const auto object = QJsonDocument::fromJson(entry.toUtf8()).object();
+        UsedPrediction item;
+        item.channel = object.value("channel").toString();
+        item.saved.title = object.value("title").toString();
+        for (const auto &outcome : object.value("outcomes").toArray())
+        {
+            item.saved.outcomes.append(outcome.toString());
+        }
+        item.saved.durationSeconds = object.value("duration").toInt(120);
+        item.count = object.value("count").toInt();
+        item.last = qint64(object.value("last").toDouble());
+        if (!item.channel.isEmpty() && !item.saved.title.isEmpty() &&
+            item.saved.outcomes.size() >= 2 && item.count > 0)
+        {
+            used.push_back(std::move(item));
+        }
+    }
+    return used;
+}
+
+void writeUsedPredictions(const std::vector<UsedPrediction> &used)
+{
+    QStringList entries;
+    for (const auto &item : used)
+    {
+        entries.append(QString::fromUtf8(
+            QJsonDocument(
+                QJsonObject{
+                    {"channel", item.channel},
+                    {"title", item.saved.title},
+                    {"outcomes", QJsonArray::fromStringList(item.saved.outcomes)},
+                    {"duration", item.saved.durationSeconds},
+                    {"count", item.count},
+                    {"last", double(item.last)},
+                })
+                .toJson(QJsonDocument::Compact)));
+    }
+    getSettings()->solrinoPredictionUsage = entries;
+    getSettings()->requestSave();
+}
+
+/// The ones started most in this channel, most first, newest first on a tie.
+std::vector<UsedPrediction> mostUsedPredictions(const QString &channel)
+{
+    auto used = readUsedPredictions();
+    std::erase_if(used, [&channel](const auto &item) {
+        return item.channel.compare(channel, Qt::CaseInsensitive) != 0;
+    });
+    std::ranges::sort(used, [](const auto &a, const auto &b) {
+        return a.count != b.count ? a.count > b.count : a.last > b.last;
+    });
+    return used;
+}
+
+void noteUsedPrediction(const QString &channel, const QString &title,
+                        const QStringList &outcomes, int durationSeconds)
+{
+    auto used = readUsedPredictions();
+    const auto key = usedPredictionKey(title, outcomes);
+    const auto now = QDateTime::currentMSecsSinceEpoch();
+    const auto found = std::ranges::find_if(used, [&](const auto &item) {
+        return item.channel.compare(channel, Qt::CaseInsensitive) == 0 &&
+               usedPredictionKey(item.saved.title, item.saved.outcomes) == key;
+    });
+    if (found != used.end())
+    {
+        found->count += 1;
+        found->last = now;
+        found->saved.durationSeconds = durationSeconds;
+    }
+    else
+    {
+        used.push_back({channel.toLower(), {title, outcomes, durationSeconds},
+                        1, now});
+    }
+
+    // Keeps the list short: a channel's least used ones go first
+    auto mine = mostUsedPredictions(channel);
+    while (int(mine.size()) > MOST_USED_KEPT_PER_CHANNEL)
+    {
+        const auto drop = usedPredictionKey(mine.back().saved.title,
+                                            mine.back().saved.outcomes);
+        std::erase_if(used, [&](const auto &item) {
+            return item.channel.compare(channel, Qt::CaseInsensitive) == 0 &&
+                   usedPredictionKey(item.saved.title, item.saved.outcomes) ==
+                       drop;
+        });
+        mine.pop_back();
+    }
+    writeUsedPredictions(used);
+}
+
+void forgetUsedPrediction(const QString &channel, const QString &key)
+{
+    auto used = readUsedPredictions();
+    std::erase_if(used, [&](const auto &item) {
+        return item.channel.compare(channel, Qt::CaseInsensitive) == 0 &&
+               usedPredictionKey(item.saved.title, item.saved.outcomes) == key;
+    });
+    writeUsedPredictions(used);
+}
 
 class PredictionTemplatePicker : public QWidget
 {
@@ -995,6 +1124,18 @@ void PredictionDialog::resizeEvent(QResizeEvent *event)
 
 bool PredictionDialog::eventFilter(QObject *watched, QEvent *event)
 {
+    // Most used chips: a long title ends in "..." at whatever width they get
+    if (event->type() == QEvent::Resize)
+    {
+        if (auto *chip = qobject_cast<QPushButton *>(watched);
+            chip != nullptr && chip->property("fullTitle").isValid())
+        {
+            chip->setText(chip->fontMetrics().elidedText(
+                chip->property("fullTitle").toString(), Qt::ElideRight,
+                std::max(0, chip->width() - 18)));
+        }
+    }
+
     if (event->type() == QEvent::MouseButtonPress ||
         event->type() == QEvent::MouseButtonRelease ||
         event->type() == QEvent::MouseButtonDblClick)
@@ -1590,6 +1731,11 @@ void PredictionDialog::buildCreateUI()
         previousTabWidget = widget;
     };
 
+    if (auto *mostUsed = this->buildMostUsedRow(titleInputHeight, uiFont))
+    {
+        layout->addWidget(mostUsed);
+    }
+
     auto *titleInput = new PredictionTemplatePicker(this->activeWidget_);
     titleInput->setFont(uiFont);
     titleInput->setFixedHeight(titleInputHeight);
@@ -1613,24 +1759,7 @@ void PredictionDialog::buildCreateUI()
             return;
         }
 
-        const auto predictionTemplate =
-            this->predictionTemplates_.at(templateIndex);
-        this->draftTitle_ = predictionTemplate.title.left(TITLE_LIMIT);
-        this->draftOutcomes_ = predictionTemplate.outcomes;
-        for (auto &outcome : this->draftOutcomes_)
-        {
-            outcome = outcome.left(OUTCOME_LIMIT);
-        }
-        while (this->draftOutcomes_.size() > MAX_OUTCOMES)
-        {
-            this->draftOutcomes_.removeLast();
-        }
-        this->draftDurationSeconds_ = predictionTemplate.durationSeconds;
-        this->mainScrollValue_ =
-            this->scrollArea_->verticalScrollBar()->value();
-        this->outcomesScrollValue_ = 0;
-        this->ensureCreateDraft();
-        this->updateUI();
+        this->applyTemplate(this->predictionTemplates_.at(templateIndex));
     };
     if (this->predictionTemplatesFetchedAt_.isValid() &&
         this->predictionTemplatesFetchedAt_.msecsTo(
@@ -1865,6 +1994,119 @@ void PredictionDialog::buildCreateUI()
     this->mainLayout_->addWidget(this->bottomWidget_);
 }
 
+void PredictionDialog::applyTemplate(
+    const PredictionTemplate &predictionTemplate)
+{
+    this->draftTitle_ = predictionTemplate.title.left(TITLE_LIMIT);
+    this->draftOutcomes_ = predictionTemplate.outcomes;
+    for (auto &outcome : this->draftOutcomes_)
+    {
+        outcome = outcome.left(OUTCOME_LIMIT);
+    }
+    while (this->draftOutcomes_.size() > MAX_OUTCOMES)
+    {
+        this->draftOutcomes_.removeLast();
+    }
+    this->draftDurationSeconds_ = predictionTemplate.durationSeconds;
+    this->mainScrollValue_ = this->scrollArea_->verticalScrollBar()->value();
+    this->outcomesScrollValue_ = 0;
+    this->ensureCreateDraft();
+    this->updateUI();
+}
+
+/// One click puts back a prediction this person starts often in this channel.
+QWidget *PredictionDialog::buildMostUsedRow(int controlHeight,
+                                            const QFont &font)
+{
+    if (this->channel_ == nullptr)
+    {
+        return nullptr;
+    }
+    const auto channel = this->channel_->getName();
+    const auto used = mostUsedPredictions(channel);
+    if (used.empty())
+    {
+        return nullptr;
+    }
+
+    const auto *theme = getTheme();
+    auto background = theme->window.text;
+    background.setAlpha(14);
+    auto hover = theme->tabs.selected.line.regular;
+    if (hover.alpha() < 120)
+    {
+        hover = theme->tabs.selected.backgrounds.regular;
+    }
+    hover.setAlpha(255);
+    auto border = theme->window.text;
+    border.setAlpha(40);
+    const auto chipStyle =
+        QStringLiteral(
+            "QPushButton { background: %1; color: %2; border: 1px solid %3;"
+            " border-radius: 6px; padding: 0 8px; text-align: left; }"
+            "QPushButton:hover { border-color: %4; }")
+            .arg(background.name(QColor::HexArgb), theme->window.text.name(),
+                 border.name(QColor::HexArgb), hover.name());
+
+    auto *row = new QWidget(this->activeWidget_);
+    auto *rowLayout = new QVBoxLayout(row);
+    rowLayout->setContentsMargins(0, 0, 0, 0);
+    rowLayout->setSpacing(std::max(2, controlHeight / 8));
+
+    auto *label = new QLabel(QStringLiteral("Your most used here"), row);
+    label->setObjectName("PredictionSectionTitle");
+    label->setFont(font);
+    rowLayout->addWidget(label);
+
+    auto *chips = new QVBoxLayout();
+    chips->setSpacing(std::max(2, controlHeight / 6));
+    const QFontMetrics metrics(font);
+    const int shown = std::min(int(used.size()), MOST_USED_SHOWN);
+    for (int i = 0; i < shown; ++i)
+    {
+        const auto item = used.at(size_t(i));
+        auto *chip = new QPushButton(row);
+        chip->setFont(font);
+        chip->setFixedHeight(controlHeight);
+        chip->setCursor(Qt::PointingHandCursor);
+        chip->setFocusPolicy(Qt::NoFocus);
+        // One per row, the full width, so most titles fit whole
+        chip->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+        chip->setStyleSheet(chipStyle);
+        chip->setProperty("fullTitle", item.saved.title);
+        chip->setText(item.saved.title);
+        chip->setToolTip(
+            QStringLiteral("%1\n%2\nStarted %3 %4 here. Right-click to remove it.")
+                .arg(item.saved.title, item.saved.outcomes.join(QStringLiteral(" / ")))
+                .arg(item.count)
+                .arg(item.count == 1 ? QStringLiteral("time")
+                                     : QStringLiteral("times")));
+        chip->setContextMenuPolicy(Qt::CustomContextMenu);
+        QObject::connect(chip, &QPushButton::clicked, this, [this, item] {
+            this->applyTemplate(item.saved);
+        });
+        const auto key = usedPredictionKey(item.saved.title, item.saved.outcomes);
+        QObject::connect(
+            chip, &QWidget::customContextMenuRequested, this,
+            [this, chip, channel, key](const QPoint &at) {
+                QMenu menu(chip);
+                menu.addAction(QStringLiteral("Remove from most used"), this,
+                               [this, channel, key] {
+                                   forgetUsedPrediction(channel, key);
+                                   QTimer::singleShot(0, this, [this] {
+                                       this->updateUI();
+                                   });
+                               });
+                menu.exec(chip->mapToGlobal(at));
+            });
+        // Long titles end in "..." to fit
+        chip->installEventFilter(this);
+        chips->addWidget(chip);
+    }
+    rowLayout->addLayout(chips);
+    return row;
+}
+
 bool PredictionDialog::populatePredictionTemplates(PredictionTemplatePicker *picker)
 {
     if (picker == nullptr)
@@ -2038,10 +2280,14 @@ void PredictionDialog::startPrediction()
     this->updateUI();
 
     QPointer<PredictionDialog> self = this;
+    const auto channelName = this->channel_->getName();
+    const auto duration = this->draftDurationSeconds_;
     TwitchGql::createPredictionEvent(
         this->channel_->roomId(), title, choices,
         this->draftDurationSeconds_, auth.token,
-        [self] {
+        [self, channelName, title, choices, duration] {
+            // Counted once it really started, so typos that failed don't stick
+            noteUsedPrediction(channelName, title, choices, duration);
             if (!self)
             {
                 return;
