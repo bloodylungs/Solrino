@@ -325,6 +325,11 @@ const std::vector<ThemeDescriptor> Theme::builtInThemes{
         .name = "Solrino",
     },
     {
+        .key = "Solrino Seasonal",
+        .path = "builtin:seasonal",
+        .name = "Seasonal",
+    },
+    {
         .key = "Moltorino Midnight",
         .path = "builtin:moltorino-midnight",
         .name = "Moltorino",
@@ -456,6 +461,30 @@ Theme::Theme(const Paths &paths)
                          }
                      });
 #endif
+
+    // The Seasonal theme changes look when the season does, even if the app
+    // stays open across the change
+    auto *seasonTimer = new QTimer(&this->lifetime_);
+    QObject::connect(seasonTimer, &QTimer::timeout, &this->lifetime_,
+                     [this, season = currentSeasonThemeId()]() mutable {
+                         const auto now = currentSeasonThemeId();
+                         if (now == season)
+                         {
+                             return;
+                         }
+                         season = now;
+                         const auto inUse =
+                             this->isSystemTheme()
+                                 ? QStringList{this->darkSystemThemeName,
+                                               this->lightSystemThemeName}
+                                 : QStringList{this->themeName};
+                         if (inUse.contains(u"Solrino Seasonal"_s))
+                         {
+                             this->update();
+                             getApp()->getWindows()->forceLayoutChannelViews();
+                         }
+                     });
+    seasonTimer->start(60 * 60 * 1000);
 
     this->update();
 }

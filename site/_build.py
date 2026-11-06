@@ -66,6 +66,7 @@ def page(slug, title, description, body, scripts=("site",), current=None):
         nav = nav.replace(f'data-tab="{current}">', f'data-tab="{current}" aria-current="true">')
     tags = "\n".join(f'<script src="/{name}.js" defer></script>' for name in ("nav",) + tuple(scripts))
     head_title = title if slug == "index" else f"{title} | Solrino"
+    screen_pings = "" if 'id="screen-pings"' in body else '<div class="pings pings-screen" id="screen-pings" aria-live="polite"></div>\n'
     open(f"{slug}.html", "w", encoding="utf-8", newline="\n").write(f'''<!doctype html>
 <html lang="en">
 <head>
@@ -95,7 +96,6 @@ try {{
 <div class="intro" aria-hidden="true"><img src="/assets/icon.png" alt="" width="256" height="256" decoding="sync" fetchpriority="high"></div>
 <a class="skip" href="#main">Skip to content</a>
 <div class="backdrop" aria-hidden="true"></div>
-<div class="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
 
 {nav}
 
@@ -104,8 +104,7 @@ try {{
 </main>
 
 {FOOT}
-<div class="pings pings-screen" id="screen-pings" aria-live="polite"></div>
-{tags}
+{screen_pings}{tags}
 </body>
 </html>
 ''')
@@ -163,46 +162,41 @@ CHAT_APP = '''<div class="app" aria-label="Demo of Solrino's chat window. The ch
     </form>
   </div>'''
 
-floaters = "".join(
-    f'<img class="floater f{i}" src="/assets/badges/small/{b}.webp" alt="" width="72" height="72">'
-    for i, b in enumerate(["obsidian", "supporter_plus_plus", "top_donor", "supporter_plus", "supporter", "founder", "developer"]))
+GAME = '''<div class="game" aria-label="A game on your screen, with Solrino's ping cards on top">
+      <div class="game-sky"></div><div class="game-sun"></div>
+      <div class="game-ridge r1"></div><div class="game-ridge r2"></div><div class="game-ridge r3"></div>
+      <div class="hud-map" aria-hidden="true"><i></i></div>
+      <div class="hud-aim" aria-hidden="true"></div>
+      <div class="hud-health" aria-hidden="true"><b>100</b><span><i></i></span></div>
+      <div class="pings pings-game" id="screen-pings" aria-live="polite"></div>
+    </div>'''
 
 home = f'''<section class="hero">
-  <div class="floaters" aria-hidden="true">{floaters}</div>
-  <h1 class="wordmark"><img src="/assets/icon.png" alt="" width="256" height="256"><span>Solrino</span></h1>
-  <p class="hero-line">Twitch chat that <em>reaches you</em> mid&#8209;game.</p>
-  <p class="hero-sub">When someone mentions you, a card appears on top of the game you're playing. Mod tools are next to the chat box.</p>
-  <div class="hero-actions">
-    {DOWNLOAD.format(cls="btn btn-big", label="Download for Windows")}
-    <a class="btn btn-ghost btn-big" href="#demo">Try it here</a>
+  <div class="hero-copy">
+    <h1>Twitch chat that reaches you <em>mid&#8209;game.</em></h1>
+    <p class="hero-sub">When someone mentions you, a card appears on top of the game you're playing. Mod tools are next to the chat box.</p>
+    <div class="hero-actions">
+      {DOWNLOAD.format(cls="btn btn-big", label="Download for Windows")}
+      <a class="btn btn-ghost btn-big" href="#chat-text">Try the chat</a>
+    </div>
+    <p class="platforms">Free for Windows. Works with Twitch, Kick, YouTube and TikTok.</p>
   </div>
-  <ul class="platforms" aria-label="Works with">
-    <li>Twitch</li><li>Kick</li><li>YouTube</li><li>TikTok</li>
-  </ul>
-</section>
-
-<section class="demo reveal" id="demo">
-  <div class="sec-title"><h2>Try the <em>chat.</em></h2></div>
-  {CHAT_APP}
-  <p class="demo-note">Type a message and someone in the demo pings you back. The people are made up, and nothing you type leaves your browser.</p>
-</section>
-
-<section class="stats reveal" aria-label="Solrino at a glance">
-  <div class="stat glass" title="Every one of them moves"><b>41</b><span>Animated badges</span></div>
-  <div class="stat glass" title="Twitch, Kick, YouTube and TikTok"><b>4</b><span>Chat platforms</span></div>
-  <div class="stat glass" title="With the quick game bar"><b>1 click</b><span>To change the game</span></div>
-  <div class="stat glass" title="Solrino doesn't show any ads"><b>0</b><span>Ads</span></div>
+  <div class="desk" id="demo">
+    {GAME}
+    {CHAT_APP}
+  </div>
+  <p class="demo-note">This is a live demo. Type a message and someone pings you back. The people are made up, and nothing you type leaves your browser.</p>
 </section>
 
 <section class="explore">
-  <div class="sec-title reveal"><h2>What Solrino <em>adds.</em></h2></div>
+  <div class="sec-title sec-left reveal"><h2>What Solrino <em>adds.</em></h2></div>
   <div class="explore-grid">
     <a class="ex-card glass reveal" href="/pings">
       <div class="ex-visual ex-ping">
         <div class="ping-card ping-still"><span class="ping-pic">L</span><div class="ping-body"><p><b>@lunaris</b> pinged you</p><p class="ping-msg">you up for a game?</p></div><span class="ping-line"><i></i></span></div>
       </div>
       <h3>Pings</h3>
-      <p>Never miss your name, even in a game.</p>
+      <p>A card shows up over your game when someone says your name.</p>
       <span class="ex-go">See pings <i aria-hidden="true">&rarr;</i></span>
     </a>
     <a class="ex-card glass reveal" href="/modding">
@@ -219,22 +213,24 @@ home = f'''<section class="hero">
         {badge_img("supporter_plus", 64)}{badge_img("obsidian", 84)}{badge_img("top_donor", 64)}
       </div>
       <h3>Badges</h3>
-      <p>Animated stars that everyone on Solrino sees.</p>
+      <p>Animated stars next to your name that everyone on Solrino sees.</p>
       <span class="ex-go">See badges <i aria-hidden="true">&rarr;</i></span>
     </a>
   </div>
 </section>
 
 <section class="stand reveal">
-  <div class="sec-title"><h2>Badges other Solrino users <em>see.</em></h2></div>
+  <div class="sec-title sec-left"><h2>Badges other Solrino users <em>see.</em></h2></div>
   {marquee(BADGES[:6])}
   {marquee(BADGES[5:] + BADGES[:1], True)}
 </section>
 
 <section class="faq reveal">
-  <div class="sec-title"><h2>Common <em>questions.</em></h2></div>
-  <div class="faq-list">
+  <div class="faq-wrap">
+    <div class="sec-title sec-left"><h2>Common <em>questions.</em></h2><p>Something else? <a href="https://github.com/bloodylungs/Solrino/issues">Ask on GitHub.</a></p></div>
+    <div class="faq-list">
 {faq}
+    </div>
   </div>
 </section>
 
@@ -399,8 +395,6 @@ software = [(name, url, read_text(path)) for name, url, path in listed] + [
     ("WebView2", "https://developer.microsoft.com/microsoft-edge/webview2/", read_text("_licenses/WebView2.txt")),
     ("Geist and Geist Mono (website)", "https://github.com/vercel/geist-font",
      "Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font)\n\n" + ofl_body),
-    ("Instrument Serif (website)", "https://github.com/Instrument/instrument-serif",
-     "Copyright 2022 The Instrument Serif Project Authors (https://github.com/Instrument/instrument-serif)\n\n" + ofl_body),
 ]
 software.sort(key=lambda item: item[0].lower())
 entries = "\n".join(license_entry(*item) for item in software)

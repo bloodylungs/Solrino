@@ -64,26 +64,6 @@
     if (!revealWorks) document.querySelectorAll(".reveal").forEach((item) => item.classList.add("is-in"));
   }, 1500);
 
-  // A light that follows the mouse across glass
-  if (matchMedia("(hover: hover)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    let pending = null;
-    addEventListener("pointermove", (event) => {
-      pending = event;
-      if (pending.handled) return;
-      requestAnimationFrame(() => {
-        const last = pending;
-        pending = null;
-        const card = last?.target?.closest?.(".glass");
-        if (!card) return;
-        const box = card.getBoundingClientRect();
-        const x = last.clientX - box.left;
-        const y = last.clientY - box.top;
-        card.style.setProperty("--mx", `${x}px`);
-        card.style.setProperty("--my", `${y}px`);
-      });
-    }, { passive: true });
-  }
-
   // Download buttons aren't links, so the browser doesn't show the address on hover
   document.querySelectorAll("[data-download]").forEach((button) => {
     button.addEventListener("click", () => {
