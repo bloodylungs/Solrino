@@ -133,7 +133,7 @@ FAQ = [
     ("Why does Windows show a warning when I install it?", "The app isn't signed yet, so SmartScreen doesn't recognize it. Click <b>More info</b>, then <b>Run anyway</b>."),
     ("Will the on-screen pings work over my game?", "In borderless and windowed games, yes. Exclusive fullscreen can hide them. The cards are a normal always-on-top window that clicks pass through, and they don't touch the game itself. Every game's anti-cheat has its own rules, so check them if you're unsure."),
     ("Can I keep my Chatterino or Moltorino setup?", "Yes. The first time you run setup, it asks if you'd like to bring over your settings, chat tabs and accounts from another fork."),
-    ("How do I get a badge?", "Most badges are given by Solrino's owner, and event badges are free for everyone. Once you have one, type <code>/vanity</code> in chat and equip it."),
+    ("How do I get a badge?", "Solrino's owner gives out most badges, and event badges are free for everyone. Once you have one, type <code>/vanity</code> in chat and equip it."),
     ("Who can see my badge?", "Everyone using Solrino, usually within a couple of seconds of it changing. People on the Twitch website or other chat apps won't see it."),
 ]
 faq = "\n".join(f'''    <details class="faq-item glass"><summary>{q}<i aria-hidden="true"></i></summary><p>{a}</p></details>''' for q, a in FAQ)
@@ -171,7 +171,7 @@ home = f'''<section class="hero">
   <div class="floaters" aria-hidden="true">{floaters}</div>
   <h1 class="wordmark"><img src="/assets/icon.png" alt="" width="256" height="256"><span>Solrino</span></h1>
   <p class="hero-line">Twitch chat that <em>reaches you</em> mid&#8209;game.</p>
-  <p class="hero-sub">When someone pings you, it lands on top of whatever you're playing. Your mod tools sit right by the chat box.</p>
+  <p class="hero-sub">When someone mentions you, a card appears on top of the game you're playing. Mod tools are next to the chat box.</p>
   <div class="hero-actions">
     {DOWNLOAD.format(cls="btn btn-big", label="Download for Windows")}
     <a class="btn btn-ghost btn-big" href="#demo">Try it here</a>
@@ -182,9 +182,9 @@ home = f'''<section class="hero">
 </section>
 
 <section class="demo reveal" id="demo">
-  <div class="sec-title"><h2>Go on, <em>try it.</em></h2></div>
+  <div class="sec-title"><h2>Try the <em>chat.</em></h2></div>
   {CHAT_APP}
-  <p class="demo-note">Go ahead, type something. This is a demo with made-up people.</p>
+  <p class="demo-note">Type a message and someone in the demo pings you back. The people are made up, and nothing you type leaves your browser.</p>
 </section>
 
 <section class="stats reveal" aria-label="Solrino at a glance">
@@ -195,7 +195,7 @@ home = f'''<section class="hero">
 </section>
 
 <section class="explore">
-  <div class="sec-title reveal"><h2>Built for people who <em>live</em> in chat.</h2></div>
+  <div class="sec-title reveal"><h2>What Solrino <em>adds.</em></h2></div>
   <div class="explore-grid">
     <a class="ex-card glass reveal" href="/pings">
       <div class="ex-visual ex-ping">
@@ -211,7 +211,7 @@ home = f'''<section class="hero">
         <span class="ex-sword">&#9876;</span>
       </div>
       <h3>Modding</h3>
-      <p>Your tools, one click from the chat box.</p>
+      <p>Mod tools are one click from the chat box.</p>
       <span class="ex-go">See modding <i aria-hidden="true">&rarr;</i></span>
     </a>
     <a class="ex-card glass reveal" href="/badges">
@@ -226,13 +226,13 @@ home = f'''<section class="hero">
 </section>
 
 <section class="stand reveal">
-  <div class="sec-title"><h2>Stand out in <em>every</em> chat.</h2></div>
+  <div class="sec-title"><h2>Badges other Solrino users <em>see.</em></h2></div>
   {marquee(BADGES[:6])}
   {marquee(BADGES[5:] + BADGES[:1], True)}
 </section>
 
 <section class="faq reveal">
-  <div class="sec-title"><h2>Good to <em>know.</em></h2></div>
+  <div class="sec-title"><h2>Common <em>questions.</em></h2></div>
   <div class="faq-list">
 {faq}
   </div>
@@ -240,23 +240,23 @@ home = f'''<section class="hero">
 
 <section class="cta glass reveal">
   <img src="/assets/icon.png" alt="" width="84" height="84">
-  <h2>Ready when you are.</h2>
-  <p>Free, updates itself, and your settings come with you.</p>
+  <h2>Download Solrino.</h2>
+  <p>It's free and updates itself. Setup can bring over your settings and tabs from another fork.</p>
   {DOWNLOAD.format(cls="btn btn-big", label="Download for Windows")}
   <p class="small">Windows may show a SmartScreen warning because the app isn't signed yet. Click <b>More info</b>, then <b>Run anyway</b>.</p>
 </section>'''
 page("index", "Solrino: Twitch chat that reaches you mid-game",
-     "Solrino is a free Twitch chat app for Windows. Pings land on top of your game, mod tools sit by the chat box, and your Discord shows what chat you're in.", home)
+     "Solrino is a free Twitch chat app for Windows. It shows pings on top of your game, puts mod tools next to the chat box, and shows your chat on your Discord profile.", home)
 
 pings = page_head("Stop missing your <em>name</em> in chat.",
-                  "When someone says your name, or a word you chose, a card slides in at the top of your chat and at the bottom right of your main monitor.") + '''
+                  "When someone says your name, or a word you chose, a card slides in at the top of your chat and on your screen. The screen card goes in the bottom right corner unless you move it.") + '''
 <section class="shell">
   <div class="ping-demo glass reveal">
     <div class="ping-demo-slot" id="ping-slot" aria-live="polite"></div>
     <button class="btn btn-big" id="ping-me">Send me a ping</button>
   </div>
 
-  <div class="sec-title reveal"><h2>Everything you need, <em>at a glance.</em></h2></div>
+  <div class="sec-title reveal"><h2>What's on a <em>ping card.</em></h2></div>
   <div class="anatomy reveal">
     <div class="anatomy-card glass">
       <div class="ping-card ping-large">
@@ -276,7 +276,7 @@ pings = page_head("Stop missing your <em>name</em> in chat.",
     </ol>
   </div>
 
-  <div class="sec-title reveal"><h2>Built so it <em>never</em> gets in your way.</h2></div>
+  <div class="sec-title reveal"><h2>How the cards <em>behave.</em></h2></div>
   <div class="bento">
     <article class="card glass bento-wide reveal">
       <div class="bento-visual"><div class="ping-card ping-still ping-count"><span class="ping-pic">E</span><div class="ping-body"><p><b>@lunaris</b> pinged you <span class="count" id="ping-count">&times;2</span></p><p class="ping-msg">hello??</p></div><span class="ping-line"><i></i></span></div></div>
@@ -288,7 +288,7 @@ pings = page_head("Stop missing your <em>name</em> in chat.",
     </article>
     <article class="card glass reveal">
       <div class="bento-visual bento-words"><span class="word-hit">scaryxdxd</span><span>your name</span><span class="word-hit">any word</span></div>
-      <h3>Your name or your words</h3><p>Works with your username and any custom highlights.</p>
+      <h3>Your name or your words</h3><p>Your username and any custom highlights both trigger a card.</p>
     </article>
     <article class="card glass bento-full reveal">
       <div class="bento-visual bento-stream"><span class="live-dot">Streaming</span><span class="fake-switch"></span></div>
@@ -297,23 +297,23 @@ pings = page_head("Stop missing your <em>name</em> in chat.",
   </div>
   <p class="note center reveal">Exclusive fullscreen games can hide the screen card. Borderless or windowed mode shows it.</p>
 </section>'''
-page("pings", "Pings", "Pings land in your chat and on top of your game, then fade away.", pings, current="pings")
+page("pings", "Pings", "Pings show in your chat and on top of your game, then fade away.", pings, current="pings")
 
 modding = page_head("Mod without <em>leaving</em> the chat box.",
-                    "Everything you reach for while modding, right where you're already looking.") + '''
+                    "Game changes, predictions, mod presets and mod history are next to the chat box.") + '''
 <section class="shell">
   <div class="split reveal">
     <div>
       <h2>Change the game in one click.</h2>
       <p>Your most used games sit by the chat box as small buttons, and the ones you use most move to the front. Click one and it sends <code>!game fortnite</code>.</p>
-      <p class="note">A bot in the channel has to support the command. Some channels use a different one, so you can set a command for each channel and it stays saved for that channel. You choose the bar's position, size and alignment in settings.</p>
+      <p class="note">A bot in the channel has to support the command. If a channel uses a different command, set it in the game popup, and Solrino saves it for that channel. The bar's position, size and alignment are in settings.</p>
     </div>
     <div class="panel glass demo-games"><span class="chip chip-big" title="Sends !game valorant">Valorant</span><span class="chip chip-big" title="Sends !game minecraft">Minecraft</span><span class="chip chip-big" title="Sends !game fortnite">Fortnite</span><span class="chip chip-big" title="Sends !game just chatting">Just Chatting</span></div>
   </div>
   <div class="split split-flip reveal">
     <div>
       <h2>Show Discord what you're up to.</h2>
-      <p>Your Discord profile shows the chat you're in, and whether you're modding or chatting. It follows the sword button, so try it here.</p>
+      <p>Your Discord profile shows the chat you're in, and whether you're modding or chatting. Press the sword button here to switch between the two.</p>
       <p class="note">You can turn this off, or hide the chat name, in settings.</p>
     </div>
     <div class="panel glass discord-demo">
@@ -327,14 +327,14 @@ modding = page_head("Mod without <em>leaving</em> the chat box.",
       </div>
     </div>
   </div>
-  <div class="sec-title reveal"><h2>And the tools you <em>already</em> use.</h2></div>
+  <div class="sec-title reveal"><h2>Other mod <em>tools.</em></h2></div>
   <div class="cards three">
-    <article class="card glass reveal"><h3>Polls and predictions</h3><p>Start and manage them right from the chat box.</p></article>
+    <article class="card glass reveal"><h3>Polls and predictions</h3><p>Start and end them from the chat box. Your most used predictions for each channel are one click away.</p></article>
     <article class="card glass reveal"><h3>Mod presets</h3><p>Save the timeouts and bans you use most, one click from any message.</p></article>
-    <article class="card glass reveal"><h3>Mod history with undo</h3><p>See what you just did, and undo a mistake quickly.</p></article>
+    <article class="card glass reveal"><h3>Mod history with undo</h3><p>See your recent mod actions and undo a mistake.</p></article>
     <article class="card glass reveal"><h3>Focus view</h3><p>Cut chat down to what you need while it's moving fast.</p></article>
     <article class="card glass reveal"><h3>Saved messages</h3><p>Keep messages you'll want to come back to, plus quick phrases you send often.</p></article>
-    <article class="card glass reveal"><h3>Command palette</h3><p>Press <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>P</kbd> and jump straight to any tool.</p></article>
+    <article class="card glass reveal"><h3>Command palette</h3><p>Press <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>P</kbd> to open any tool by name.</p></article>
   </div>
 </section>'''
 page("modding", "Modding", "Change the game in one click, show Discord you're modding, and keep your tools by the chat box.", modding, current="modding")
@@ -411,7 +411,7 @@ licenses = f'''<article class="page legal">
   <p>Solrino is free and open source. Its code is on <a href="https://github.com/bloodylungs/Solrino">GitHub</a>, and it includes work from the projects listed here, each under its own license.</p>
 
   <h2>Solrino</h2>
-  <p>Solrino is a fork of Moltorino7, which builds on Chatterino7 and <a href="https://github.com/Chatterino/chatterino2">Chatterino 2</a>. It carries on under their MIT License:</p>
+  <p>Solrino is a fork of Moltorino7, which builds on Chatterino7 and <a href="https://github.com/Chatterino/chatterino2">Chatterino 2</a>. It uses their MIT License:</p>
   <pre class="license-text">{escape(read_text("../LICENSE"))}</pre>
 
   <h2>Open source software</h2>
