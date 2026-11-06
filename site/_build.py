@@ -162,15 +162,6 @@ CHAT_APP = '''<div class="app" aria-label="Demo of Solrino's chat window. The ch
     </form>
   </div>'''
 
-GAME = '''<div class="game" aria-label="A game on your screen, with Solrino's ping cards on top">
-      <div class="game-sky"></div><div class="game-sun"></div>
-      <div class="game-ridge r1"></div><div class="game-ridge r2"></div><div class="game-ridge r3"></div>
-      <div class="hud-map" aria-hidden="true"><i></i></div>
-      <div class="hud-aim" aria-hidden="true"></div>
-      <div class="hud-health" aria-hidden="true"><b>100</b><span><i></i></span></div>
-      <div class="pings pings-game" id="screen-pings" aria-live="polite"></div>
-    </div>'''
-
 home = f'''<section class="hero">
   <div class="hero-copy">
     <h1>Twitch chat that reaches you <em>mid&#8209;game.</em></h1>
@@ -182,7 +173,6 @@ home = f'''<section class="hero">
     <p class="platforms">Free for Windows. Works with Twitch, Kick, YouTube and TikTok.</p>
   </div>
   <div class="desk" id="demo">
-    {GAME}
     {CHAT_APP}
   </div>
   <p class="demo-note">This is a live demo. Type a message and someone pings you back. The people are made up, and nothing you type leaves your browser.</p>
@@ -356,7 +346,7 @@ updates = page_head("It keeps itself <em>up to date.</em>",
                     "When a new version is ready, a card asks whether to update now, update when you quit, or remind you later.") + f'''
 <section class="shell narrow">
   <ol class="releases" id="releases">
-    <li class="release"><div class="release-side"><b>Latest</b></div><div class="release-body"><p>See every version on <a href="https://github.com/bloodylungs/Solrino/releases">GitHub</a>.</p></div></li>
+    <li class="release is-latest"><header class="release-head"><h2 class="release-version">Every version</h2></header><div class="release-body changes"><p>See the full list on <a href="https://github.com/bloodylungs/Solrino/releases">GitHub</a>.</p></div></li>
   </ol>
   <div class="center-action">{DOWNLOAD.format(cls="btn btn-big", label="Download for Windows")}</div>
 </section>'''
