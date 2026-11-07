@@ -663,6 +663,19 @@ public:
                                  const QString &oauthToken,
                                  std::function<void(qint64)> successCallback,
                                  std::function<void(const QString &)> failureCallback);
+    /// Looks for a "Claim bonus" waiting in a channel. Calls back with an
+    /// empty id when there isn't one.
+    static void getAvailablePointsBonus(
+        const QString &channelLogin, const QString &oauthToken,
+        std::function<void(const QString &claimId)> successCallback,
+        std::function<void(const QString &)> failureCallback);
+    /// Claims a waiting bonus. Calls back with the points it gave (0 if
+    /// Twitch didn't say).
+    static void claimPointsBonus(
+        const QString &channelId, const QString &claimId,
+        const QString &oauthToken,
+        std::function<void(qint64 pointsEarned)> successCallback,
+        std::function<void(const QString &)> failureCallback);
 #if MOLTORINO_ENABLE_CHANNEL_POINT_REWARDS
     static void getRewardRequestOverview(
         const QString &channelLogin, const QString &expectedChannelId,

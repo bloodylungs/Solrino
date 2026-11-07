@@ -1,4 +1,4 @@
-# Changes since v1.0.32
+# Changes since v1.0.33
 
 Not released yet. Collect everything here, then use it for the release notes.
 
@@ -8,4 +8,4 @@ Not released yet. Collect everything here, then use it for the release notes.
 
 ## Website
 
-- Nothing waiting. (The game picture removal and the new update log went live on November 6.)
+- Nothing waiting.

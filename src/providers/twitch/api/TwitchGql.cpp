@@ -5693,6 +5693,121 @@ void TwitchGql::voteInPoll(const QString &pollId, const QString &choiceId,
         .execute();
 }
 
+void TwitchGql::getAvailablePointsBonus(
+    const QString &channelLogin, const QString &oauthToken,
+    std::function<void(const QString &claimId)> successCallback,
+    std::function<void(const QString &)> failureCallback)
+{
+    QJsonObject variables;
+    variables.insert("channelLogin", channelLogin);
+
+    static const char *query = R"(
+        query ChannelPointsBonus($channelLogin: String!) {
+            channel(name: $channelLogin) {
+                self {
+                    communityPoints {
+                        availableClaim {
+                            id
+                        }
+                    }
+                }
+            }
+        }
+    )";
+
+    makeTvInlineGqlRequest(query, variables, oauthToken)
+        .onSuccess([successCallback, failureCallback](
+                       const NetworkResult &result) {
+            const auto root = result.parseJsonValue();
+            if (root.isUndefined() || root.isNull())
+            {
+                failureCallback("Failed to parse GQL response");
+                return;
+            }
+            const auto gqlError = extractFirstGqlErrorMessage(root);
+            if (!gqlError.isEmpty())
+            {
+                failureCallback("Twitch API Error: " + gqlError);
+                return;
+            }
+
+            const auto claim = payloadDataObject(root)
+                                   .value("channel")
+                                   .toObject()
+                                   .value("self")
+                                   .toObject()
+                                   .value("communityPoints")
+                                   .toObject()
+                                   .value("availableClaim")
+                                   .toObject();
+            successCallback(claim.value("id").toString());
+        })
+        .onError([failureCallback](const NetworkResult &result) {
+            failureCallback("Network Error: " + result.formatError());
+        })
+        .execute();
+}
+
+void TwitchGql::claimPointsBonus(
+    const QString &channelId, const QString &claimId, const QString &oauthToken,
+    std::function<void(qint64 pointsEarned)> successCallback,
+    std::function<void(const QString &)> failureCallback)
+{
+    QJsonObject input;
+    input.insert("channelID", channelId);
+    input.insert("claimID", claimId);
+    QJsonObject variables;
+    variables.insert("input", input);
+
+    static const char *mutation = R"(
+        mutation ClaimCommunityPoints($input: ClaimCommunityPointsInput!) {
+            claimCommunityPoints(input: $input) {
+                claim {
+                    id
+                    pointsEarnedTotal
+                }
+                error {
+                    code
+                }
+            }
+        }
+    )";
+
+    makeTvInlineGqlRequest(mutation, variables, oauthToken)
+        .onSuccess([successCallback, failureCallback](
+                       const NetworkResult &result) {
+            const auto root = result.parseJsonValue();
+            if (root.isUndefined() || root.isNull())
+            {
+                failureCallback("Failed to parse GQL response");
+                return;
+            }
+
+            const auto payload =
+                payloadDataObject(root).value("claimCommunityPoints").toObject();
+            if (rejectGqlOrPayloadError(root, payload, "Failed to claim bonus",
+                                        failureCallback))
+            {
+                return;
+            }
+            if (payload.isEmpty())
+            {
+                failureCallback("Twitch API Error: Failed to claim bonus");
+                return;
+            }
+
+            const auto earned = payload.value("claim")
+                                    .toObject()
+                                    .value("pointsEarnedTotal")
+                                    .toInteger(0);
+            successCallback(earned);
+        })
+        .onError([failureCallback](const NetworkResult &result) {
+            failureCallback("Network Error: " + result.formatError());
+        })
+        .execute();
+}
+
 void TwitchGql::getChannelPoints(const QString &channelLogin,
                                  const QString &oauthToken,
                                  std::function<void(qint64)> successCallback,

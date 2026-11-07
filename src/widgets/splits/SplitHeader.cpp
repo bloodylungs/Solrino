@@ -734,6 +734,20 @@ void SplitHeader::initializeLayout()
             w->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
             w->hide();
         }),
+        this->emoteOnlyButton_ = makeWidget<LabelButton>([&](auto w) {
+            w->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
+            w->setPadding({5, 0});
+            w->enableRichText();
+            w->setAccessibleName("Emote only");
+            w->hide();
+        }),
+        this->subOnlyButton_ = makeWidget<LabelButton>([&](auto w) {
+            w->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
+            w->setPadding({5, 0});
+            w->enableRichText();
+            w->setAccessibleName("Sub only");
+            w->hide();
+        }),
 
         this->sharedChatButton_ = makeWidget<LabelButton>([&](auto w) {
             w->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
@@ -754,6 +768,19 @@ void SplitHeader::initializeLayout()
         // add split
         this->addButton_,
     });
+
+    QObject::connect(this->emoteOnlyButton_, &Button::leftClicked, this,
+                     [this] {
+                         this->toggleChatMode(true);
+                     });
+    QObject::connect(this->subOnlyButton_, &Button::leftClicked, this, [this] {
+        this->toggleChatMode(false);
+    });
+    getSettings()->showChatModeButtons.connect(
+        [this](const auto &, auto) {
+            this->updateRoomModes();
+        },
+        this->managedConnections_, false);
 
     QObject::connect(this->modeButton_, &Button::leftMousePress, this, [this] {
         if (this->modeButton_->menu() == nullptr)
@@ -1425,6 +1452,37 @@ void SplitHeader::updateRoomModes()
         }
         cleanRoomModeText(text, twitchChannel->hasModRights());
 
+        // Emote only and sub only: shown to mods, lit up while the mode is on
+        {
+            const bool show = getSettings()->showChatModeButtons &&
+                              twitchChannel->hasModRights();
+            bool emoteOnly = false;
+            bool subOnly = false;
+            {
+                auto roomModes = twitchChannel->accessRoomModes();
+                emoteOnly = roomModes->emoteOnly;
+                subOnly = roomModes->submode;
+            }
+            const auto label = [this](const QString &name, bool on) {
+                if (!on)
+                {
+                    return name;
+                }
+                return QString("<span style=\"color:%1\"><b>%2</b></span>")
+                    .arg(this->theme->accent.name(), name);
+            };
+            this->emoteOnlyButton_->setText(label("emote only", emoteOnly));
+            this->emoteOnlyButton_->setToolTip(
+                emoteOnly ? "Emote-only chat is on. Click to turn it off."
+                          : "Click to turn on emote-only chat");
+            this->subOnlyButton_->setText(label("sub only", subOnly));
+            this->subOnlyButton_->setToolTip(
+                subOnly ? "Sub-only chat is on. Click to turn it off."
+                        : "Click to turn on sub-only chat");
+            this->emoteOnlyButton_->setVisible(show);
+            this->subOnlyButton_->setVisible(show);
+        }
+
         // set the label text
 
         if (!text.isEmpty())
@@ -1441,6 +1499,8 @@ void SplitHeader::updateRoomModes()
     }
     else if (auto *kc = dynamic_cast<KickChannel *>(chan.get()))
     {
+        this->emoteOnlyButton_->hide();
+        this->subOnlyButton_->hide();
         this->modeButton_->setEnabled(false);
 
         QString text = formatRoomModeUnclean(kc->roomModes());
@@ -1458,7 +1518,38 @@ void SplitHeader::updateRoomModes()
     }
     else
     {
+        this->emoteOnlyButton_->hide();
+        this->subOnlyButton_->hide();
         this->modeButton_->hide();
+    }
+}
+
+void SplitHeader::toggleChatMode(bool emoteOnly)
+{
+    const auto channel = std::dynamic_pointer_cast<TwitchChannel>(
+        this->split_->getSelectedChannel());
+    if (!channel || !channel->hasModRights())
+    {
+        return;
+    }
+
+    bool on = false;
+    {
+        auto roomModes = channel->accessRoomModes();
+        on = emoteOnly ? roomModes->emoteOnly : roomModes->submode;
+    }
+
+    // The same commands as typing them, so errors show in chat the same way
+    QString command = emoteOnly ? "/emoteonly" : "/subscribers";
+    if (on)
+    {
+        command += "off";
+    }
+    const auto leftover =
+        getApp()->getCommands()->execCommand(command, channel, false);
+    if (!leftover.isEmpty())
+    {
+        channel->sendMessage(leftover);
     }
 }
 

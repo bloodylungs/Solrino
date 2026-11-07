@@ -3,3 +3,6 @@ compatibility_date = "2026-01-01"
 
 [assets]
 directory = "."
+
+# Unknown addresses get the 404 page instead of a blank error
+not_found_handling = "404-page"

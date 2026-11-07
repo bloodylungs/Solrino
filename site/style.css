@@ -37,7 +37,36 @@ code, kbd { font: 500 .88em "Geist Mono", Consolas, monospace; background: #ffff
 /* One soft red light at the top of the page */
 .backdrop { position: absolute; inset: 0 0 auto 0; height: 900px; z-index: -1; overflow: hidden; pointer-events: none;
   background: radial-gradient(55% 60% at 50% 0, #a50e1c3d, transparent 72%); }
-body { background: var(--wine-deep); }
+/* body stays see-through (html paints the color) so the layers below can show */
+body { background: transparent; }
+
+/* Little background stuff: a faint dot grid and embers drifting up behind everything */
+body::before, body::after { content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none; }
+body::before {
+  background: radial-gradient(circle, #ffffff10 1px, transparent 1.5px) 0 0 / 28px 28px;
+  -webkit-mask: radial-gradient(90% 70% at 50% 20%, #000, transparent 85%);
+  mask: radial-gradient(90% 70% at 50% 20%, #000, transparent 85%);
+}
+body::after {
+  --e1: #ff5c4d; --e2: #ffb454;
+  background:
+    radial-gradient(2.4px 2.4px at 8% 12%, var(--e1), transparent),
+    radial-gradient(1.8px 1.8px at 23% 64%, var(--e2), transparent),
+    radial-gradient(3px 3px at 41% 31%, var(--e1), transparent),
+    radial-gradient(1.8px 1.8px at 57% 82%, var(--e2), transparent),
+    radial-gradient(2.6px 2.6px at 72% 46%, var(--e1), transparent),
+    radial-gradient(2px 2px at 88% 18%, var(--e2), transparent),
+    radial-gradient(2.2px 2.2px at 94% 71%, var(--e1), transparent),
+    radial-gradient(1.6px 1.6px at 33% 93%, var(--e2), transparent);
+  background-size: 640px 900px;
+  opacity: .7;
+  filter: drop-shadow(0 0 4px #ff5c4d);
+  -webkit-mask: linear-gradient(transparent, #000 25%, #000 70%, transparent);
+  mask: linear-gradient(transparent, #000 25%, #000 70%, transparent);
+  animation: embers 70s linear infinite;
+}
+@keyframes embers { to { background-position: 120px -900px; } }
+@media (prefers-reduced-motion: reduce) { body::after { animation: none; } }
 
 h1, h2 { font-optical-sizing: auto; font-family: "Geist", "Segoe UI", sans-serif; font-weight: 650; letter-spacing: -.04em; line-height: 1.05; text-wrap: balance; }
 h2 { font-size: clamp(30px, 3.8vw, 56px); }
@@ -451,6 +480,133 @@ span.chip:hover, button.chip:hover { transform: translateY(-2px); }
 .live-dot::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--flare); box-shadow: 0 0 12px var(--flare); animation: blink 2.4s ease-in-out infinite; }
 .fake-switch { position: relative; width: 38px; height: 22px; background: var(--ember); border-radius: 12px; }
 .fake-switch::after { content: ""; position: absolute; left: 19px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+
+/* ---------- Quality of life ---------- */
+[hidden] { display: none !important; }
+html { scroll-behavior: smooth; }
+::selection { background: #e3101c66; }
+.btn:focus-visible, .dl-btn:focus-visible { outline-offset: 4px; }
+
+/* Reading line along the very top */
+.progress { position: fixed; z-index: 60; top: 0; left: 0; right: 0; height: 2px; transform-origin: 0 50%; transform: scaleX(0); pointer-events: none;
+  background: linear-gradient(90deg, #8e0812, var(--ember) 50%, var(--amber)); box-shadow: 0 0 8px #ff2830; }
+@supports (animation-timeline: scroll()) {
+  .progress { animation: readLine linear both; animation-timeline: scroll(root); }
+}
+@keyframes readLine { to { transform: scaleX(1); } }
+
+/* Back to the top */
+.to-top {
+  position: fixed; z-index: 35; right: 16px; bottom: 16px; display: grid; place-items: center; width: 44px; height: 44px; padding: 0;
+  background: #170b0ee6; border: 1px solid #ffffff1f; border-radius: 14px; color: var(--ash); cursor: pointer;
+  box-shadow: 0 10px 28px #00000080; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  opacity: 0; visibility: hidden; transform: translateY(10px);
+  transition: opacity .2s, transform .25s cubic-bezier(.2,.7,.2,1), visibility 0s .2s, background .18s, border-color .18s;
+}
+.has-top .to-top { opacity: 1; visibility: visible; transform: none; transition: opacity .2s, transform .25s cubic-bezier(.2,.7,.2,1), background .18s, border-color .18s; }
+.to-top:hover { background: #2a1015; border-color: #ff5c4d80; }
+.to-top:hover svg { transform: translateY(-2px); }
+.to-top svg { transition: transform .18s; }
+.has-top .pings-screen { bottom: 72px; }
+
+/* Small notes at the bottom */
+.toast {
+  position: fixed; z-index: 120; left: 50%; bottom: 22px; padding: 10px 16px; max-width: calc(100vw - 32px);
+  background: #241013; border: 1px solid #ff5c4d59; border-radius: 12px; color: var(--ash); font-size: 14.5px; font-weight: 550;
+  box-shadow: 0 14px 34px #000000a0; pointer-events: none;
+  opacity: 0; transform: translate(-50%, 12px); transition: opacity .18s, transform .25s cubic-bezier(.2,.7,.2,1);
+}
+.toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+
+/* Commands copy when clicked */
+code.copyable { cursor: copy; transition: background .15s, color .15s; }
+code.copyable:hover { background: #e3101c38; color: #ffd4cf; }
+
+/* Cards glow faintly under the mouse */
+.glass { background-image: radial-gradient(260px circle at var(--mx, -400px) var(--my, -400px), #ff5c4d12, transparent 70%); }
+
+/* Plain text buttons */
+.link-btn { padding: 0; background: none; border: 0; color: #ff9c8f; cursor: pointer; font: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.link-btn:hover { color: var(--ash); }
+
+/* Download helper and badge viewer share the same sheet look */
+.sheet, .viewer {
+  width: min(460px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 30px 28px 24px; margin: auto;
+  background: linear-gradient(180deg, #1d0c10, #110809); border: 1px solid #ff5c4d40; border-radius: 22px; color: var(--ash);
+  box-shadow: 0 30px 90px #000000c0, 0 0 60px #e3101c26; overflow: auto;
+}
+.sheet[open], .viewer[open] { animation: sheetIn .26s cubic-bezier(.2,.9,.3,1); }
+.sheet::backdrop, .viewer::backdrop { background: #05030480; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+@keyframes sheetIn { from { opacity: 0; transform: translateY(14px) scale(.97); } }
+.sheet { text-align: left; }
+.sheet > img { margin-bottom: 14px; filter: drop-shadow(0 0 18px #e3101c66); }
+.sheet h2, .viewer h2 { font-size: clamp(24px, 3vw, 30px); }
+.sheet-x { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; background: #ffffff0a; border: 1px solid #ffffff17; border-radius: 10px; color: var(--smoke); cursor: pointer; font-size: 22px; line-height: 1; }
+.sheet-x:hover { color: var(--ash); background: #ffffff14; }
+.sheet-steps { display: grid; gap: 12px; margin-top: 18px; }
+.sheet-steps li { display: flex; gap: 12px; }
+.sheet-steps b { flex: none; display: grid; place-items: center; width: 26px; height: 26px; background: #e3101c30; border: 1px solid #ff5c4d66; border-radius: 50%; color: #ffc9c4; font: 600 13px "Geist Mono", monospace; }
+.sheet-steps p, .sheet-text { color: #d7c7c4; font-size: 15.5px; }
+.sheet-text { margin-top: 12px; }
+.sheet-end, .viewer-end { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-top: 22px; padding-top: 16px; border-top: 1px solid #ffffff12; color: var(--smoke); font-size: 14px; }
+.sheet-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.sheet-small { margin-top: 14px; color: var(--smoke); font-size: 14px; }
+.latest-line:empty { display: none; }
+
+.viewer { width: min(520px, calc(100vw - 32px)); text-align: center; }
+.viewer-stage { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0 14px; }
+.viewer-stage img { width: min(240px, 52vw); height: auto; filter: drop-shadow(0 12px 30px #000000a0); animation: badgeIn .3s cubic-bezier(.2,.9,.3,1); }
+@keyframes badgeIn { from { opacity: 0; transform: scale(.9); } }
+.viewer-arrow { flex: none; display: grid; place-items: center; width: 42px; height: 42px; padding: 0 0 3px; background: #ffffff0a; border: 1px solid #ffffff1f; border-radius: 50%; color: var(--ash); cursor: pointer; font-size: 28px; line-height: 1; transition: background .15s, border-color .15s, transform .14s; }
+.viewer-arrow:hover { background: #e3101c38; border-color: #ff5c4d80; }
+.viewer-arrow[data-step="-1"]:hover { transform: translateX(-2px); }
+.viewer-arrow[data-step="1"]:hover { transform: translateX(2px); }
+.viewer-group { display: inline-block; margin-bottom: 8px; padding: 2px 10px; background: #e3101c30; border: 1px solid #ff5c4d66; border-radius: 10px; color: #ffc9c4; font-size: 12.5px; font-weight: 600; }
+.viewer-text { margin-top: 8px; color: #d7c7c4; }
+
+/* Search and filter bar (badges and updates) */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 18px; }
+.search { position: relative; display: flex; align-items: center; flex: 1 1 220px; max-width: 320px; }
+.search svg { position: absolute; left: 13px; color: var(--smoke); pointer-events: none; }
+.search input { width: 100%; height: 42px; padding: 0 38px 0 38px; background: #140c0f; border: 1px solid #ffffff1f; border-radius: 12px; font-size: 15px; transition: border-color .15s, box-shadow .15s; }
+.search input::placeholder { color: #8d7d7f; }
+.search input:focus { outline: none; border-color: var(--flare); box-shadow: 0 0 0 3px #ff5c4d2e; }
+.search input::-webkit-search-cancel-button { filter: grayscale(1) brightness(1.6); cursor: pointer; }
+.search kbd { position: absolute; right: 10px; color: var(--smoke); font-size: 12px; pointer-events: none; }
+.search input:focus ~ kbd, .search input:not(:placeholder-shown) ~ kbd { display: none; }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.filter { height: 34px; padding: 0 13px; background: #ffffff08; border: 1px solid #ffffff1a; border-radius: 10px; color: var(--smoke); cursor: pointer; font-size: 14px; font-weight: 550; transition: background .15s, border-color .15s, color .15s; }
+.filter:hover { color: var(--ash); border-color: #ffffff33; }
+.filter[aria-pressed="true"] { background: #e3101c38; border-color: #ff5c4d80; color: #ffd4cf; }
+.toolbar-count { margin-left: auto; color: #8d7d7f; font-size: 14px; }
+.empty { padding: 40px 0; color: var(--smoke); text-align: center; }
+
+/* Whole badge card opens the viewer */
+.badge-card { position: relative; cursor: zoom-in; }
+.badge-open { position: absolute; inset: 0; z-index: 1; padding: 0; background: none; border: 0; border-radius: inherit; cursor: zoom-in; }
+.badge-card:target { border-color: #ff5c4d80; }
+
+/* Copy link on each version */
+.copy-link { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; background: none; border: 1px solid transparent; border-radius: 8px; color: var(--smoke); cursor: pointer; transition: color .15s, background .15s, border-color .15s; }
+.copy-link:hover { color: var(--ash); background: #ffffff0d; border-color: #ffffff1f; }
+.release-head .copy-link { order: 9; }
+.release:target { border-color: #ff5c4d80; box-shadow: 0 0 0 3px #ff5c4d26; }
+
+/* Not found page */
+.lost { display: flex; flex-direction: column; align-items: center; text-align: center; padding: calc(var(--bar) + clamp(50px, 7vw, 100px)) var(--gutter) clamp(70px, 9vw, 130px); animation: heroIn .3s ease-out backwards; }
+.lost img { width: clamp(110px, 14vw, 160px); height: auto; filter: drop-shadow(0 0 30px #7b2cff55); animation: drift 6s ease-in-out infinite; }
+@keyframes drift { 50% { transform: translateY(-10px) rotate(-6deg); } }
+.lost-code { margin-top: 14px; color: var(--flare); font: 600 15px "Geist Mono", Consolas, monospace; letter-spacing: .2em; }
+.lost h1 { margin-top: 8px; max-width: 14em; font-size: clamp(36px, 5.4vw, 72px); font-weight: 700; }
+
+@media (max-width: 720px) {
+  .search { max-width: none; flex-basis: 100%; }
+  .toolbar-count { margin-left: 0; }
+  .viewer-arrow { width: 38px; height: 38px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
 
 @media (max-width: 1000px) {
   .anatomy { grid-template-columns: minmax(0, 1fr); }

@@ -1168,6 +1168,7 @@ public:
     BoolSetting showPredictionButton{"/moltorino/predictions/showButton", true};
     BoolSetting showPollButton{"/moltorino/polls/showButton", true};
     BoolSetting showGameButton{"/moltorino/game/showButton", true};
+    BoolSetting showChatModeButtons{"/moltorino/chatModes/showButtons", true};
     BoolSetting solrinoIntroShown{"/solrino/introShown", false};
     /// Where things go. See LayoutPage. The defaults are the basic layout.
     QStringSetting solrinoLayoutChatBox{"/solrino/layout/chatBox", "below"};
@@ -1236,6 +1237,8 @@ public:
     /// Channel Points and Rewards
     BoolSetting enableChannelPointsDisplay{
         "/moltorino/predictions/showChannelPoints", true};
+    BoolSetting autoClaimPointsBonus{
+        "/moltorino/channelPoints/autoClaimBonus", true};
     BoolSetting openRewardsWithChannelPointsClick{
         "/moltorino/channelPoints/openRewardsWithBalanceClick", true};
     BoolSetting rewardsCloseOnFocusLoss{

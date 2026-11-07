@@ -59,6 +59,28 @@ BADGES = [
 ]
 DOWNLOAD = '<button type="button" class="{cls}" data-download title="Solrino">{label}</button>'
 
+# Groups for the filter on the badges page
+GROUPS = [("team", "Team"), ("supporter", "Supporters"), ("donor", "Donors"), ("rare", "Rare"), ("event", "Events")]
+TEAM = {"developer", "founder", "staff", "moderator", "contributor", "top_bug_hunter", "alpha_tester", "beta_tester", "bug_hunter"}
+SUPPORTER = {"obsidian", "veteran", "one_year_on_solrino", "friend_of_solrino"}
+EVENT = {"spooky", "valentines_2027", "winter_2026"}
+
+
+def badge_group(badge_id):
+    if badge_id in TEAM:
+        return "team"
+    if "donor" in badge_id:
+        return "donor"
+    if badge_id.startswith("supporter") or badge_id in SUPPORTER:
+        return "supporter"
+    if badge_id in EVENT:
+        return "event"
+    return "rare"
+
+
+def slug(text):
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+
 
 def page(slug, title, description, body, scripts=("site",), current=None):
     nav = NAV
@@ -81,6 +103,7 @@ def page(slug, title, description, body, scripts=("site",), current=None):
 <link rel="icon" href="/assets/icon.png">
 <link rel="preload" href="/assets/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/style.css">
+<script type="speculationrules">{{"prefetch": [{{"where": {{"href_matches": "/*"}}, "eagerness": "moderate"}}]}}</script>
 <script>
 document.documentElement.classList.add("js");
 // The logo intro plays the first time someone opens the site, then never again in that browser
@@ -135,7 +158,7 @@ FAQ = [
     ("How do I get a badge?", "Solrino's owner gives out most badges, and event badges are free for everyone. Once you have one, type <code>/vanity</code> in chat and equip it."),
     ("Who can see my badge?", "Everyone using Solrino, usually within a couple of seconds of it changing. People on the Twitch website or other chat apps won't see it."),
 ]
-faq = "\n".join(f'''    <details class="faq-item glass"><summary>{q}<i aria-hidden="true"></i></summary><p>{a}</p></details>''' for q, a in FAQ)
+faq = "\n".join(f'''    <details class="faq-item glass" id="{slug(q)}"><summary>{q}<i aria-hidden="true"></i></summary><p>{a}</p></details>''' for q, a in FAQ)
 
 CHAT_APP = '''<div class="app" aria-label="Demo of Solrino's chat window. The chatters are made up.">
     <div class="app-title">
@@ -170,7 +193,7 @@ home = f'''<section class="hero">
       {DOWNLOAD.format(cls="btn btn-big", label="Download for Windows")}
       <a class="btn btn-ghost btn-big" href="#chat-text">Try the chat</a>
     </div>
-    <p class="platforms">Free for Windows. Works with Twitch, Kick, YouTube and TikTok.</p>
+    <p class="platforms">Free for Windows<span data-latest></span>. Works with Twitch, Kick, YouTube and TikTok.</p>
   </div>
   <div class="desk" id="demo">
     {CHAT_APP}
@@ -228,6 +251,7 @@ home = f'''<section class="hero">
   <img src="/assets/icon.png" alt="" width="84" height="84">
   <h2>Download Solrino.</h2>
   <p>It's free and updates itself. Setup can bring over your settings and tabs from another fork.</p>
+  <p class="small latest-line" data-latest-full hidden></p>
   {DOWNLOAD.format(cls="btn btn-big", label="Download for Windows")}
   <p class="small">Windows may show a SmartScreen warning because the app isn't signed yet. Click <b>More info</b>, then <b>Run anyway</b>.</p>
 </section>'''
@@ -325,11 +349,21 @@ modding = page_head("Mod without <em>leaving</em> the chat box.",
 </section>'''
 page("modding", "Modding", "Change the game in one click, show Discord you're modding, and keep your tools by the chat box.", modding, current="modding")
 
-grid = "\n".join(f'''    <li class="badge-card glass reveal" title="Solrino {b[1]}"><img src="/assets/badges/{b[0]}.webp" alt="" width="144" height="144" loading="lazy"><b>{b[1]}</b><span>{b[2]}</span></li>''' for b in BADGES)
+grid = "\n".join(f'''    <li class="badge-card glass reveal" id="{b[0].replace("_", "-")}" data-badge="{b[0]}" data-group="{badge_group(b[0])}"><button type="button" class="badge-open" aria-label="View the {b[1]} badge"></button><img src="/assets/badges/{b[0]}.webp" alt="" width="144" height="144" loading="lazy"><b>{b[1]}</b><span>{b[2]}</span></li>''' for b in BADGES)
+group_chips = "".join(f'<button type="button" class="filter" data-filter="{key}" aria-pressed="false">{label}</button>' for key, label in GROUPS)
 badges = page_head("Badges everyone on Solrino <em>can see.</em>",
-                   "Forty-one animated stars, and what each one is for.") + f'''
+                   "Forty-one animated stars, and what each one is for. Click one to see it up close.") + f'''
 <section class="shell">
-  <ul class="badge-grid">
+  <div class="toolbar" role="search">
+    <label class="search"><span class="sr">Search badges</span>
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input type="search" id="badge-search" placeholder="Search badges" autocomplete="off"><kbd aria-hidden="true">/</kbd>
+    </label>
+    <div class="filters" aria-label="Show a group of badges"><button type="button" class="filter" data-filter="all" aria-pressed="true">All</button>{group_chips}</div>
+    <p class="toolbar-count" id="badge-count" aria-live="polite"></p>
+  </div>
+  <p class="empty" id="badge-empty" hidden>No badges match that. <button type="button" class="link-btn" id="badge-reset">Show all badges</button></p>
+  <ul class="badge-grid" id="badge-grid">
 {grid}
   </ul>
   <div class="sec-title reveal"><h2>How it <em>works.</em></h2></div>
@@ -340,17 +374,38 @@ badges = page_head("Badges everyone on Solrino <em>can see.</em>",
   </ol>
   <p class="note center reveal">Badges only show inside Solrino. People on the Twitch website or other chat apps won't see them.</p>
 </section>'''
-page("badges", "Badges", "Forty-one animated star badges that everyone using Solrino can see.", badges, current="badges")
+page("badges", "Badges", "Forty-one animated star badges that everyone using Solrino can see.", badges, scripts=("badges",), current="badges")
 
 updates = page_head("It keeps itself <em>up to date.</em>",
                     "When a new version is ready, a card asks whether to update now, update when you quit, or remind you later.") + f'''
 <section class="shell narrow">
+  <div class="toolbar" role="search" id="update-tools" hidden>
+    <label class="search"><span class="sr">Search changes</span>
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input type="search" id="update-search" placeholder="Search changes" autocomplete="off"><kbd aria-hidden="true">/</kbd>
+    </label>
+    <div class="filters" aria-label="Show a kind of change"><button type="button" class="filter" data-filter="all" aria-pressed="true">All</button><button type="button" class="filter" data-filter="new" aria-pressed="false">New</button><button type="button" class="filter" data-filter="fixed" aria-pressed="false">Fixed</button><button type="button" class="filter" data-filter="removed" aria-pressed="false">Removed</button></div>
+    <p class="toolbar-count" id="update-count" aria-live="polite"></p>
+  </div>
+  <p class="empty" id="update-empty" hidden>No changes match that. <button type="button" class="link-btn" id="update-reset">Show everything</button></p>
   <ol class="releases" id="releases">
     <li class="release is-latest"><header class="release-head"><h2 class="release-version">Every version</h2></header><div class="release-body changes"><p>See the full list on <a href="https://github.com/bloodylungs/Solrino/releases">GitHub</a>.</p></div></li>
   </ol>
   <div class="center-action">{DOWNLOAD.format(cls="btn btn-big", label="Download for Windows")}</div>
 </section>'''
 page("updates", "Updates", "Everything new in Solrino, version by version.", updates, scripts=("updates",), current="updates")
+
+lost = f'''<section class="lost">
+  <img src="/assets/badges/black_hole.webp" alt="" width="144" height="144">
+  <p class="lost-code">404</p>
+  <h1>This page fell into a <em>black hole.</em></h1>
+  <p class="lede">The address might be mistyped, or the page moved. These still work:</p>
+  <div class="hero-actions">
+    <a class="btn btn-big" href="/">Go home</a>
+    <a class="btn btn-ghost btn-big" href="/updates">See what's new</a>
+  </div>
+</section>'''
+page("404", "Page not found", "This page doesn't exist.", lost, scripts=())
 
 page("terms", "Terms of Service", "The terms for using Solrino, its website and its badge service.", TERMS, scripts=())
 page("privacy", "Privacy Policy", "What data Solrino uses, where it goes, and how to control it.", PRIVACY, scripts=())

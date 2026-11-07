@@ -12,6 +12,7 @@
 <link rel="icon" href="/assets/icon.png">
 <link rel="preload" href="/assets/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/style.css">
+<script type="speculationrules">{"prefetch": [{"where": {"href_matches": "/*"}, "eagerness": "moderate"}]}</script>
 <script>
 document.documentElement.classList.add("js");
 // The logo intro plays the first time someone opens the site, then never again in that browser
@@ -63,7 +64,7 @@ try {
       <button type="button" class="btn btn-big" data-download title="Solrino">Download for Windows</button>
       <a class="btn btn-ghost btn-big" href="#chat-text">Try the chat</a>
     </div>
-    <p class="platforms">Free for Windows. Works with Twitch, Kick, YouTube and TikTok.</p>
+    <p class="platforms">Free for Windows<span data-latest></span>. Works with Twitch, Kick, YouTube and TikTok.</p>
   </div>
   <div class="desk" id="demo">
     <div class="app" aria-label="Demo of Solrino's chat window. The chatters are made up.">
@@ -135,13 +136,13 @@ try {
   <div class="faq-wrap">
     <div class="sec-title sec-left"><h2>Common <em>questions.</em></h2><p>Something else? <a href="https://github.com/bloodylungs/Solrino/issues">Ask on GitHub.</a></p></div>
     <div class="faq-list">
-    <details class="faq-item glass"><summary>Is Solrino free?<i aria-hidden="true"></i></summary><p>Yes, it's free to download and use, with no ads.</p></details>
-    <details class="faq-item glass"><summary>What does it run on?<i aria-hidden="true"></i></summary><p>Windows. There isn't a Mac or Linux version.</p></details>
-    <details class="faq-item glass"><summary>Why does Windows show a warning when I install it?<i aria-hidden="true"></i></summary><p>The app isn't signed yet, so SmartScreen doesn't recognize it. Click <b>More info</b>, then <b>Run anyway</b>.</p></details>
-    <details class="faq-item glass"><summary>Will the on-screen pings work over my game?<i aria-hidden="true"></i></summary><p>In borderless and windowed games, yes. Exclusive fullscreen can hide them. The cards are a normal always-on-top window that clicks pass through, and they don't touch the game itself. Every game's anti-cheat has its own rules, so check them if you're unsure.</p></details>
-    <details class="faq-item glass"><summary>Can I keep my Chatterino or Moltorino setup?<i aria-hidden="true"></i></summary><p>Yes. The first time you run setup, it asks if you'd like to bring over your settings, chat tabs and accounts from another fork.</p></details>
-    <details class="faq-item glass"><summary>How do I get a badge?<i aria-hidden="true"></i></summary><p>Solrino's owner gives out most badges, and event badges are free for everyone. Once you have one, type <code>/vanity</code> in chat and equip it.</p></details>
-    <details class="faq-item glass"><summary>Who can see my badge?<i aria-hidden="true"></i></summary><p>Everyone using Solrino, usually within a couple of seconds of it changing. People on the Twitch website or other chat apps won't see it.</p></details>
+    <details class="faq-item glass" id="is-solrino-free"><summary>Is Solrino free?<i aria-hidden="true"></i></summary><p>Yes, it's free to download and use, with no ads.</p></details>
+    <details class="faq-item glass" id="what-does-it-run-on"><summary>What does it run on?<i aria-hidden="true"></i></summary><p>Windows. There isn't a Mac or Linux version.</p></details>
+    <details class="faq-item glass" id="why-does-windows-show-a-warning-when-i-install-it"><summary>Why does Windows show a warning when I install it?<i aria-hidden="true"></i></summary><p>The app isn't signed yet, so SmartScreen doesn't recognize it. Click <b>More info</b>, then <b>Run anyway</b>.</p></details>
+    <details class="faq-item glass" id="will-the-on-screen-pings-work-over-my-game"><summary>Will the on-screen pings work over my game?<i aria-hidden="true"></i></summary><p>In borderless and windowed games, yes. Exclusive fullscreen can hide them. The cards are a normal always-on-top window that clicks pass through, and they don't touch the game itself. Every game's anti-cheat has its own rules, so check them if you're unsure.</p></details>
+    <details class="faq-item glass" id="can-i-keep-my-chatterino-or-moltorino-setup"><summary>Can I keep my Chatterino or Moltorino setup?<i aria-hidden="true"></i></summary><p>Yes. The first time you run setup, it asks if you'd like to bring over your settings, chat tabs and accounts from another fork.</p></details>
+    <details class="faq-item glass" id="how-do-i-get-a-badge"><summary>How do I get a badge?<i aria-hidden="true"></i></summary><p>Solrino's owner gives out most badges, and event badges are free for everyone. Once you have one, type <code>/vanity</code> in chat and equip it.</p></details>
+    <details class="faq-item glass" id="who-can-see-my-badge"><summary>Who can see my badge?<i aria-hidden="true"></i></summary><p>Everyone using Solrino, usually within a couple of seconds of it changing. People on the Twitch website or other chat apps won't see it.</p></details>
     </div>
   </div>
 </section>
@@ -150,6 +151,7 @@ try {
   <img src="/assets/icon.png" alt="" width="84" height="84">
   <h2>Download Solrino.</h2>
   <p>It's free and updates itself. Setup can bring over your settings and tabs from another fork.</p>
+  <p class="small latest-line" data-latest-full hidden></p>
   <button type="button" class="btn btn-big" data-download title="Solrino">Download for Windows</button>
   <p class="small">Windows may show a SmartScreen warning because the app isn't signed yet. Click <b>More info</b>, then <b>Run anyway</b>.</p>
 </section>

@@ -12,6 +12,7 @@
 <link rel="icon" href="/assets/icon.png">
 <link rel="preload" href="/assets/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/style.css">
+<script type="speculationrules">{"prefetch": [{"where": {"href_matches": "/*"}, "eagerness": "moderate"}]}</script>
 <script>
 document.documentElement.classList.add("js");
 // The logo intro plays the first time someone opens the site, then never again in that browser
@@ -60,6 +61,15 @@ try {
   <p class="lede">When a new version is ready, a card asks whether to update now, update when you quit, or remind you later.</p>
 </header>
 <section class="shell narrow">
+  <div class="toolbar" role="search" id="update-tools" hidden>
+    <label class="search"><span class="sr">Search changes</span>
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input type="search" id="update-search" placeholder="Search changes" autocomplete="off"><kbd aria-hidden="true">/</kbd>
+    </label>
+    <div class="filters" aria-label="Show a kind of change"><button type="button" class="filter" data-filter="all" aria-pressed="true">All</button><button type="button" class="filter" data-filter="new" aria-pressed="false">New</button><button type="button" class="filter" data-filter="fixed" aria-pressed="false">Fixed</button><button type="button" class="filter" data-filter="removed" aria-pressed="false">Removed</button></div>
+    <p class="toolbar-count" id="update-count" aria-live="polite"></p>
+  </div>
+  <p class="empty" id="update-empty" hidden>No changes match that. <button type="button" class="link-btn" id="update-reset">Show everything</button></p>
   <ol class="releases" id="releases">
     <li class="release is-latest"><header class="release-head"><h2 class="release-version">Every version</h2></header><div class="release-body changes"><p>See the full list on <a href="https://github.com/bloodylungs/Solrino/releases">GitHub</a>.</p></div></li>
   </ol>

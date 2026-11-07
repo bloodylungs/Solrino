@@ -148,3 +148,7 @@ aqtinstall.log
 /build_*/
 /cmake-build-*/
 /out/
+
+# Local website preview and deploy caches
+site/.claude/
+site/.wrangler/

@@ -358,6 +358,9 @@ public:
     void refreshLeadModStatus(bool force = false);
     void refreshChannelPoints();
     void refreshChannelPointsIfStale(bool force = false);
+    /// Claims the channel's "Claim bonus" if one is waiting
+    void checkForPointsBonus();
+    void claimPointsBonus(const QString &claimId);
     void handlePinnedChatUpdate(const QJsonObject &data);
 
     // Predictions & Points
@@ -791,6 +794,10 @@ private:
     QDateTime lastChannelPointsRefreshAt_;
     QDateTime lastChannelPointsUpdateAt_;
     QString lastChannelPointsError_;
+    QString pointsBonusClaimInFlight_;
+    QString lastClaimedPointsBonus_;
+    bool pointsBonusCheckInFlight_{false};
+    QTimer pointsBonusTimer_;
     bool disconnected_{};
     std::atomic<std::uint64_t> expectedReconnectGeneration_{};
     std::atomic<std::uint64_t> expectedReconnectToken_{};
