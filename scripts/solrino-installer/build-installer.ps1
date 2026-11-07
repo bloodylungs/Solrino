@@ -2,7 +2,10 @@
 # Uses only the C# compiler that ships with Windows, so it needs no extra tools.
 param(
     [string]$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path,
-    [string]$Notes = ''
+    [string]$Notes = '',
+    # The release notes, one "- New ..." / "- Fixed ..." line per change. The
+    # update card shows them in sections.
+    [string]$NotesFile = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,7 +54,30 @@ Remove-Item $work -Recurse -Force -Confirm:$false
 # What the app's updater reads. See RELEASING.md.
 $versionFile = Get-Content (Join-Path $ProjectRoot 'src\common\SolrinoVersion.hpp') -Raw
 if ($versionFile -notmatch '#define SOLRINO_VERSION "([0-9.]+)"') { throw 'SOLRINO_VERSION was not found.' }
-$manifest = [ordered]@{ version = $Matches[1]; sha256 = (Get-FileHash $output -Algorithm SHA256).Hash.ToLower(); notes = $Notes }
+$version = $Matches[1]
+$manifest = [ordered]@{ version = $version; sha256 = (Get-FileHash $output -Algorithm SHA256).Hash.ToLower(); notes = $Notes }
+
+# Each change for the card's sections: its kind, a short title from the first
+# sentence (without the "New"/"Fixed" word, which the section already says), and
+# the next sentence as detail. Older copies ignore this and show the notes.
+if ($NotesFile) {
+    $changes = @()
+    foreach ($line in Get-Content $NotesFile -Encoding UTF8) {
+        if ($line -notmatch '^\s*[-*]\s+(.+)$') { continue }
+        $text = $Matches[1].Trim()
+        $kind = 'changed'
+        if ($text -match '^(New|Added|Add)\b') { $kind = 'new' }
+        elseif ($text -match '^(Fixed|Fix)\b') { $kind = 'fixed' }
+        elseif ($text -match '^(Removed|Remove)\b') { $kind = 'removed' }
+        $sentences = [regex]::Split($text, '(?<=[.!?])\s+')
+        $title = $sentences[0] -replace '^(New|Added|Add|Fixed|Fix|Removed|Remove)\s+', '' -replace '[.!]$', ''
+        if ($title.Length -gt 0) { $title = $title.Substring(0, 1).ToUpper() + $title.Substring(1) }
+        $detail = if ($sentences.Count -gt 1) { $sentences[1] } else { '' }
+        $changes += [ordered]@{ kind = $kind; title = $title; detail = $detail }
+    }
+    $manifest.changes = $changes
+}
+
 $manifestPath = Join-Path $ProjectRoot 'build\solrino-update.json'
-[IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json))
-"Created $manifestPath for version $($Matches[1])"
+[IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 4))
+"Created $manifestPath for version $version"

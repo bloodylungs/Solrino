@@ -6,6 +6,7 @@
 #include <QRectF>
 #include <QString>
 #include <QTimer>
+#include <QVector>
 #include <QWidget>
 
 #include <array>
@@ -24,8 +25,19 @@ class SolrinoUpdatePrompt : public QWidget
 public:
     enum class Choice { UpdateNow, UpdateLater, RemindLater };
 
+    /// One line of the update log: kind is "new", "fixed", "removed" or
+    /// anything else (shown as "Changed")
+    struct Change {
+        QString kind;
+        QString title;
+        QString detail;
+    };
+
+    /// With changes, the card lists them in sections. Without, it shows the
+    /// notes as one paragraph, like updates from before sections existed.
     SolrinoUpdatePrompt(const QString &version, const QString &notes,
-                        std::function<void(Choice)> onChoice);
+                        std::function<void(Choice)> onChoice,
+                        QVector<Change> changes = {});
 
     /// The download has finished, so "Update now" works straight away.
     void setReady();
@@ -46,9 +58,23 @@ private:
     void drawButton(QPainter &painter, const QRectF &area, const QString &text,
                     bool primary, double hover);
     void tick();
+    /// Places the sections and changes, returning the height they need
+    int layoutChanges(int width);
+    void drawChanges(QPainter &painter);
+
+    /// One thing to draw in the changes list, placed relative to notesArea_
+    struct Piece {
+        enum class Kind { Tag, Bullet, Title, Detail };
+        Kind kind;
+        QRectF rect;
+        QString text;
+        QString changeKind;
+    };
 
     QString version_;
     QString notes_;
+    QVector<Change> changes_;
+    QVector<Piece> pieces_;
     bool ready_ = false;
     bool waiting_ = false;
     bool failed_ = false;

@@ -18,13 +18,16 @@ namespace chatterino {
 
 namespace {
 
-constexpr int CARD_WIDTH = 440;
+constexpr int CARD_WIDTH = 460;
 constexpr int SHADOW = 24;
 constexpr double RADIUS = 16;
 constexpr int PAD = 24;
 constexpr int LOGO = 58;
 constexpr int BUTTON_HEIGHT = 36;
 constexpr int NOTE_MAX_HEIGHT = 96;
+/// The sectioned list can grow taller than a paragraph, but not past this
+constexpr int CHANGES_MAX_HEIGHT = 380;
+constexpr int BULLET_INDENT = 16;
 
 const QColor WHITE(248, 241, 239);
 const QColor MUTED(186, 164, 162);
@@ -45,15 +48,61 @@ QString defaultNotes()
         "as they are.");
 }
 
+/// The sections, in the order they're shown
+struct Section {
+    QString kind;
+    QString label;
+    QColor text;
+    QColor fill;
+    QColor border;
+};
+
+const std::array<Section, 4> &sections()
+{
+    static const std::array<Section, 4> list{{
+        {"new", "NEW", QColor(139, 227, 168), QColor(31, 143, 74, 60),
+         QColor(63, 191, 109, 100)},
+        {"fixed", "FIXED", QColor(156, 194, 255), QColor(47, 111, 214, 60),
+         QColor(91, 143, 230, 100)},
+        {"changed", "CHANGED", QColor(255, 196, 120), QColor(200, 120, 20, 50),
+         QColor(255, 180, 84, 90)},
+        {"removed", "REMOVED", MUTED, QColor(255, 255, 255, 16),
+         QColor(255, 255, 255, 34)},
+    }};
+    return list;
+}
+
+const Section &sectionFor(const QString &kind)
+{
+    for (const auto &section : sections())
+    {
+        if (section.kind == kind)
+        {
+            return section;
+        }
+    }
+    return sections()[2];
+}
+
+double wrappedHeight(const QFont &font, int width, const QString &text)
+{
+    return std::ceil(QFontMetricsF(font)
+                         .boundingRect(QRectF(0, 0, width, 1000),
+                                       Qt::TextWordWrap, text)
+                         .height());
+}
+
 }  // namespace
 
 SolrinoUpdatePrompt::SolrinoUpdatePrompt(const QString &version,
                                          const QString &notes,
-                                         std::function<void(Choice)> onChoice)
+                                         std::function<void(Choice)> onChoice,
+                                         QVector<Change> changes)
     : QWidget(nullptr, Qt::Window | Qt::FramelessWindowHint |
                            Qt::NoDropShadowWindowHint)
     , version_(version)
     , notes_(notes.isEmpty() ? defaultNotes() : notes)
+    , changes_(std::move(changes))
     , onChoice_(std::move(onChoice))
     , logo_(QStringLiteral(":/icon.png"))
 {
@@ -65,13 +114,12 @@ SolrinoUpdatePrompt::SolrinoUpdatePrompt(const QString &version,
     this->setWindowTitle(QStringLiteral("Solrino update"));
 
     const int textWidth = CARD_WIDTH - PAD * 2;
-    const QFontMetricsF metrics(uiFont(13, false));
-    const int noteHeight = std::min(
-        NOTE_MAX_HEIGHT,
-        int(std::ceil(metrics
-                          .boundingRect(QRectF(0, 0, textWidth, 1000),
-                                        Qt::TextWordWrap, this->notes_)
-                          .height())));
+    const int noteHeight =
+        this->changes_.isEmpty()
+            ? std::min(NOTE_MAX_HEIGHT,
+                       int(wrappedHeight(uiFont(13, false), textWidth,
+                                         this->notes_)))
+            : std::min(CHANGES_MAX_HEIGHT, this->layoutChanges(textWidth));
     const int header = PAD + LOGO;
     const int cardHeight =
         header + 16 + noteHeight + 8 + 18 + 18 + BUTTON_HEIGHT + PAD;
@@ -125,6 +173,114 @@ void SolrinoUpdatePrompt::showProblem(const QString &problem)
     this->failed_ = true;
     this->notes_ = problem;
     this->update();
+}
+
+int SolrinoUpdatePrompt::layoutChanges(int width)
+{
+    const auto titleFont = uiFont(13, true);
+    const auto detailFont = uiFont(12, false);
+    const auto tagFont = uiFont(10, true);
+    const int textWidth = width - BULLET_INDENT;
+
+    double y = 0;
+    bool first = true;
+    for (const auto &section : sections())
+    {
+        QVector<const Change *> inSection;
+        for (const auto &change : this->changes_)
+        {
+            if (&sectionFor(change.kind) == &section)
+            {
+                inSection.push_back(&change);
+            }
+        }
+        if (inSection.isEmpty())
+        {
+            continue;
+        }
+
+        if (!first)
+        {
+            y += 12;
+        }
+        first = false;
+
+        const double tagWidth =
+            QFontMetricsF(tagFont).horizontalAdvance(section.label) + 18;
+        this->pieces_.push_back(
+            {Piece::Kind::Tag, QRectF(0, y, tagWidth, 19), section.label,
+             section.kind});
+        y += 19 + 8;
+
+        for (const auto *change : inSection)
+        {
+            const double titleHeight =
+                wrappedHeight(titleFont, textWidth, change->title);
+            this->pieces_.push_back({Piece::Kind::Bullet,
+                                     QRectF(3, y + 6, 6, 6), {}, section.kind});
+            this->pieces_.push_back(
+                {Piece::Kind::Title,
+                 QRectF(BULLET_INDENT, y, textWidth, titleHeight),
+                 change->title, section.kind});
+            y += titleHeight;
+
+            if (!change->detail.isEmpty())
+            {
+                const double detailHeight =
+                    wrappedHeight(detailFont, textWidth, change->detail);
+                y += 1;
+                this->pieces_.push_back(
+                    {Piece::Kind::Detail,
+                     QRectF(BULLET_INDENT, y, textWidth, detailHeight),
+                     change->detail, section.kind});
+                y += detailHeight;
+            }
+            y += 9;
+        }
+        y -= 9;
+    }
+    return int(std::ceil(y));
+}
+
+void SolrinoUpdatePrompt::drawChanges(QPainter &p)
+{
+    const auto origin = this->notesArea_.topLeft();
+    for (const auto &piece : this->pieces_)
+    {
+        const auto &section = sectionFor(piece.changeKind);
+        const auto rect = piece.rect.translated(origin);
+        switch (piece.kind)
+        {
+            case Piece::Kind::Tag:
+                p.setPen(QPen(section.border, 1));
+                p.setBrush(section.fill);
+                p.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), 6, 6);
+                p.setFont(uiFont(10, true));
+                p.setPen(section.text);
+                p.drawText(rect, Qt::AlignCenter, piece.text);
+                break;
+
+            case Piece::Kind::Bullet:
+                p.setPen(Qt::NoPen);
+                p.setBrush(section.text);
+                p.drawEllipse(rect);
+                break;
+
+            case Piece::Kind::Title:
+                p.setFont(uiFont(13, true));
+                p.setPen(WHITE);
+                p.drawText(rect, Qt::TextWordWrap | Qt::AlignLeft | Qt::AlignTop,
+                           piece.text);
+                break;
+
+            case Piece::Kind::Detail:
+                p.setFont(uiFont(12, false));
+                p.setPen(MUTED);
+                p.drawText(rect, Qt::TextWordWrap | Qt::AlignLeft | Qt::AlignTop,
+                           piece.text);
+                break;
+        }
+    }
 }
 
 void SolrinoUpdatePrompt::tick()
@@ -267,13 +423,22 @@ void SolrinoUpdatePrompt::paintEvent(QPaintEvent * /*event*/)
     p.drawText(QPointF(textLeft, card.top() + PAD + 50),
                QStringLiteral("Solrino %1").arg(this->version_));
 
-    // Notes
-    p.setFont(uiFont(13, false));
-    p.setPen(MUTED);
+    // What's new: in sections when the update lists its changes, otherwise
+    // one paragraph. A failed download shows why instead.
     p.save();
     p.setClipRect(this->notesArea_);
-    p.drawText(this->notesArea_, Qt::TextWordWrap | Qt::AlignLeft | Qt::AlignTop,
-               this->notes_);
+    if (!this->changes_.isEmpty() && !this->failed_)
+    {
+        this->drawChanges(p);
+    }
+    else
+    {
+        p.setFont(uiFont(13, false));
+        p.setPen(MUTED);
+        p.drawText(this->notesArea_,
+                   Qt::TextWordWrap | Qt::AlignLeft | Qt::AlignTop,
+                   this->notes_);
+    }
     p.restore();
 
     // What "Update later" means
