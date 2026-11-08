@@ -5,6 +5,7 @@
 #include <QJsonObject>
 #include <QString>
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <shared_mutex>
@@ -89,8 +90,13 @@ private:
     SolrinoPaints();
     void loadOwnPaints();
     void saveOwnPaints() const;
+    /// Call with the lock held after either map changes
+    void refreshAnyWorn();
 
     std::vector<std::shared_ptr<SolrinoPaint>> catalog_;
+    std::unordered_map<QString, std::shared_ptr<SolrinoPaint>> byId_;
+    /// Lets chats skip the lookup entirely while nobody wears a paint
+    std::atomic<bool> anyWorn_{false};
     mutable std::shared_mutex mutex_;
     std::unordered_map<QString, QString> serverPaints_;
     std::unordered_map<QString, QString> ownPaints_;

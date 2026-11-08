@@ -6,6 +6,7 @@
 
 #include <private/qpixmapfilter_p.h>
 #include <QFontMetricsF>
+#include <QCache>
 #include <QLabel>
 #include <QPainter>
 
@@ -30,6 +31,38 @@ QPixmap Paint::getPixmap(const QString &text, const QFont &font,
                          QColor userColor, QSizeF size, float scale,
                          float dpr, QMarginsF contentMargins,
                          bool separateTrailingColon) const
+{
+    // The same name is drawn many times: once per message, and again on every
+    // redraw of an animated paint. Drawing it and its shadows is slow, so each
+    // finished picture is kept for reuse. Animated paints put their current
+    // frame in the key, so they still move.
+    static QCache<QString, QPixmap> cache(24 * 1024);  // in KB
+
+    auto key = this->getPixmapCacheKey(text, font, userColor, size, scale, dpr,
+                                       contentMargins, separateTrailingColon);
+    if (separateTrailingColon && text.endsWith(u':'))
+    {
+        key += u'/' + QString::number(getApp()
+                                          ->getThemes()
+                                          ->messages.textColors.regular.rgba());
+    }
+    if (const auto *cached = cache.object(key))
+    {
+        return *cached;
+    }
+
+    auto pixmap = this->renderPixmap(text, font, userColor, size, scale, dpr,
+                                     contentMargins, separateTrailingColon);
+    const auto costKb = std::max<qsizetype>(
+        1, qsizetype(pixmap.width()) * pixmap.height() * 4 / 1024);
+    cache.insert(key, new QPixmap(pixmap), costKb);
+    return pixmap;
+}
+
+QPixmap Paint::renderPixmap(const QString &text, const QFont &font,
+                            QColor userColor, QSizeF size, float scale,
+                            float dpr, QMarginsF contentMargins,
+                            bool separateTrailingColon) const
 {
     contentMargins = {
         std::max<qreal>(0, contentMargins.left()),

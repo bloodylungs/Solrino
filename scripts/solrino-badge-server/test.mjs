@@ -327,6 +327,42 @@ test("the badges only one person holds are the right ones", async () => {
   assert.deepEqual(only, ["donor_of_the_month", "donor_of_the_year", "first_donor", "number_one_donor", "top_bug_hunter"]);
 });
 
+test("you can wear a paint, and others see it by your login", async () => {
+  const saved = await call("PUT", "/v2/paints/me", {
+    token: "friendtoken",
+    body: { userId: FRIEND, paint: "aurora" },
+  });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.paint, "aurora");
+  const list = await call("GET", "/v2/badges?refresh=1");
+  assert.equal(list.body.users[FRIEND].paint, "aurora");
+  assert.equal(list.body.users[FRIEND].login, "x");
+});
+
+test("a paint that doesn't exist can't be worn", async () => {
+  const res = await call("PUT", "/v2/paints/me", {
+    token: "friendtoken",
+    body: { userId: FRIEND, paint: "made_up_paint" },
+  });
+  assert.equal(res.status, 400);
+});
+
+test("you can't change someone else's paint", async () => {
+  const res = await call("PUT", "/v2/paints/me", {
+    token: "friendtoken",
+    body: { userId: OWNER, paint: "aurora" },
+  });
+  assert.equal(res.status, 403);
+  const nobody = await call("PUT", "/v2/paints/me", { body: { userId: FRIEND, paint: "aurora" } });
+  assert.equal(nobody.status, 401);
+});
+
+test("taking a paint off removes it from the list", async () => {
+  await call("PUT", "/v2/paints/me", { token: "friendtoken", body: { userId: FRIEND, paint: "" } });
+  const list = await call("GET", "/v2/badges?refresh=1");
+  assert.equal(list.body.users[FRIEND].paint, undefined);
+});
+
 test("login tokens are never saved", async () => {
   const saved = JSON.stringify([...store.values()]);
   for (const token of Object.keys(TOKENS)) assert.ok(!saved.includes(token));

@@ -55,6 +55,11 @@ protected:
     virtual qint64 sourcePixmapCacheKey() const;
 
 private:
+    QPixmap renderPixmap(const QString &text, const QFont &font,
+                         QColor userColor, QSizeF size, float scale, float dpr,
+                         QMarginsF contentMargins,
+                         bool separateTrailingColon) const;
+
     QString name_;
 };
 

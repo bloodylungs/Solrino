@@ -392,6 +392,8 @@ void Client::onEntitlementCreate(
             badges->assignBadgeToUsers(entitlement.refID,
                                        entitlement.connections);
             badges->loadBadgeByID(entitlement.refID);
+            // Their messages from before 7TV said so get the badge too
+            badges->backfillUsers(entitlement.connections);
         }
         break;
         case CosmeticKind::Paint: {

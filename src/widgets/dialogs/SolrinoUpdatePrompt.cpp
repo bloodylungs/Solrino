@@ -10,6 +10,7 @@
 #include <QPainterPath>
 #include <QRadialGradient>
 #include <QScreen>
+#include <QWheelEvent>
 
 #include <algorithm>
 #include <cmath>
@@ -114,12 +115,14 @@ SolrinoUpdatePrompt::SolrinoUpdatePrompt(const QString &version,
     this->setWindowTitle(QStringLiteral("Solrino update"));
 
     const int textWidth = CARD_WIDTH - PAD * 2;
-    const int noteHeight =
+    // Anything taller than the card's limit scrolls
+    this->contentHeight_ =
         this->changes_.isEmpty()
-            ? std::min(NOTE_MAX_HEIGHT,
-                       int(wrappedHeight(uiFont(13, false), textWidth,
-                                         this->notes_)))
-            : std::min(CHANGES_MAX_HEIGHT, this->layoutChanges(textWidth));
+            ? int(wrappedHeight(uiFont(13, false), textWidth, this->notes_))
+            : this->layoutChanges(textWidth);
+    const int noteHeight = std::min(
+        this->changes_.isEmpty() ? NOTE_MAX_HEIGHT : CHANGES_MAX_HEIGHT,
+        this->contentHeight_);
     const int header = PAD + LOGO;
     const int cardHeight =
         header + 16 + noteHeight + 8 + 18 + 18 + BUTTON_HEIGHT + PAD;
@@ -172,6 +175,9 @@ void SolrinoUpdatePrompt::showProblem(const QString &problem)
     this->waiting_ = false;
     this->failed_ = true;
     this->notes_ = problem;
+    this->contentHeight_ = int(wrappedHeight(
+        uiFont(13, false), int(this->notesArea_.width()), this->notes_));
+    this->scrollTo(0, true);
     this->update();
 }
 
@@ -283,6 +289,117 @@ void SolrinoUpdatePrompt::drawChanges(QPainter &p)
     }
 }
 
+double SolrinoUpdatePrompt::maxScroll() const
+{
+    return std::max(0.0, this->contentHeight_ - this->notesArea_.height());
+}
+
+void SolrinoUpdatePrompt::scrollTo(double offset, bool instant)
+{
+    this->scrollTarget_ = std::clamp(offset, 0.0, this->maxScroll());
+    if (instant || !solrino::smoothAnimationsEnabled())
+    {
+        this->scroll_ = this->scrollTarget_;
+    }
+    this->update();
+}
+
+QRectF SolrinoUpdatePrompt::scrollTrack() const
+{
+    // In the card's right padding, beside the list
+    return {this->notesArea_.right() + 9, this->notesArea_.top(), 4,
+            this->notesArea_.height()};
+}
+
+QRectF SolrinoUpdatePrompt::scrollThumb() const
+{
+    const auto track = this->scrollTrack();
+    const double height = std::max(
+        28.0, track.height() * track.height() / this->contentHeight_);
+    const double travel = track.height() - height;
+    const double max = this->maxScroll();
+    return {track.left(),
+            track.top() + (max > 0 ? travel * this->scroll_ / max : 0.0),
+            track.width(), height};
+}
+
+void SolrinoUpdatePrompt::drawNotes(QPainter &p)
+{
+    // Drawn on its own layer, so the edges can fade out where it scrolls
+    const double dpr = this->devicePixelRatioF();
+    QPixmap layer((this->notesArea_.size() * dpr).toSize());
+    layer.setDevicePixelRatio(dpr);
+    layer.fill(Qt::transparent);
+    {
+        QPainter lp(&layer);
+        lp.setRenderHints(p.renderHints());
+        lp.translate(-this->notesArea_.topLeft());
+        lp.translate(0, -this->scroll_);
+        if (!this->changes_.isEmpty() && !this->failed_)
+        {
+            this->drawChanges(lp);
+        }
+        else
+        {
+            lp.setFont(uiFont(13, false));
+            lp.setPen(MUTED);
+            lp.drawText(
+                QRectF(this->notesArea_.topLeft(),
+                       QSizeF(this->notesArea_.width(),
+                              std::max<double>(this->contentHeight_,
+                                               this->notesArea_.height()))),
+                Qt::TextWordWrap | Qt::AlignLeft | Qt::AlignTop, this->notes_);
+        }
+
+        const double height = this->notesArea_.height();
+        const double fade = std::min(28.0, height / 4);
+        const bool moreAbove = this->scroll_ > 0.5;
+        const bool moreBelow = this->scroll_ < this->maxScroll() - 0.5;
+        if (moreAbove || moreBelow)
+        {
+            lp.resetTransform();
+            lp.setCompositionMode(QPainter::CompositionMode_DestinationIn);
+            QLinearGradient mask(0, 0, 0, height);
+            mask.setColorAt(0, QColor(0, 0, 0, moreAbove ? 0 : 255));
+            mask.setColorAt(fade / height, Qt::black);
+            mask.setColorAt(1 - (fade / height), Qt::black);
+            mask.setColorAt(1, QColor(0, 0, 0, moreBelow ? 0 : 255));
+            lp.fillRect(QRectF(0, 0, this->notesArea_.width(), height), mask);
+        }
+    }
+    p.drawPixmap(this->notesArea_.topLeft(), layer);
+}
+
+void SolrinoUpdatePrompt::drawScrollBar(QPainter &p)
+{
+    if (this->maxScroll() <= 0)
+    {
+        return;
+    }
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(255, 255, 255, 18));
+    p.drawRoundedRect(this->scrollTrack(), 2, 2);
+    const bool active = this->thumbHovered_ || this->draggingThumb_;
+    p.setBrush(active ? QColor(255, 110, 114, 220)
+                      : QColor(255, 255, 255, 90));
+    p.drawRoundedRect(this->scrollThumb(), 2, 2);
+}
+
+void SolrinoUpdatePrompt::wheelEvent(QWheelEvent *event)
+{
+    if (this->maxScroll() <= 0)
+    {
+        event->ignore();
+        return;
+    }
+    const auto pixels = event->pixelDelta();
+    const double step = !pixels.isNull()
+                            ? double(pixels.y())
+                            : double(event->angleDelta().y()) / 120.0 * 52.0;
+    this->scrollTo(this->scrollTarget_ - step, !pixels.isNull());
+    event->accept();
+}
+
 void SolrinoUpdatePrompt::tick()
 {
     // Hover eases in and out; the glow behind the logo breathes slowly
@@ -291,6 +408,12 @@ void SolrinoUpdatePrompt::tick()
         const double target = this->hovered_ == i ? 1.0 : 0.0;
         this->hover_[i] += (target - this->hover_[i]) *
                            (solrino::smoothAnimationsEnabled() ? 0.22 : 1.0);
+    }
+    this->scroll_ += (this->scrollTarget_ - this->scroll_) *
+                     (solrino::smoothAnimationsEnabled() ? 0.3 : 1.0);
+    if (std::abs(this->scrollTarget_ - this->scroll_) < 0.25)
+    {
+        this->scroll_ = this->scrollTarget_;
     }
     this->update();
 }
@@ -425,21 +548,8 @@ void SolrinoUpdatePrompt::paintEvent(QPaintEvent * /*event*/)
 
     // What's new: in sections when the update lists its changes, otherwise
     // one paragraph. A failed download shows why instead.
-    p.save();
-    p.setClipRect(this->notesArea_);
-    if (!this->changes_.isEmpty() && !this->failed_)
-    {
-        this->drawChanges(p);
-    }
-    else
-    {
-        p.setFont(uiFont(13, false));
-        p.setPen(MUTED);
-        p.drawText(this->notesArea_,
-                   Qt::TextWordWrap | Qt::AlignLeft | Qt::AlignTop,
-                   this->notes_);
-    }
-    p.restore();
+    this->drawNotes(p);
+    this->drawScrollBar(p);
 
     // What "Update later" means
     p.setFont(uiFont(11, false));
@@ -499,10 +609,30 @@ void SolrinoUpdatePrompt::paintEvent(QPaintEvent * /*event*/)
 
 void SolrinoUpdatePrompt::mouseMoveEvent(QMouseEvent *event)
 {
+    if (this->draggingThumb_)
+    {
+        const auto track = this->scrollTrack();
+        const double travel = track.height() - this->scrollThumb().height();
+        if (travel > 0)
+        {
+            const double top =
+                event->position().y() - this->thumbGrab_ - track.top();
+            this->scrollTo(top / travel * this->maxScroll(), true);
+        }
+        return;
+    }
     if (this->dragging_)
     {
         this->move(event->globalPosition().toPoint() - this->dragOffset_);
         return;
+    }
+    const bool overThumb =
+        this->maxScroll() > 0 &&
+        this->scrollTrack().adjusted(-6, 0, 6, 0).contains(event->position());
+    if (overThumb != this->thumbHovered_)
+    {
+        this->thumbHovered_ = overThumb;
+        this->update();
     }
     this->hovered_ = this->controlAt(event->position());
     this->setCursor(this->hovered_ >= 0 ? Qt::PointingHandCursor
@@ -513,6 +643,24 @@ void SolrinoUpdatePrompt::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() != Qt::LeftButton)
     {
+        return;
+    }
+    // The scrollbar: grab the thumb, or click the track to jump a page
+    if (this->maxScroll() > 0 &&
+        this->scrollTrack().adjusted(-6, 0, 6, 0).contains(event->position()))
+    {
+        const auto thumb = this->scrollThumb();
+        if (thumb.adjusted(-6, 0, 6, 0).contains(event->position()))
+        {
+            this->draggingThumb_ = true;
+            this->thumbGrab_ = event->position().y() - thumb.top();
+        }
+        else
+        {
+            const double page = this->notesArea_.height() * 0.85;
+            this->scrollTo(this->scrollTarget_ +
+                           (event->position().y() < thumb.top() ? -page : page));
+        }
         return;
     }
     this->pressed_ = this->controlAt(event->position());
@@ -526,6 +674,12 @@ void SolrinoUpdatePrompt::mousePressEvent(QMouseEvent *event)
 void SolrinoUpdatePrompt::mouseReleaseEvent(QMouseEvent *event)
 {
     this->dragging_ = false;
+    if (this->draggingThumb_)
+    {
+        this->draggingThumb_ = false;
+        this->update();
+        return;
+    }
     const int released = this->controlAt(event->position());
     const int pressed = this->pressed_;
     this->pressed_ = -1;
@@ -560,6 +714,7 @@ void SolrinoUpdatePrompt::mouseReleaseEvent(QMouseEvent *event)
 void SolrinoUpdatePrompt::leaveEvent(QEvent * /*event*/)
 {
     this->hovered_ = -1;
+    this->thumbHovered_ = false;
     this->setCursor(Qt::ArrowCursor);
 }
 
