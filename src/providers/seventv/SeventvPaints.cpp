@@ -1,5 +1,7 @@
 #include "providers/seventv/SeventvPaints.hpp"
 
+#include "providers/moltorino/SolrinoPaints.hpp"
+
 #include "Application.hpp"
 #include "common/network/NetworkRequest.hpp"
 #include "common/network/NetworkResult.hpp"
@@ -197,6 +199,15 @@ SeventvPaints::SeventvPaints() = default;
 std::shared_ptr<Paint> SeventvPaints::getPaint(const QString &userName,
                                                bool kick) const
 {
+    // Solrino's own paints are worn over 7TV ones
+    if (!kick)
+    {
+        if (auto solrino = SolrinoPaints::instance().forLogin(userName))
+        {
+            return solrino;
+        }
+    }
+
     std::shared_lock lock(this->mutex_);
 
     const auto &assignments =
@@ -212,6 +223,11 @@ std::shared_ptr<Paint> SeventvPaints::getPaint(const QString &userName,
 
 std::shared_ptr<Paint> SeventvPaints::getPaintByID(const QString &paintID) const
 {
+    if (paintID.startsWith(QLatin1String(SolrinoPaints::ID_PREFIX)))
+    {
+        return SolrinoPaints::instance().byId(paintID);
+    }
+
     const auto normalized = normalizePaintID(paintID);
     if (normalized.isEmpty())
     {

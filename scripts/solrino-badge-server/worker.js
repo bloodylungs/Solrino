@@ -4,6 +4,7 @@
 //   GET  /v2/badges              Everyone's badges, read by every Solrino.
 //   GET  /v2/badges/me?userId=   One person's badges and layout.
 //   PUT  /v2/badges/me           Saves your own layout and equipped badge.
+//   PUT  /v2/paints/me           Wears one of Solrino's username paints.
 //   POST /v2/badges/give         The owner gives someone a badge.
 //   POST /v2/badges/take         The owner takes a badge away.
 //   GET  /v2/badges/socket       A live connection announcing each change.
@@ -84,6 +85,22 @@ const BADGES = [
 }));
 const BADGE_IDS = new Set(BADGES.map((badge) => badge.id));
 
+// Username paints anyone can wear. The app draws them itself.
+const PAINT_IDS = new Set([
+  "sunset", "deep_ocean", "rose_gold", "chrome", "toxic", "candy_cane", "galaxy",
+  "cotton_candy", "blood_moon", "rainbow_flow", "aurora", "ember", "gold_shimmer",
+  "neon_pulse", "frostbite", "witching_hour", "peach_fuzz", "lavender_haze",
+  "matcha_latte", "pink_lemonade", "tropical", "mermaid", "dragonfruit", "sakura_petal",
+  "midnight_city", "vaporwave", "bubblegum_split", "sunrise_split", "holographic",
+  "copper", "emerald", "sapphire", "amethyst", "ruby", "pearl", "barbershop", "bumblebee",
+  "watermelon", "arctic", "lava", "forest_spirit", "cherry_cola", "glitter", "starlight",
+  "disco_ball", "ocean_wave", "lava_lamp", "toxic_waste", "glitch", "siren", "heartbeat",
+  "mainframe", "prism", "liquid_chrome", "holo_flow", "candy_swirl", "barber_pole",
+  "caution_tape", "sunset_drift", "thunderstorm", "plasma", "phantom", "bubblegum_pop",
+  "sea_glass", "fireflies", "snowfall", "rgb_gamer", "rose_shimmer", "diamond", "inferno",
+  "galaxy_swirl",
+]);
+
 function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
     status,
@@ -136,6 +153,11 @@ function listBody(state) {
     if (user.order?.length) entry.order = user.order;
     if (user.hidden?.length) entry.hidden = user.hidden;
     if (user.explicit) entry.activeBadge = user.activeBadge ?? "";
+    // Chat names are logins, so paints are listed with one
+    if (user.paint && user.login) {
+      entry.paint = user.paint;
+      entry.login = user.login;
+    }
     users[id] = entry;
   }
   return {
@@ -150,6 +172,11 @@ function listBody(state) {
 
 /** Asks Twitch who a login token belongs to. Returns null if it isn't valid. */
 async function verifiedUserId(request) {
+  return (await verifiedUser(request))?.userId ?? null;
+}
+
+/** Like verifiedUserId, but also gives the Twitch login. */
+async function verifiedUser(request) {
   const header = request.headers.get("authorization") ?? "";
   const match = header.match(/^OAuth ([A-Za-z0-9]{1,256})$/);
   if (!match) return null;
@@ -158,7 +185,9 @@ async function verifiedUserId(request) {
   });
   if (!reply.ok) return null;
   const body = await reply.json();
-  return typeof body.user_id === "string" && USER_ID.test(body.user_id) ? body.user_id : null;
+  if (typeof body.user_id !== "string" || !USER_ID.test(body.user_id)) return null;
+  const login = typeof body.login === "string" ? body.login.toLowerCase() : "";
+  return { userId: body.user_id, login };
 }
 
 async function readBody(request) {
@@ -291,6 +320,24 @@ export class BadgeHub {
     return json({ userId: caller, profile: profileOf(user), assignedBadges: ownedBadges(user) });
   }
 
+  async putPaint(request) {
+    const caller = await verifiedUser(request);
+    if (!caller) return fail(401, "not_verified", "Twitch didn't confirm this login.");
+
+    const body = await readBody(request);
+    if (!body) return fail(400, "bad_request", "That request couldn't be read.");
+    if (body.userId !== caller.userId) return fail(403, "wrong_user", "You can only change your own paint.");
+    const paint = typeof body.paint === "string" ? body.paint.trim().toLowerCase() : "";
+    if (paint && !PAINT_IDS.has(paint)) return fail(400, "bad_paint", "That paint doesn't exist.");
+
+    const state = await this.readState();
+    const user = userEntry(state, caller.userId);
+    user.paint = paint;
+    user.login = caller.login;
+    await this.writeState(state);
+    return json({ userId: caller.userId, paint });
+  }
+
   async changeBadge(request, giving) {
     const caller = await verifiedUserId(request);
     if (!caller) return fail(401, "not_verified", "Twitch didn't confirm this login.");
@@ -338,6 +385,8 @@ export class BadgeHub {
         return this.openSocket(request);
       case "PUT /v2/badges/me":
         return this.putMe(request);
+      case "PUT /v2/paints/me":
+        return this.putPaint(request);
       case "POST /v2/badges/give":
         return this.changeBadge(request, true);
       case "POST /v2/badges/take":

@@ -18,6 +18,7 @@
 #include "providers/ffzap/FfzApBadges.hpp"
 #include "providers/homies/HomiesBadges.hpp"
 #include "providers/moltorino/MoltorinoAuth.hpp"
+#include "providers/moltorino/SolrinoPaints.hpp"
 #include "providers/seventv/SeventvBadges.hpp"
 #include "providers/seventv/SeventvPaints.hpp"
 #include "providers/twitch/api/Helix.hpp"
@@ -30,6 +31,7 @@
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
 #include "widgets/dialogs/SolrinoBadgePanel.hpp"
+#include "widgets/dialogs/SolrinoPaintGallery.hpp"
 #include "widgets/buttons/Button.hpp"
 #include "widgets/buttons/SvgButton.hpp"
 #include "widgets/helper/Line.hpp"
@@ -2133,19 +2135,23 @@ void VanityDialog::buildUi()
     this->sevenTVBadgePage_ = this->buildSevenTVBadgeTab();
     this->moltorinoBadgePage_ = this->buildMoltorinoBadgeTab();
     this->layoutPage_ = this->buildLayoutTab();
+    this->buildSolrinoPaintTab();
     this->tabs_->addTab(this->colorPage_, QStringLiteral("Color"));
     this->tabs_->addTab(this->globalBadgePage_, QStringLiteral("Global"));
     this->tabs_->addTab(this->channelBadgePage_, QStringLiteral("Channel"));
     this->tabs_->addTab(this->sevenTVBadgePage_, QStringLiteral("7TV"));
     this->tabs_->addTab(this->paintPage_, QStringLiteral("Paints"));
     this->tabs_->addTab(this->moltorinoBadgePage_, QStringLiteral("Solrino"));
+    this->tabs_->addTab(this->solrinoPaintPage_,
+                        QStringLiteral("Solrino Paints"));
     this->tabs_->addTab(this->layoutPage_, QStringLiteral("Order"));
     this->tabs_->setTabToolTip(1, QStringLiteral("Twitch global badge"));
     this->tabs_->setTabToolTip(2, QStringLiteral("Badge for this channel"));
     this->tabs_->setTabToolTip(3, QStringLiteral("7TV badge"));
     this->tabs_->setTabToolTip(4, QStringLiteral("7TV paint"));
     this->tabs_->setTabToolTip(5, QStringLiteral("Solrino badge"));
-    this->tabs_->setTabToolTip(6, QStringLiteral("Badge order and visibility"));
+    this->tabs_->setTabToolTip(6, QStringLiteral("Solrino username paints"));
+    this->tabs_->setTabToolTip(7, QStringLiteral("Badge order and visibility"));
     this->mainLayout_->addWidget(this->tabs_, 1);
     QObject::connect(this->tabs_, &QTabWidget::currentChanged, this,
                      [this](int) {
@@ -2326,6 +2332,61 @@ QWidget *VanityDialog::buildColorTab()
                          this->refreshPreview();
                      });
     return page;
+}
+
+QWidget *VanityDialog::buildSolrinoPaintTab()
+{
+    this->solrinoPaintPage_ = new SolrinoPaintGallery(this->tabs_);
+    this->solrinoPaintPage_->setObjectName(QStringLiteral("VanityTabPage"));
+    this->solrinoPaintPage_->paintChosen = [this](const QString &paintId) {
+        this->chooseSolrinoPaint(paintId);
+    };
+    return this->solrinoPaintPage_;
+}
+
+void VanityDialog::chooseSolrinoPaint(const QString &paintId)
+{
+    if (this->accountLogin_.isEmpty())
+    {
+        this->solrinoPaintPage_->setStatus(
+            QStringLiteral("Log in to Twitch to wear a paint."), true);
+        return;
+    }
+
+    const auto paint = SolrinoPaints::instance().byId(paintId);
+    const auto account = getApp()->getAccounts()->twitch.getCurrent();
+    this->solrinoPaintPage_->setStatus(
+        paint ? QStringLiteral("Wearing %1. Saving...")
+                    .arg(paint->style().name)
+              : QStringLiteral("Paint removed. Saving..."));
+    QPointer<SolrinoPaintGallery> gallery = this->solrinoPaintPage_;
+    SolrinoPaints::instance().setOwnPaint(
+        this->accountLogin_, this->accountUserId_,
+        account ? account->getOAuthToken() : QString(), paintId, this,
+        [gallery, name = paint ? paint->style().name : QString()](
+            bool confirmed) {
+            if (!gallery)
+            {
+                return;
+            }
+            if (confirmed)
+            {
+                gallery->setStatus(
+                    name.isEmpty()
+                        ? QStringLiteral("Paint removed for everyone.")
+                        : QStringLiteral("Wearing %1. Everyone on Solrino "
+                                         "can see it.")
+                              .arg(name));
+            }
+            else
+            {
+                gallery->setStatus(
+                    QStringLiteral("Saved on this device. Others will see it "
+                                   "once it syncs online."));
+            }
+        });
+    this->refreshPreview();
+    getApp()->getWindows()->invalidateChannelViewBuffers();
 }
 
 QWidget *VanityDialog::buildSevenTVPaintTab()
@@ -2800,6 +2861,10 @@ void VanityDialog::refreshStyle()
     this->setFont(
         getApp()->getFonts()->getFont(FontStyle::UiMedium, scale));
     this->preview_->setUiScale(scale);
+    if (this->solrinoPaintPage_ != nullptr)
+    {
+        this->solrinoPaintPage_->setUiScale(scale);
+    }
     this->closeButton_->setOverrideScale(scale);
     this->pinButton_->setOverrideScale(scale);
     for (auto *button : this->sevenTVRefreshButtons_)
@@ -5314,10 +5379,24 @@ void VanityDialog::refreshPreview()
     {
         getApp()->getSeventvPaints()->loadPaintByID(paintId);
     }
-    const bool useActivePaint = !this->sevenTVLoaded_;
+    // A Solrino paint is worn over a 7TV one, so the preview shows it first
+    const auto solrinoPaint =
+        SolrinoPaints::instance().ownPaint(this->accountLogin_);
+    const auto previewPaintId =
+        solrinoPaint.isEmpty()
+            ? paintId
+            : QString(SolrinoPaints::ID_PREFIX) + solrinoPaint;
+    const bool useActivePaint =
+        !this->sevenTVLoaded_ && solrinoPaint.isEmpty();
     this->preview_->setPreview(this->accountDisplayName_, this->accountLogin_,
-                               this->selectedColor_, paintId, useActivePaint,
-                               std::move(badges));
+                               this->selectedColor_, previewPaintId,
+                               useActivePaint, std::move(badges));
+    if (this->solrinoPaintPage_ != nullptr)
+    {
+        this->solrinoPaintPage_->setIdentity(this->accountDisplayName_,
+                                             this->selectedColor_);
+        this->solrinoPaintPage_->setSelected(solrinoPaint);
+    }
     if (this->paintGrid_ != nullptr)
     {
         this->paintGrid_->setSelected(paintId);

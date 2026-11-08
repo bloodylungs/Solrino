@@ -531,6 +531,8 @@ set(SOURCE_FILES
         providers/moltorino/MoltorinoPresence.hpp
         providers/moltorino/MoltorinoSupporterBadges.cpp
         providers/moltorino/MoltorinoSupporterBadges.hpp
+        providers/moltorino/SolrinoPaints.cpp
+        providers/moltorino/SolrinoPaints.hpp
         providers/moltorino/MoltorinoUpdater.cpp
         providers/moltorino/MoltorinoUpdater.hpp
 
@@ -767,6 +769,8 @@ set(SOURCE_FILES
         singletons/StreamerMode.hpp
         singletons/Theme.cpp
         singletons/Theme.hpp
+        singletons/SeasonalDecorations.cpp
+        singletons/SeasonalDecorations.hpp
         singletons/ThemeCustomization.cpp
         singletons/ThemeCustomization.hpp
         singletons/ThemeVideo.cpp
@@ -1080,6 +1084,8 @@ set(SOURCE_FILES
         providers/moltorino/MoltorinoOriginalBadges.hpp
         widgets/dialogs/SolrinoBadgePanel.cpp
         widgets/dialogs/SolrinoBadgePanel.hpp
+        widgets/dialogs/SolrinoPaintGallery.cpp
+        widgets/dialogs/SolrinoPaintGallery.hpp
         widgets/dialogs/SolrinoUpdatePrompt.cpp
         widgets/dialogs/SolrinoUpdatePrompt.hpp
         singletons/SolrinoUpdater.cpp

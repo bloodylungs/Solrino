@@ -1,5 +1,7 @@
 #include "providers/moltorino/MoltorinoSupporterBadges.hpp"
 
+#include "providers/moltorino/SolrinoPaints.hpp"
+
 #include "common/SolrinoVersion.hpp"
 
 #include "Application.hpp"
@@ -1529,6 +1531,11 @@ bool MoltorinoSupporterBadges::applyPayload(const QByteArray &payload,
         this->decorationsDisabledUsers_ =
             std::move(parsed.decorationsDisabledUsers);
         this->vanityLayouts_ = std::move(parsed.vanityLayouts);
+    }
+    if (parsed.isV2)
+    {
+        SolrinoPaints::instance().applyServerUsers(
+            QJsonDocument::fromJson(payload).object().value("users").toObject());
     }
     if (removedLocalLayout)
     {

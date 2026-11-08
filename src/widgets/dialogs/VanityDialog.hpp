@@ -45,6 +45,7 @@ std::vector<TwitchBadge> withSelectedTwitchVanityBadge(
 }
 
 class Button;
+class SolrinoPaintGallery;
 class SvgButton;
 class TwitchChannel;
 class VanityChoiceGrid;
@@ -111,6 +112,8 @@ private:
                               bool owned);
     void selectMoltorinoTiles(const QString &key);
     QWidget *buildLayoutTab();
+    QWidget *buildSolrinoPaintTab();
+    void chooseSolrinoPaint(const QString &paintId);
     QWidget *buildSevenTVConnectionHeader(QWidget *parent, const QString &title,
                                           const QString &disconnectedText);
     void refreshStyle();
@@ -199,6 +202,7 @@ private:
     QWidget *channelBadgePage_{};
     QWidget *sevenTVBadgePage_{};
     QWidget *moltorinoBadgePage_{};
+    SolrinoPaintGallery *solrinoPaintPage_{};
     QTabWidget *moltorinoBadgeTabs_{};
     QWidget *layoutPage_{};
     QButtonGroup *colorButtons_{};
