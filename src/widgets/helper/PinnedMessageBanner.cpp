@@ -360,6 +360,7 @@ PinnedMessageBanner::PinnedMessageBanner(Split *split, QWidget *parent)
     this->unpinButton_->setGraphicsEffect(new QGraphicsOpacityEffect);
     static_cast<QGraphicsOpacityEffect*>(this->unpinButton_->graphicsEffect())->setOpacity(0.5);
     this->unpinButton_->setVisible(true);
+    this->unpinButton_->installEventFilter(this);
     this->topLayout_->addWidget(this->unpinButton_, 0, Qt::AlignBottom);
 
     layout->addLayout(this->topLayout_);
@@ -740,26 +741,28 @@ void PinnedMessageBanner::setPinnedMessage(
               "you"
             : "Hide this pin for you");
 
+    // Always clickable. Whether someone is a mod is checked on each click,
+    // because the pin often loads before Twitch says they're a mod, and a
+    // choice made now would stay wrong.
     this->icon_->disconnect();
-    if (hasModRights)
-    {
-        this->icon_->setCursor(Qt::PointingHandCursor);
-        this->connect(
-            this->icon_, &Button::leftClicked,
-            [this, currentChannel, hideHere,
-             timed = pin->endsAt.has_value()]() {
-                const auto channel = currentChannel();
-                if (!channel || !channel->canManagePinnedMessages())
-                {
-                    return;
-                }
-                auto *menu = new QMenu(this);
-                menu->setAttribute(Qt::WA_DeleteOnClose);
+    this->icon_->setCursor(Qt::PointingHandCursor);
+    this->connect(
+        this->icon_, &Button::leftClicked,
+        [this, currentChannel, hideHere, timed = pin->endsAt.has_value()]() {
+            const auto channel = currentChannel();
+            if (!channel)
+            {
+                return;
+            }
+            auto *menu = new QMenu(this);
+            menu->setAttribute(Qt::WA_DeleteOnClose);
 
-                menu->addAction("Hide for me (keeps it pinned)", this,
-                                [hideHere]() {
-                                    hideHere();
-                                });
+            menu->addAction("Hide for me (keeps it pinned)", this,
+                            [hideHere]() {
+                                hideHere();
+                            });
+            if (channel->canManagePinnedMessages())
+            {
                 menu->addAction("Unpin Message", this, [currentChannel]() {
                     if (auto channel = currentChannel();
                         channel && channel->canManagePinnedMessages())
@@ -780,14 +783,10 @@ void PinnedMessageBanner::setPinnedMessage(
                             }
                         });
                 }
+            }
 
-                menu->popup(QCursor::pos());
-            });
-    }
-    else
-    {
-        this->icon_->setCursor(Qt::ArrowCursor);
-    }
+            menu->popup(QCursor::pos());
+        });
 
     this->scheduleInitialLayoutStabilization();
 }
@@ -1108,6 +1107,16 @@ void PinnedMessageBanner::updateScaling()
 
 bool PinnedMessageBanner::eventFilter(QObject *obj, QEvent *event)
 {
+    if (obj == this->unpinButton_ && event->type() == QEvent::ToolTip)
+    {
+        const bool unpins = getSettings()->pinCloseButtonAction == 1 &&
+                            this->twitchChannel_ != nullptr &&
+                            this->twitchChannel_->canManagePinnedMessages();
+        this->unpinButton_->setToolTip(
+            unpins ? QStringLiteral("Unpin message for everyone\nRight-click "
+                                    "to just hide it for you")
+                   : QStringLiteral("Hide this pin for you"));
+    }
     if (obj == this->messageView_ && event->type() == QEvent::Wheel)
     {
         auto *wheelEvent = static_cast<QWheelEvent *>(event);
