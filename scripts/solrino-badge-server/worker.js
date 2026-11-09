@@ -8,6 +8,7 @@
 //   POST /v2/badges/give         The owner gives someone a badge.
 //   POST /v2/badges/take         The owner takes a badge away.
 //   GET  /v2/badges/socket       A live connection announcing each change.
+//   POST /v2/announcements       The owner announces something to everyone.
 //
 // Saving and giving prove who you are with your Twitch login token. It's only
 // passed to Twitch to check it, and is never stored or logged.
@@ -20,6 +21,7 @@ const LIST_CACHE_SECONDS = 60;
 const MAX_BODY_BYTES = 16 * 1024;
 const MAX_KEYS = 64;
 const MAX_KEY_LENGTH = 64;
+const ANNOUNCEMENT_MAX = 300;
 const STATE_KEY = "state";
 const HUB_NAME = "badges";
 const USER_ID = /^[0-9]{1,20}$/;
@@ -181,6 +183,8 @@ function listBody(state) {
     bundleVersion: state.revision,
     layout: { schemaVersion: 1, defaultOrder: DEFAULT_ORDER },
     badges: BADGES,
+    // The owner's latest announcement, shown once in every app
+    ...(state.announcement ? { announcement: state.announcement } : {}),
     users,
   };
 }
@@ -353,6 +357,29 @@ export class BadgeHub {
     return json({ userId: caller.userId, paint });
   }
 
+  async announce(request) {
+    const caller = await verifiedUserId(request);
+    if (!caller) return fail(401, "not_verified", "Twitch didn't confirm this login.");
+    if (caller !== this.env.OWNER_USER_ID) return fail(403, "not_owner", "Only Solrino's owner can do that.");
+
+    const body = await readBody(request);
+    if (!body || typeof body.message !== "string") {
+      return fail(400, "bad_request", "That request couldn't be read.");
+    }
+    const message = body.message.trim();
+    if (message.length > ANNOUNCEMENT_MAX) {
+      return fail(400, "too_long", `Announcements can be up to ${ANNOUNCEMENT_MAX} characters.`);
+    }
+
+    const state = await this.readState();
+    // An empty message takes the current announcement down
+    state.announcement = message
+      ? { id: `a${state.revision + 1}`, message, at: new Date().toISOString() }
+      : null;
+    await this.writeState(state);
+    return json({ announcement: state.announcement });
+  }
+
   async changeBadge(request, giving) {
     const caller = await verifiedUserId(request);
     if (!caller) return fail(401, "not_verified", "Twitch didn't confirm this login.");
@@ -402,6 +429,8 @@ export class BadgeHub {
         return this.putMe(request);
       case "PUT /v2/paints/me":
         return this.putPaint(request);
+      case "POST /v2/announcements":
+        return this.announce(request);
       case "POST /v2/badges/give":
         return this.changeBadge(request, true);
       case "POST /v2/badges/take":

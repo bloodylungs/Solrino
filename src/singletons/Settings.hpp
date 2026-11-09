@@ -1192,6 +1192,12 @@ public:
     /// Badges whose "you got a new badge" popup has already appeared
     ChatterinoSetting<QStringList> solrinoBadgeGiftsSeen = {
         "/solrino/badgeGiftsSeen", {}};
+    /// Badges given to each account that it already knows about, as
+    /// "userId:badgeId". "userId:*" means that account has been checked once.
+    ChatterinoSetting<QStringList> solrinoGivenBadgesSeen = {
+        "/solrino/givenBadgesSeen", {}};
+    /// The owner's last announcement that has been shown here
+    QStringSetting solrinoAnnouncementSeen{"/solrino/announcementSeen", ""};
     /// How the Other Badges tab in /vanity is sorted
     QStringSetting solrinoOtherBadgeSort{"/solrino/vanity/otherBadgeSort", "az"};
     /// Predictions started from this PC, with how often, for each channel

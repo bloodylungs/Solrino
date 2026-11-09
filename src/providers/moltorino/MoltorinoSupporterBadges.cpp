@@ -1,6 +1,7 @@
 #include "providers/moltorino/MoltorinoSupporterBadges.hpp"
 
 #include "providers/moltorino/SolrinoPaints.hpp"
+#include "widgets/dialogs/SolrinoAnnouncement.hpp"
 
 #include "common/SolrinoVersion.hpp"
 
@@ -1534,8 +1535,10 @@ bool MoltorinoSupporterBadges::applyPayload(const QByteArray &payload,
     }
     if (parsed.isV2)
     {
+        const auto root = QJsonDocument::fromJson(payload).object();
         SolrinoPaints::instance().applyServerUsers(
-            QJsonDocument::fromJson(payload).object().value("users").toObject());
+            root.value("users").toObject());
+        solrino::receiveAnnouncement(root.value("announcement").toObject());
     }
     if (removedLocalLayout)
     {

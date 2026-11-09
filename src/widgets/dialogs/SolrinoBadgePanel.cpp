@@ -1,4 +1,4 @@
-#include "widgets/dialogs/SolrinoBadgePanel.hpp"
+﻿#include "widgets/dialogs/SolrinoBadgePanel.hpp"
 
 #include "Application.hpp"
 #include "common/network/NetworkRequest.hpp"
@@ -9,8 +9,10 @@
 #include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
 #include "widgets/BaseWindow.hpp"
+#include "widgets/dialogs/SolrinoAnnouncement.hpp"
 
 #include <QButtonGroup>
+#include <QFrame>
 #include <QGridLayout>
 #include <QGuiApplication>
 #include <QHBoxLayout>
@@ -19,6 +21,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QMovie>
 #include <QPointer>
 #include <QPushButton>
@@ -128,7 +131,9 @@ public:
             "QPushButton:disabled { color: rgba(255, 255, 255, 110); }"
             "QPushButton#give { background: #d3121f; border-color: #ff5c4d; }"
             "QPushButton#give:hover { background: #ee2230; }"
-            "QPushButton#give:disabled { background: #6e1a20; }"));
+            "QPushButton#give:disabled { background: #6e1a20; }"
+            "QLabel#section { font-size: 15px; font-weight: 700; }"
+            "QFrame#rule { background: rgba(255, 255, 255, 30); }"));
 
         auto *layout = new QVBoxLayout();
         layout->setContentsMargins(16, 14, 16, 14);
@@ -179,6 +184,58 @@ public:
         buttons->addWidget(this->takeButton_);
         buttons->addWidget(this->giveButton_);
         layout->addLayout(buttons);
+
+        // Announcement: a message for everyone using Solrino
+        auto *rule = new QFrame();
+        rule->setObjectName(QStringLiteral("rule"));
+        rule->setFixedHeight(1);
+        layout->addSpacing(4);
+        layout->addWidget(rule);
+        auto *title = new QLabel(QStringLiteral("Announcement"));
+        title->setObjectName(QStringLiteral("section"));
+        layout->addWidget(title);
+        this->announcementInput_ = new QLineEdit();
+        this->announcementInput_->setPlaceholderText(
+            QStringLiteral("Say something to everyone on Solrino"));
+        this->announcementInput_->setMaxLength(300);
+        layout->addWidget(this->announcementInput_);
+        auto *announceRow = new QHBoxLayout();
+        this->announceStatus_ = new QLabel(QStringLiteral(
+            "Shows as a banner at the top of everyone's Solrino."));
+        this->announceStatus_->setWordWrap(true);
+        this->announceStatus_->setStyleSheet(
+            QStringLiteral("color: rgba(248, 241, 239, 170);"));
+        announceRow->addWidget(this->announceStatus_, 1);
+        this->clearAnnouncementButton_ = new QPushButton(QStringLiteral("Clear"));
+        this->clearAnnouncementButton_->setToolTip(
+            QStringLiteral("Take the current announcement down"));
+        this->announceButton_ = new QPushButton(QStringLiteral("Announce"));
+        this->announceButton_->setObjectName(QStringLiteral("give"));
+        this->announceButton_->setEnabled(false);
+        announceRow->addWidget(this->clearAnnouncementButton_);
+        announceRow->addWidget(this->announceButton_);
+        layout->addLayout(announceRow);
+
+        QObject::connect(this->announcementInput_, &QLineEdit::textChanged, this,
+                         [this] {
+                             this->announceButton_->setEnabled(
+                                 !this->announcing_ &&
+                                 !this->announcementInput_->text()
+                                      .trimmed()
+                                      .isEmpty());
+                         });
+        QObject::connect(this->announceButton_, &QPushButton::clicked, this,
+                         [this] {
+                             this->announce(false);
+                         });
+        QObject::connect(this->announcementInput_, &QLineEdit::returnPressed,
+                         this, [this] {
+                             this->announce(false);
+                         });
+        QObject::connect(this->clearAnnouncementButton_, &QPushButton::clicked,
+                         this, [this] {
+                             this->announce(true);
+                         });
 
         QObject::connect(this->giveButton_, &QPushButton::clicked, this, [this] {
             this->submit(true);
@@ -292,6 +349,57 @@ private:
                         self->nameInput_->setFocus();
                     });
     }
+
+    void announce(bool clear)
+    {
+        const auto text = this->announcementInput_->text().trimmed();
+        if (this->announcing_ || (!clear && text.isEmpty()))
+        {
+            return;
+        }
+        // It reaches everyone at once, so it's checked first
+        const auto question =
+            clear ? QStringLiteral("Take the current announcement down for "
+                                   "everyone?")
+                  : QStringLiteral("Send this to everyone on Solrino?\n\n\"%1\"")
+                        .arg(text);
+        if (QMessageBox::question(this, QStringLiteral("Announcement"),
+                                  question) != QMessageBox::Yes)
+        {
+            return;
+        }
+
+        this->announcing_ = true;
+        this->announceButton_->setEnabled(false);
+        this->clearAnnouncementButton_->setEnabled(false);
+        this->announceStatus_->setText(clear ? QStringLiteral("Taking it down...")
+                                             : QStringLiteral("Sending..."));
+        QPointer<BadgePanel> self(this);
+        sendAnnouncement(clear ? QString() : text,
+                         [self, clear](bool ok, const QString &message) {
+                             if (self == nullptr)
+                             {
+                                 return;
+                             }
+                             self->announcing_ = false;
+                             self->announceStatus_->setText(message);
+                             if (ok && !clear)
+                             {
+                                 self->announcementInput_->clear();
+                             }
+                             self->clearAnnouncementButton_->setEnabled(true);
+                             self->announceButton_->setEnabled(
+                                 !self->announcementInput_->text()
+                                      .trimmed()
+                                      .isEmpty());
+                         });
+    }
+
+    QLineEdit *announcementInput_{};
+    QLabel *announceStatus_{};
+    QPushButton *announceButton_{};
+    QPushButton *clearAnnouncementButton_{};
+    bool announcing_ = false;
 
     QButtonGroup *group_{};
     QLineEdit *nameInput_{};

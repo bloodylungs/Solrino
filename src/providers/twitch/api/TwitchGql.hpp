@@ -438,6 +438,13 @@ public:
         const QString &oauthToken,
         std::function<void(bool)> successCallback,
         std::function<void(const QString &)> failureCallback);
+    /// Shares your watch streak in a channel's chat, like the button on the
+    /// Twitch website. Twitch picks the streak; success is false when there's
+    /// none to share right now.
+    static void useChatNotificationToken(
+        const QString &channelLogin, const QString &message,
+        const QString &oauthToken, std::function<void(bool)> successCallback,
+        std::function<void(const QString &)> failureCallback);
     static void createModeratorComment(
         const QString &channelId, const QString &userId, const QString &text,
         bool shareable, const QString &oauthToken,

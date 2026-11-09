@@ -7,6 +7,8 @@
 #include "Application.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
 #include "singletons/Settings.hpp"
+#include "widgets/buttons/LabelButton.hpp"
+#include "widgets/helper/NotebookTab.hpp"
 #include "widgets/Notebook.hpp"
 #include "widgets/splits/Split.hpp"
 #include "widgets/splits/SplitContainer.hpp"
@@ -14,6 +16,7 @@
 
 #include <QApplication>
 #include <QFileInfo>
+#include <QMenu>
 #include <QPainter>
 #include <QRegularExpression>
 #include <QtConcurrent>
@@ -482,6 +485,95 @@ void TwitchChatDock::dock(const ChatLocation &location)
     this->showChannelFromTitle();
     this->sinceSearch_.start();
     this->followTimer_.start();
+    this->setTabsButtonVisible(true);
+}
+
+void TwitchChatDock::setTabsButtonVisible(bool visible)
+{
+    if (visible && !this->tabsButton_ && this->window_.hasCustomWindowFrame())
+    {
+        this->tabsButton_ = this->window_.addTitleBarLabel([this] {
+            this->showTabsMenu();
+        });
+        this->tabsButton_->setText(QStringLiteral("Tabs ▾"));
+        this->tabsButton_->setToolTip(
+            QStringLiteral("Switch to your other tabs while docked"));
+    }
+    if (this->tabsButton_)
+    {
+        this->tabsButton_->setVisible(visible);
+    }
+}
+
+void TwitchChatDock::showTabsMenu()
+{
+    auto &notebook = this->window_.getNotebook();
+    QMenu menu;
+
+    // Back to whatever the browser is showing
+    auto *stream = menu.addAction(
+        this->channel_.isEmpty()
+            ? QStringLiteral("Back to stream chat")
+            : QStringLiteral("Back to stream chat (%1)").arg(this->channel_));
+    QObject::connect(stream, &QAction::triggered, this, [this] {
+        this->channel_.clear();
+        this->showChannelFromTitle();
+    });
+    menu.addSeparator();
+
+    auto *selected = notebook.getSelectedPage();
+    for (int i = 0; i < notebook.getPageCount(); i++)
+    {
+        auto *page = notebook.getPageAt(i);
+        if (page == nullptr || page == this->addedPage_.data())
+        {
+            continue;
+        }
+        auto *tab = notebook.getTabFromPage(page);
+        if (tab == nullptr)
+        {
+            continue;
+        }
+        auto title = tab->getTitle();
+        if (title.isEmpty())
+        {
+            title = QStringLiteral("Tab %1").arg(i + 1);
+        }
+        auto *action = menu.addAction(
+            tab->isLive() ? QStringLiteral("● ") + title : title);
+        action->setCheckable(true);
+        action->setChecked(page == selected);
+        if (tab->isLive())
+        {
+            action->setToolTip(QStringLiteral("Live"));
+        }
+        QPointer<QWidget> target(page);
+        QObject::connect(action, &QAction::triggered, this, [this, target] {
+            if (target)
+            {
+                this->window_.getNotebook().select(target, true);
+            }
+        });
+    }
+
+    menu.addSeparator();
+    auto *showBar = menu.addAction(QStringLiteral("Show tab bar while docked"));
+    showBar->setCheckable(true);
+    showBar->setChecked(notebook.getShowTabs());
+    QObject::connect(showBar, &QAction::toggled, this, [this](bool show) {
+        // Toggling tabs normally explains itself in a popup; not wanted here
+        const bool inform =
+            getSettings()->informOnTabVisibilityToggle.getValue();
+        getSettings()->informOnTabVisibilityToggle.setValue(false);
+        this->window_.getNotebook().setShowTabs(show);
+        getSettings()->informOnTabVisibilityToggle.setValue(inform);
+    });
+
+    const auto *button = this->tabsButton_.data();
+    const QPoint at = button != nullptr
+                          ? button->mapToGlobal(button->rect().bottomLeft())
+                          : QCursor::pos();
+    menu.exec(at);
 }
 
 void TwitchChatDock::undock(bool immediately)
@@ -492,6 +584,7 @@ void TwitchChatDock::undock(bool immediately)
     }
     this->docked_ = false;
     this->followTimer_.stop();
+    this->setTabsButtonVisible(false);
     auto hwnd = toHwnd(this->windowHandle_);
 
     if (this->hiddenByDock_)

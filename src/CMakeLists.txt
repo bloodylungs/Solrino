@@ -1086,6 +1086,8 @@ set(SOURCE_FILES
         providers/moltorino/MoltorinoOriginalBadges.hpp
         widgets/dialogs/SolrinoBadgePanel.cpp
         widgets/dialogs/SolrinoBadgePanel.hpp
+        widgets/dialogs/SolrinoAnnouncement.cpp
+        widgets/dialogs/SolrinoAnnouncement.hpp
         widgets/dialogs/SolrinoPaintGallery.cpp
         widgets/dialogs/SolrinoPaintGallery.hpp
         widgets/dialogs/SolrinoWrappedDialog.cpp

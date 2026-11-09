@@ -363,6 +363,41 @@ test("taking a paint off removes it from the list", async () => {
   assert.equal(list.body.users[FRIEND].paint, undefined);
 });
 
+test("only the owner can announce", async () => {
+  const nobody = await call("POST", "/v2/announcements", { body: { message: "hi" } });
+  assert.equal(nobody.status, 401);
+  const friend = await call("POST", "/v2/announcements", { token: "friendtoken", body: { message: "hi" } });
+  assert.equal(friend.status, 403);
+  const list = await call("GET", "/v2/badges?refresh=1");
+  assert.equal(list.body.announcement, undefined);
+});
+
+test("the owner's announcement reaches every app", async () => {
+  notices.length = 0;
+  const res = await call("POST", "/v2/announcements", { token: "ownertoken", body: { message: "  Big update today!  " } });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.announcement.message, "Big update today!");
+  const list = await call("GET", "/v2/badges?refresh=1");
+  assert.equal(list.body.announcement.message, "Big update today!");
+  assert.ok(list.body.announcement.id);
+  assert.equal(notices.length, 1);
+  assert.equal(notices[0].type, "badge_v2_changed");
+});
+
+test("a new announcement gets a new id, and an empty one clears it", async () => {
+  const first = (await call("GET", "/v2/badges?refresh=1")).body.announcement.id;
+  await call("POST", "/v2/announcements", { token: "ownertoken", body: { message: "Second one" } });
+  const second = (await call("GET", "/v2/badges?refresh=1")).body.announcement.id;
+  assert.notEqual(first, second);
+  await call("POST", "/v2/announcements", { token: "ownertoken", body: { message: "" } });
+  assert.equal((await call("GET", "/v2/badges?refresh=1")).body.announcement, undefined);
+});
+
+test("announcements can't be too long", async () => {
+  const res = await call("POST", "/v2/announcements", { token: "ownertoken", body: { message: "x".repeat(301) } });
+  assert.equal(res.status, 400);
+});
+
 test("login tokens are never saved", async () => {
   const saved = JSON.stringify([...store.values()]);
   for (const token of Object.keys(TOKENS)) assert.ok(!saved.includes(token));
