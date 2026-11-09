@@ -417,6 +417,9 @@ public:
     BoolSetting useCustomBadgeLayouts = {"/appearance/badges/useCustomLayouts",
                                          true};
     QStringSetting sevenTVVanityToken = {"/moltorino/vanity/sevenTVToken", ""};
+    /// The month ("yyyy-MM") whose Wrapped announcement was last shown
+    QStringSetting solrinoWrappedAnnouncedMonth = {
+        "/moltorino/wrapped/announcedMonth", ""};
     /// JSON object of Twitch login to the Solrino paint worn on this device
     QStringSetting solrinoOwnPaints = {"/moltorino/vanity/solrinoPaints", ""};
     QStringSetting sevenTVVanityTwitchUserId = {

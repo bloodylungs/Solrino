@@ -1,5 +1,6 @@
 #include "widgets/settingspages/MoltorinoPage.hpp"
 
+#include "widgets/dialogs/SolrinoWrappedDialog.hpp"
 #include "common/network/NetworkRequest.hpp"
 #include "common/network/NetworkResult.hpp"
 #include "controllers/chat/ChatAutomationController.hpp"
@@ -997,6 +998,35 @@ MoltorinoPage::MoltorinoPage()
                      &QStackedWidget::setCurrentIndex);
 
     auto &s = *getSettings();
+
+    view->addTitle("Solrino Wrapped");
+    view->addDescription(
+        "Your month or year in chat: messages, top channels, time with chat "
+        "open, favorite emotes and more. A new one is ready on the 1st of "
+        "every month.");
+    {
+        auto *wrappedRow = new QWidget(view);
+        auto *wrappedLayout = new QHBoxLayout(wrappedRow);
+        wrappedLayout->setContentsMargins(0, 4, 0, 4);
+        wrappedLayout->setSpacing(8);
+        const std::pair<const char *, SolrinoWrappedDialog::Period> choices[] = {
+            {"View last month", SolrinoWrappedDialog::Period::LastMonth},
+            {"View this month", SolrinoWrappedDialog::Period::ThisMonth},
+            {"View this year", SolrinoWrappedDialog::Period::ThisYear},
+        };
+        for (const auto &[label, period] : choices)
+        {
+            auto *button = new QPushButton(label, wrappedRow);
+            QObject::connect(button, &QPushButton::clicked, wrappedRow,
+                             [period] {
+                                 SolrinoWrappedDialog::showDialog(period);
+                             });
+            wrappedLayout->addWidget(button);
+        }
+        wrappedLayout->addStretch(1);
+        view->addWidget(wrappedRow, {"wrapped", "recap", "stats", "year",
+                                     "month"});
+    }
 
     view->addTitle("Authentication");
     view->addDescription(

@@ -8,7 +8,7 @@ class QPainter;
 namespace chatterino {
 
 /// Paints the Seasonal theme's decorations (Halloween bats, pumpkins and
-/// cobwebs, or Winter icicles, snow and pine trees) over a chat's background.
+/// cobwebs, or Christmas lights, a tree, presents and snow) over a chat's background.
 /// The art hugs the edges of `rect` so the middle stays clear for messages.
 /// `season` is a value from currentSeasonThemeId(); anything else paints
 /// nothing.

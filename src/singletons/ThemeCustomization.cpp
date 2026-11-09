@@ -1926,14 +1926,13 @@ std::optional<ThemeCustomizationProfile> buildThemePalette(
 
 QString currentSeasonThemeId()
 {
-    // Only two seasons: spooky Halloween for the half of the year leading up
-    // to October 31, and Winter for the other half
-    const auto month = QDate::currentDate().month();
-    if (month >= 5 && month <= 10)
+    // Only two seasons: Christmas for December, and spooky Halloween for the
+    // rest of the year
+    if (QDate::currentDate().month() == 12)
     {
-        return u"season-halloween"_s;
+        return u"season-christmas"_s;
     }
-    return u"season-winter"_s;
+    return u"season-halloween"_s;
 }
 
 std::optional<ThemeCustomizationProfile> builtInCustomizationProfile(
@@ -2005,12 +2004,12 @@ std::optional<ThemeCustomizationProfile> builtInCustomizationProfile(
         seasonLook("#0e0912", "#120b17", "#21142d", "#2e1c3e", "#f4ebf8",
                    "#ab97b8", "#ff7a1a", "#8a45b5");
     }
-    else if (id == u"season-winter")
+    else if (id == u"season-christmas")
     {
-        // Night snow and ice blue
-        profile.name = u"Winter"_s;
-        seasonLook("#0a0f16", "#0d141d", "#16212e", "#213041", "#eaf3fb",
-                   "#9fb2c4", "#8fd3ff", "#6f9cc0");
+        // Evergreen, candy-cane red and a touch of gold
+        profile.name = u"Christmas"_s;
+        seasonLook("#0c1310", "#0f1813", "#18291f", "#22392b", "#f3f8f2",
+                   "#a9c0ae", "#ff4d5a", "#3fa060");
     }
     else if (id == u"solrino-ember")
     {

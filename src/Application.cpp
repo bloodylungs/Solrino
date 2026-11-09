@@ -1,5 +1,7 @@
 #include "Application.hpp"
 
+#include "providers/moltorino/SolrinoWrapped.hpp"
+
 #include "common/Args.hpp"
 #include "common/Channel.hpp"
 #include "common/Modes.hpp"
@@ -437,6 +439,7 @@ int Application::run()
     assert(this->initialized);
 
     solrino::initializeAnimationEffects();
+    solrino::WrappedStats::instance().start();
 
     this->connect();
 
@@ -891,6 +894,7 @@ TikTokChatServer *Application::getTikTokChatServer()
 
 void Application::aboutToQuit()
 {
+    solrino::WrappedStats::instance().save();
     this->chatRecordings->shutdown();
     ABOUT_TO_QUIT.store(true);
 

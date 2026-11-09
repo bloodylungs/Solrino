@@ -1,5 +1,6 @@
 #include "widgets/helper/SolrinoPing.hpp"
 #include "widgets/dialogs/SolrinoTools.hpp"
+#include "widgets/dialogs/SolrinoWrappedDialog.hpp"
 
 #include "Application.hpp"
 #include "common/Channel.hpp"
@@ -955,6 +956,9 @@ protected:
             showSavedMessages(s);
         });
         add("Chat stats", &showChatStats);
+        add("Solrino Wrapped", [](Split *) {
+            SolrinoWrappedDialog::showDialog();
+        });
         add("Mod history", &showModHistory);
         add("Mod presets", [](Split *s) {
             showModPresets(s);
@@ -1237,6 +1241,9 @@ void addToolsMenu(QMenu *menu, Split *split)
     });
     tools->addAction("Chat stats", split, [split] {
         showChatStats(split);
+    });
+    tools->addAction("Solrino Wrapped", split, [] {
+        SolrinoWrappedDialog::showDialog();
     });
     tools->addAction("Mod history", split, [split] {
         showModHistory(split);

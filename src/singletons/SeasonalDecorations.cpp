@@ -391,49 +391,7 @@ void paintHalloween(QPainter &p, qreal W, qreal H, qreal s)
     }
 }
 
-// ------------------------------------------------------------------- Winter
-
-void drawPine(QPainter &p, QPointF base, qreal h)
-{
-    p.setPen(Qt::NoPen);
-    p.setBrush(rgba(34, 24, 20, 235));
-    p.drawRect(QRectF(base.x() - (h * 0.05), base.y() - (h * 0.14), h * 0.1,
-                      h * 0.14));
-
-    for (int tier = 0; tier < 3; ++tier)
-    {
-        const qreal top = base.y() - h + (tier * h * 0.24);
-        const qreal bottom = top + (h * 0.42);
-        const qreal half = h * (0.17 + (tier * 0.08));
-
-        QPainterPath branches;
-        branches.moveTo(base.x(), top);
-        branches.lineTo(base.x() + half, bottom);
-        branches.lineTo(base.x() - half, bottom);
-        branches.closeSubpath();
-        p.setBrush(rgba(22, 50, 58, 245));
-        p.drawPath(branches);
-
-        // Snow resting on each layer
-        QPainterPath snow;
-        snow.moveTo(base.x() - half, bottom);
-        snow.quadTo(base.x(), bottom - (h * 0.11), base.x() + half, bottom);
-        snow.quadTo(base.x(), bottom - (h * 0.035), base.x() - half, bottom);
-        snow.closeSubpath();
-        p.setBrush(rgba(214, 232, 250, 175));
-        p.drawPath(snow);
-    }
-
-    QPainterPath cap;
-    const qreal top = base.y() - h;
-    cap.moveTo(base.x(), top);
-    cap.lineTo(base.x() + (h * 0.06), top + (h * 0.11));
-    cap.quadTo(base.x(), top + (h * 0.08), base.x() - (h * 0.06),
-               top + (h * 0.11));
-    cap.closeSubpath();
-    p.setBrush(rgba(230, 242, 255, 200));
-    p.drawPath(cap);
-}
+// ---------------------------------------------------------------- Christmas
 
 void drawSnowflake(QPainter &p, QPointF c, qreal size, qreal turn, int alpha)
 {
@@ -458,55 +416,258 @@ void drawSnowflake(QPainter &p, QPointF c, qreal size, qreal turn, int alpha)
     p.restore();
 }
 
-void drawAurora(QPainter &p, qreal W, qreal centerY, qreal amplitude,
-                qreal thickness, qreal phase, const QColor &color)
+QPainterPath starPath(QPointF center, qreal outer, qreal inner)
 {
-    QPolygonF ribbon;
-    const int steps = 48;
-    for (int i = 0; i <= steps; ++i)
+    QPainterPath star;
+    for (int i = 0; i < 10; ++i)
     {
-        const qreal x = W * i / steps;
-        ribbon << QPointF(
-            x, centerY + (amplitude * std::sin((i * 2.2 * PI / steps) + phase)));
+        const qreal radius = i % 2 == 0 ? outer : inner;
+        const qreal angle = (-PI / 2) + (i * PI / 5);
+        const QPointF point = center + QPointF(std::cos(angle) * radius,
+                                               std::sin(angle) * radius);
+        if (i == 0)
+        {
+            star.moveTo(point);
+        }
+        else
+        {
+            star.lineTo(point);
+        }
     }
-    for (int i = steps; i >= 0; --i)
-    {
-        const qreal x = W * i / steps;
-        ribbon << QPointF(x, centerY + thickness +
-                                 (amplitude * 0.6 *
-                                  std::sin((i * 2.2 * PI / steps) + phase + 0.8)));
-    }
-
-    QLinearGradient fill(0, centerY - amplitude, 0,
-                         centerY + thickness + amplitude);
-    auto clear = color;
-    clear.setAlpha(0);
-    fill.setColorAt(0, clear);
-    fill.setColorAt(0.35, color);
-    fill.setColorAt(1, clear);
-    p.setPen(Qt::NoPen);
-    p.setBrush(fill);
-    p.drawPolygon(ribbon);
+    star.closeSubpath();
+    return star;
 }
 
-void paintWinter(QPainter &p, qreal W, qreal H, qreal s)
+/// Colored bulbs hanging from a wire that droops between hooks
+void drawStringLights(QPainter &p, qreal W, qreal s)
+{
+    static const QColor bulbs[] = {rgba(255, 70, 80, 235), rgba(80, 220, 120, 235),
+                                   rgba(255, 200, 70, 235),
+                                   rgba(90, 170, 255, 235)};
+    const qreal span = std::max(70 * s, W / std::max(1.0, std::round(W / (95 * s))));
+    const qreal hookY = 5 * s;
+    const qreal sag = 11 * s;
+    const auto wireY = [&](qreal x) {
+        const qreal along = std::fmod(x, span) / span;
+        return hookY + (sag * std::sin(along * PI));
+    };
+
+    QPainterPath wire;
+    wire.moveTo(0, wireY(0));
+    for (qreal x = 0; x <= W; x += 2 * s)
+    {
+        wire.lineTo(x, wireY(x));
+    }
+    p.setBrush(Qt::NoBrush);
+    p.setPen(QPen(rgba(30, 50, 36, 220), 1.4 * s));
+    p.drawPath(wire);
+
+    int index = 0;
+    for (qreal x = span * 0.12; x < W; x += span / 4, ++index)
+    {
+        const QPointF top(x, wireY(x));
+        const auto color = bulbs[index % 4];
+        fillGlow(p, top + QPointF(0, 6 * s), 11 * s,
+                 QColor(color.red(), color.green(), color.blue(), 60));
+        // Socket, then the bulb hanging under it
+        p.setPen(Qt::NoPen);
+        p.setBrush(rgba(40, 60, 46, 235));
+        p.drawRect(QRectF(top.x() - (1.6 * s), top.y(), 3.2 * s, 2.6 * s));
+        p.setBrush(color);
+        p.drawEllipse(top + QPointF(0, 6.2 * s), 2.8 * s, 4 * s);
+        p.setBrush(rgba(255, 255, 255, 120));
+        p.drawEllipse(top + QPointF(-0.9 * s, 4.8 * s), 0.8 * s, 1.3 * s);
+    }
+}
+
+/// Two holly leaves and a cluster of berries
+void drawHolly(QPainter &p, QPointF at, qreal s, bool flip)
+{
+    p.save();
+    p.translate(at);
+    if (flip)
+    {
+        p.scale(-1, 1);
+    }
+    const auto leaf = [&](qreal angle) {
+        p.save();
+        p.rotate(angle);
+        QPainterPath shape;
+        shape.moveTo(0, 0);
+        // Spiky edges, like real holly
+        const qreal length = 22 * s;
+        const qreal width = 7 * s;
+        for (int i = 1; i <= 4; ++i)
+        {
+            const qreal x = length * i / 4;
+            shape.quadTo(x - (length / 8), -width * (i % 2 == 0 ? 0.6 : 1.0), x,
+                         -width * 0.35);
+        }
+        for (int i = 3; i >= 0; --i)
+        {
+            const qreal x = length * i / 4;
+            shape.quadTo(x + (length / 8), width * (i % 2 == 0 ? 0.6 : 1.0), x,
+                         width * 0.35);
+        }
+        shape.closeSubpath();
+        p.setPen(QPen(rgba(20, 70, 36, 230), 0.8 * s));
+        p.setBrush(rgba(46, 140, 70, 220));
+        p.drawPath(shape);
+        p.setPen(QPen(rgba(120, 200, 130, 120), 0.7 * s));
+        p.drawLine(QPointF(2 * s, 0), QPointF(length - (3 * s), 0));
+        p.restore();
+    };
+    leaf(20);
+    leaf(70);
+    for (const QPointF berry : {QPointF(2 * s, 3 * s), QPointF(6 * s, 1 * s),
+                                QPointF(4 * s, 7 * s)})
+    {
+        fillDot(p, berry, 3 * s, rgba(220, 30, 45, 240));
+        fillDot(p, berry - QPointF(0.9 * s, 0.9 * s), 0.9 * s,
+                rgba(255, 200, 200, 180));
+    }
+    p.restore();
+}
+
+void drawChristmasTree(QPainter &p, QPointF base, qreal h, Dice &dice)
+{
+    p.setPen(Qt::NoPen);
+    p.setBrush(rgba(90, 56, 32, 240));
+    p.drawRect(QRectF(base.x() - (h * 0.06), base.y() - (h * 0.13), h * 0.12,
+                      h * 0.13));
+
+    static const QColor ornaments[] = {rgba(255, 70, 80, 240), rgba(255, 205, 80, 240),
+                                       rgba(90, 170, 255, 240),
+                                       rgba(240, 240, 255, 240)};
+    for (int tier = 0; tier < 4; ++tier)
+    {
+        const qreal top = base.y() - h + (tier * h * 0.19);
+        const qreal bottom = top + (h * 0.34);
+        const qreal half = h * (0.13 + (tier * 0.07));
+
+        QPainterPath branches;
+        branches.moveTo(base.x(), top);
+        branches.lineTo(base.x() + half, bottom);
+        branches.quadTo(base.x(), bottom + (h * 0.04), base.x() - half, bottom);
+        branches.closeSubpath();
+        QLinearGradient fill(base.x() - half, 0, base.x() + half, 0);
+        fill.setColorAt(0, rgba(30, 110, 60, 245));
+        fill.setColorAt(1, rgba(20, 80, 44, 245));
+        p.setBrush(fill);
+        p.drawPath(branches);
+
+        // A strand of tinsel and a few ornaments on each layer
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QPen(rgba(255, 215, 110, 170), 1.1));
+        p.drawLine(QPointF(base.x() - (half * 0.8), bottom - (h * 0.03)),
+                   QPointF(base.x() + (half * 0.6), bottom - (h * 0.09)));
+        p.setPen(Qt::NoPen);
+        const int count = 2 + tier;
+        for (int i = 0; i < count; ++i)
+        {
+            const qreal x =
+                base.x() + ((qreal(i) / std::max(1, count - 1)) - 0.5) * half * 1.4;
+            const qreal y = bottom - (h * dice(0.02, 0.06));
+            const auto color = ornaments[size_t(i + tier) % 4];
+            fillDot(p, {x, y}, h * 0.028, color);
+            fillDot(p, {x - (h * 0.008), y - (h * 0.008)}, h * 0.009,
+                    rgba(255, 255, 255, 170));
+        }
+    }
+
+    const QPointF starAt(base.x(), base.y() - h - (h * 0.02));
+    fillGlow(p, starAt, h * 0.18, rgba(255, 220, 110, 90));
+    p.setBrush(rgba(255, 214, 90, 250));
+    p.setPen(QPen(rgba(200, 140, 30, 220), 0.8));
+    p.drawPath(starPath(starAt, h * 0.07, h * 0.03));
+}
+
+void drawPresent(QPainter &p, QRectF box, const QColor &paper,
+                 const QColor &ribbon)
+{
+    p.setPen(Qt::NoPen);
+    p.setBrush(paper);
+    p.drawRoundedRect(box, box.width() * 0.08, box.width() * 0.08);
+    p.setBrush(ribbon);
+    const qreal band = box.width() * 0.16;
+    p.drawRect(QRectF(box.center().x() - (band / 2), box.top(), band,
+                      box.height()));
+    p.drawRect(QRectF(box.left(), box.center().y() - (band / 2), box.width(),
+                      band));
+    // Bow
+    const QPointF knot(box.center().x(), box.top());
+    p.drawEllipse(knot + QPointF(-band * 0.9, -band * 0.4), band * 0.9,
+                  band * 0.55);
+    p.drawEllipse(knot + QPointF(band * 0.9, -band * 0.4), band * 0.9,
+                  band * 0.55);
+}
+
+void drawSnowman(QPainter &p, QPointF base, qreal h)
+{
+    const qreal r1 = h * 0.24;
+    const qreal r2 = h * 0.18;
+    const qreal r3 = h * 0.13;
+    const QPointF c1(base.x(), base.y() - r1);
+    const QPointF c2(base.x(), c1.y() - r1 - (r2 * 0.7));
+    const QPointF c3(base.x(), c2.y() - r2 - (r3 * 0.7));
+
+    // Softer than pure white, so chat text over it stays easy to read
+    p.setPen(QPen(rgba(150, 170, 195, 130), 1));
+    p.setBrush(rgba(190, 206, 222, 150));
+    p.drawEllipse(c1, r1, r1);
+    p.drawEllipse(c2, r2, r2);
+    p.drawEllipse(c3, r3, r3);
+
+    p.setPen(Qt::NoPen);
+    p.setBrush(rgba(40, 40, 50, 230));
+    p.drawEllipse(c3 + QPointF(-r3 * 0.35, -r3 * 0.2), r3 * 0.12, r3 * 0.12);
+    p.drawEllipse(c3 + QPointF(r3 * 0.35, -r3 * 0.2), r3 * 0.12, r3 * 0.12);
+    for (int i = 0; i < 3; ++i)
+    {
+        p.drawEllipse(c2 + QPointF(0, (i - 1) * r2 * 0.4), r2 * 0.09,
+                      r2 * 0.09);
+    }
+
+    // Carrot nose
+    QPainterPath nose;
+    nose.moveTo(c3 + QPointF(0, -r3 * 0.05));
+    nose.lineTo(c3 + QPointF(r3 * 0.75, r3 * 0.08));
+    nose.lineTo(c3 + QPointF(0, r3 * 0.2));
+    nose.closeSubpath();
+    p.setBrush(rgba(255, 140, 40, 240));
+    p.drawPath(nose);
+
+    // Red scarf
+    p.setBrush(rgba(220, 40, 55, 235));
+    p.drawRoundedRect(QRectF(c3.x() - r3 * 1.05, c3.y() + r3 * 0.7, r3 * 2.1,
+                             r3 * 0.4),
+                      r3 * 0.2, r3 * 0.2);
+    p.drawRoundedRect(QRectF(c3.x() + r3 * 0.35, c3.y() + r3 * 0.8, r3 * 0.4,
+                             r3 * 1.1),
+                      r3 * 0.15, r3 * 0.15);
+
+    // Top hat
+    p.setBrush(rgba(30, 30, 40, 240));
+    p.drawRect(QRectF(c3.x() - r3 * 0.95, c3.y() - r3 * 0.95, r3 * 1.9,
+                      r3 * 0.18));
+    p.drawRect(QRectF(c3.x() - r3 * 0.6, c3.y() - r3 * 1.8, r3 * 1.2,
+                      r3 * 0.88));
+    p.setBrush(rgba(220, 40, 55, 235));
+    p.drawRect(QRectF(c3.x() - r3 * 0.6, c3.y() - r3 * 1.12, r3 * 1.2,
+                      r3 * 0.17));
+}
+
+void paintChristmas(QPainter &p, qreal W, qreal H, qreal s)
 {
     Dice dice(1225);
 
+    // A warm red glow above, a soft green one below
     QLinearGradient haze(0, 0, 0, H);
-    haze.setColorAt(0, rgba(40, 90, 160, 34));
-    haze.setColorAt(0.4, rgba(40, 90, 160, 0));
-    haze.setColorAt(1, rgba(150, 200, 255, 22));
+    haze.setColorAt(0, rgba(200, 40, 50, 30));
+    haze.setColorAt(0.35, rgba(200, 40, 50, 0));
+    haze.setColorAt(0.75, rgba(60, 170, 90, 0));
+    haze.setColorAt(1, rgba(60, 170, 90, 22));
     p.fillRect(QRectF(0, 0, W, H), haze);
-
-    // Northern lights and stars
-    drawAurora(p, W, 30 * s, 9 * s, 34 * s, 0.4, rgba(90, 255, 190, 40));
-    drawAurora(p, W, 46 * s, 12 * s, 30 * s, 2.1, rgba(150, 120, 255, 26));
-    for (int i = 0; i < 34; ++i)
-    {
-        fillDot(p, {dice(0, W), dice(10 * s, H * 0.38)}, dice(0.5, 1.15) * s,
-                rgba(232, 242, 255, int(dice(40, 130))));
-    }
 
     // Falling snow over the whole chat
     const int flakes =
@@ -517,93 +678,88 @@ void paintWinter(QPainter &p, qreal W, qreal H, qreal s)
                 rgba(236, 246, 255, int(dice(24, 95))));
     }
 
-    // Big crystal flakes drifting down the sides
-    const int crystals = H > 300 * s ? 6 : 3;
+    // A few big flakes down the sides
+    const int crystals = H > 300 * s ? 4 : 2;
     for (int i = 0; i < crystals; ++i)
     {
         const bool left = i % 2 == 0;
-        const qreal x = left ? dice(10 * s, 38 * s) : W - dice(10 * s, 38 * s);
-        drawSnowflake(p, {x, dice(H * 0.16, H * 0.78)}, dice(6, 11) * s,
-                      dice(0, 60), int(dice(55, 95)));
+        const qreal x = left ? dice(12 * s, 34 * s) : W - dice(12 * s, 34 * s);
+        drawSnowflake(p, {x, dice(H * 0.22, H * 0.7)}, dice(6, 10) * s,
+                      dice(0, 60), int(dice(50, 85)));
     }
 
-    // Snow piled on the top edge, with icicles hanging from it
+    // Snow on the top edge, with lights strung along it
     QPainterPath snowCap;
     snowCap.moveTo(0, 0);
     snowCap.lineTo(W, 0);
-    snowCap.lineTo(W, 4 * s);
+    snowCap.lineTo(W, 3.5 * s);
     for (qreal x = W; x > 0; x -= 18 * s)
     {
-        snowCap.quadTo(x - (9 * s), dice(6.5, 8.5) * s, x - (18 * s),
-                       dice(3.5, 5) * s);
+        snowCap.quadTo(x - (9 * s), dice(5.5, 7.5) * s, x - (18 * s),
+                       dice(3, 4.5) * s);
     }
     snowCap.lineTo(0, 0);
     snowCap.closeSubpath();
     p.setPen(Qt::NoPen);
-    p.setBrush(rgba(218, 234, 250, 150));
+    p.setBrush(rgba(232, 242, 252, 150));
     p.drawPath(snowCap);
+    drawStringLights(p, W, s);
 
-    for (qreal x = dice(2, 8) * s; x < W - (4 * s); x += dice(7, 16) * s)
+    // Holly in the top corners, under the lights
+    if (W > 160 * s && H > 140 * s)
     {
-        const qreal width = dice(3, 6) * s;
-        qreal length = dice(5, 20) * s;
-        if (dice(0, 1) > 0.85)
-        {
-            length = dice(24, 34) * s;
-        }
-        const qreal top = 3.5 * s;
-        QPainterPath icicle;
-        icicle.moveTo(x, top);
-        icicle.lineTo(x + width, top);
-        icicle.lineTo(x + (width * 0.5) + (dice(-0.6, 0.6) * s), top + length);
-        icicle.closeSubpath();
-        QLinearGradient ice(0, top, 0, top + length);
-        ice.setColorAt(0, rgba(228, 242, 255, 175));
-        ice.setColorAt(1, rgba(160, 206, 242, 40));
-        p.setBrush(ice);
-        p.drawPath(icicle);
+        drawHolly(p, {10 * s, 26 * s}, s, false);
+        drawHolly(p, {W - (10 * s), 26 * s}, s, true);
     }
 
-    // Snow drifts and pine trees along the bottom
+    // Snowy ground
     QPainterPath backDrift;
     backDrift.moveTo(0, H);
-    backDrift.lineTo(0, H - (26 * s));
-    backDrift.cubicTo(W * 0.25, H - (40 * s), W * 0.45, H - (14 * s),
-                      W * 0.62, H - (24 * s));
-    backDrift.cubicTo(W * 0.80, H - (34 * s), W * 0.92, H - (20 * s), W,
-                      H - (30 * s));
+    backDrift.lineTo(0, H - (24 * s));
+    backDrift.cubicTo(W * 0.25, H - (36 * s), W * 0.45, H - (14 * s),
+                      W * 0.62, H - (22 * s));
+    backDrift.cubicTo(W * 0.80, H - (32 * s), W * 0.92, H - (18 * s), W,
+                      H - (28 * s));
     backDrift.lineTo(W, H);
     backDrift.closeSubpath();
-    p.setBrush(rgba(30, 46, 66, 215));
+    p.setBrush(rgba(34, 50, 62, 215));
     p.drawPath(backDrift);
 
-    drawPine(p, {24 * s, H - (6 * s)}, 78 * s);
-    if (W > 220 * s)
+    // The tree with presents underneath, and a snowman on the other side
+    const qreal treeHeight = std::min(92 * s, H * 0.42);
+    drawChristmasTree(p, {34 * s, H - (8 * s)}, treeHeight, dice);
+    if (W > 180 * s)
     {
-        drawPine(p, {54 * s, H - (4 * s)}, 50 * s);
+        drawPresent(p, QRectF(58 * s, H - (24 * s), 18 * s, 15 * s),
+                    rgba(220, 45, 60, 235), rgba(255, 210, 90, 240));
+        drawPresent(p, QRectF(78 * s, H - (19 * s), 13 * s, 11 * s),
+                    rgba(40, 150, 80, 235), rgba(240, 60, 70, 240));
     }
-    if (W > 150 * s)
+    if (W > 240 * s)
     {
-        drawPine(p, {W - (28 * s), H - (6 * s)}, 68 * s);
+        drawPresent(p, QRectF(6 * s, H - (17 * s), 14 * s, 11 * s),
+                    rgba(70, 130, 230, 235), rgba(235, 240, 255, 240));
+        drawSnowman(p, {W - (30 * s), H - (9 * s)}, std::min(70 * s, H * 0.32));
     }
 
     QPainterPath frontEdge;
-    frontEdge.moveTo(0, H - (14 * s));
-    frontEdge.cubicTo(W * 0.20, H - (6 * s), W * 0.38, H - (22 * s), W * 0.55,
-                      H - (12 * s));
-    frontEdge.cubicTo(W * 0.72, H - (4 * s), W * 0.86, H - (20 * s), W,
+    frontEdge.moveTo(0, H - (12 * s));
+    frontEdge.cubicTo(W * 0.20, H - (5 * s), W * 0.38, H - (18 * s), W * 0.55,
                       H - (10 * s));
+    frontEdge.cubicTo(W * 0.72, H - (3 * s), W * 0.86, H - (17 * s), W,
+                      H - (8 * s));
     QPainterPath frontDrift = frontEdge;
     frontDrift.lineTo(W, H);
     frontDrift.lineTo(0, H);
     frontDrift.closeSubpath();
-    QLinearGradient driftFill(0, H - (22 * s), 0, H);
-    driftFill.setColorAt(0, rgba(54, 80, 108, 238));
-    driftFill.setColorAt(1, rgba(36, 54, 76, 242));
+    QLinearGradient driftFill(0, H - (18 * s), 0, H);
+    driftFill.setColorAt(0, rgba(62, 86, 108, 238));
+    driftFill.setColorAt(1, rgba(40, 58, 76, 242));
+    p.setPen(Qt::NoPen);
     p.setBrush(driftFill);
     p.drawPath(frontDrift);
     p.setBrush(Qt::NoBrush);
-    p.setPen(QPen(rgba(204, 230, 252, 100), 1.3 * s));
+    p.setPen(QPen(rgba(214, 234, 252, 110), 1.3 * s));
     p.drawPath(frontEdge);
 }
 
@@ -613,8 +769,8 @@ void paintSeasonalDecorations(QPainter &painter, const QRect &rect,
                               const QString &season, qreal scale)
 {
     const bool halloween = season == u"season-halloween"_s;
-    const bool winter = season == u"season-winter"_s;
-    if ((!halloween && !winter) || rect.width() < 40 || rect.height() < 40)
+    const bool christmas = season == u"season-christmas"_s;
+    if ((!halloween && !christmas) || rect.width() < 40 || rect.height() < 40)
     {
         return;
     }
@@ -649,7 +805,7 @@ void paintSeasonalDecorations(QPainter &painter, const QRect &rect,
             }
             else
             {
-                paintWinter(p, rect.width(), rect.height(), s);
+                paintChristmas(p, rect.width(), rect.height(), s);
             }
         }
         it = cache.insert(key, art);

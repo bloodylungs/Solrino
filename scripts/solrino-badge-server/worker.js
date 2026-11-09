@@ -105,7 +105,15 @@ const PAINT_IDS = new Set([
   "chameleon", "tv_static", "arcade", "soda_fizz", "static_shock", "comet",
   "bioluminescence", "sakura_breeze", "supernova", "ripple", "acid_trip", "champagne",
   "nebula_drift", "candlelight", "bleeding", "freeze", "charging", "kaleidoscope",
-  "fire_and_ice", "candy_floss_spin", "pulsar", "witch_cauldron", "vinyl",
+  "fire_and_ice", "candy_floss_spin", "pulsar", "witch_cauldron", "vinyl", "portal", "hex",
+  "lunar_lantern", "anodized", "peacock", "prismatic", "royale", "reflection", "catseye",
+  "celestial", "eclipse", "ultraviolet", "sunflower", "magma_pool", "abyss", "luminary",
+  "nightbloom", "psychic", "tinsel", "honey_drip", "slushie", "jellybean", "frutiger_aero",
+  "mana_potion", "sixties", "wavy", "whisper", "blizzard", "nightclub", "clownfish",
+  "camouflage", "film_reel", "copper_patina", "spellcaster", "retrovision", "crystalline",
+  "thermal", "biohazard", "outer_space", "warp_speed", "maple_syrup", "warm_nights",
+  "dragon_scale", "fairy_glow", "puddle", "eruption", "moonlight", "twilight",
+  "glow_stick", "coral_reef",
 ]);
 
 function json(body, status = 200, headers = {}) {
