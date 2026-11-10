@@ -666,6 +666,23 @@ void Split::refreshInputState(const QString &inputText)
     }
 }
 
+bool Split::hasHiddenPin() const
+{
+    return this->pinnedBanner_ != nullptr && this->pinnedBanner_->isPinHidden();
+}
+
+void Split::showHiddenPin()
+{
+    if (!this->hasHiddenPin())
+    {
+        return;
+    }
+    this->pinnedBanner_->showHiddenPin();
+    // The pin is what was asked for, even if a poll or prediction is up too
+    this->bannerToggleOverride_ = 0;
+    this->updateBannerVisibility();
+}
+
 PinnedMessageBanner *Split::ensurePinnedBanner()
 {
     if (this->pinnedBanner_ != nullptr)

@@ -32,6 +32,7 @@
 #include "util/FormatTime.hpp"
 #include "util/Helpers.hpp"
 #include "util/IrcHelpers.hpp"
+#include "widgets/dialogs/SolrinoTools.hpp"
 
 #include <IrcMessage>
 #include <QCache>
@@ -909,13 +910,20 @@ void IrcMessageHandler::handleUserNoticeMessage(Communi::IrcMessage *message,
                                                 ITwitchIrcServer &twitchServer)
 {
     auto target = message->parameter(0);
-    auto *channel = dynamic_cast<TwitchChannel *>(
-        twitchServer.getChannelOrEmpty(target).get());
+    auto shared = twitchServer.getChannelOrEmpty(target);
+    auto *channel = dynamic_cast<TwitchChannel *>(shared.get());
     if (!channel)
     {
         return;
     }
     parseUserNoticeMessageInto(message, *channel, channel);
+
+    // Only live raids, never ones in history loaded on join
+    if (message->tag(QStringLiteral("msg-id")).toString() == u"raid"_s)
+    {
+        solrino::shoutoutRaider(
+            shared, message->tag(QStringLiteral("msg-param-login")).toString());
+    }
 }
 
 void IrcMessageHandler::parseUserNoticeMessageInto(Communi::IrcMessage *message,

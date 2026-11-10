@@ -1198,6 +1198,11 @@ public:
         "/solrino/givenBadgesSeen", {}};
     /// The owner's last announcement that has been shown here
     QStringSetting solrinoAnnouncementSeen{"/solrino/announcementSeen", ""};
+    /// Sends a shoutout command when someone raids a channel you moderate
+    BoolSetting solrinoAutoShoutoutRaids{"/solrino/raids/autoShoutout", false};
+    /// The command sent for it. {user} becomes the raider's name.
+    QStringSetting solrinoRaidShoutoutCommand{"/solrino/raids/shoutoutCommand",
+                                              "!so @{user}"};
     /// How the Other Badges tab in /vanity is sorted
     QStringSetting solrinoOtherBadgeSort{"/solrino/vanity/otherBadgeSort", "az"};
     /// Predictions started from this PC, with how often, for each channel

@@ -349,6 +349,22 @@ PinnedMessageBanner::PinnedMessageBanner(Split *split, QWidget *parent)
     this->toggleButton_->hide();
     this->topLayout_->addWidget(this->toggleButton_, 0, Qt::AlignBottom);
 
+    this->hideButton_ = new SvgButton(
+        {
+            .dark = ":/buttons/conceal.svg",
+            .light = ":/buttons/concealDark.svg",
+        },
+        this, QSize(1, 1));
+    this->hideButton_->setToolTip(
+        "Hide this pin for you (it stays pinned)\nBring it back from the "
+        "chat's menu: Show pinned message");
+    this->hideButton_->setFixedSize(BASE_ICON_SIZE, BASE_ICON_SIZE);
+    auto *hideOpacity = new QGraphicsOpacityEffect(this);
+    hideOpacity->setOpacity(0.5);
+    this->hideButton_->setGraphicsEffect(hideOpacity);
+    this->hideButton_->hide();
+    this->topLayout_->addWidget(this->hideButton_, 0, Qt::AlignBottom);
+
     this->unpinButton_ = new SvgButton(
         {
             .dark = ":/buttons/cancel.svg",
@@ -384,6 +400,11 @@ PinnedMessageBanner::PinnedMessageBanner(Split *split, QWidget *parent)
     this->signalHolder_.managedConnect(this->theme->updated, [this]() {
         this->messageView_->setTransparentBackground(true);
     });
+    getSettings()->pinCloseButtonAction.connect(
+        [this] {
+            this->updateHideButton();
+        },
+        this->signalHolder_, false);
 
     this->managedConnections_.emplace_back(
         this->messageView_->mouseDown.connect([this](QMouseEvent *event) {
@@ -496,6 +517,35 @@ bool PinnedMessageBanner::hasPinnedMessage() const
     return this->hasPin_;
 }
 
+bool PinnedMessageBanner::isPinHidden() const
+{
+    if (this->dismissedPinIdentity_.isEmpty() || this->twitchChannel_ == nullptr)
+    {
+        return false;
+    }
+    // Only while that same pin is still up
+    const auto pin = this->twitchChannel_->accessPinnedMessage();
+    return pin->has_value() && pinIdentity(**pin) == this->dismissedPinIdentity_;
+}
+
+void PinnedMessageBanner::showHiddenPin()
+{
+    if (this->twitchChannel_ == nullptr)
+    {
+        return;
+    }
+    std::optional<TwitchChannel::PinnedMessage> pin;
+    {
+        const auto current = this->twitchChannel_->accessPinnedMessage();
+        pin = *current;
+    }
+    this->dismissedPinIdentity_.clear();
+    if (pin.has_value())
+    {
+        this->setPinnedMessage(pin, this->twitchChannel_);
+    }
+}
+
 void PinnedMessageBanner::setToggleButtonVisible(bool visible)
 {
     this->toggleButton_->setVisible(visible);
@@ -518,6 +568,9 @@ void PinnedMessageBanner::setPinnedMessage(
         this->messageView_->setSourceChannel({});
         this->icon_->disconnect();
         this->unpinButton_->disconnect();
+        this->hideButton_->disconnect();
+        this->hideButton_->hide();
+        this->userStateConnection_ = pajlada::Signals::ScopedConnection{};
         this->initialLayoutStabilizationQueued_ = false;
         this->setUpdatesEnabled(true);
         this->hide();
@@ -711,6 +764,16 @@ void PinnedMessageBanner::setPinnedMessage(
         this->dismissed.invoke();
     };
 
+    this->hideButton_->disconnect();
+    this->connect(this->hideButton_, &Button::leftClicked, [hideHere]() {
+        hideHere();
+    });
+    // Twitch can say someone is a mod after the pin has loaded
+    this->userStateConnection_ = channel->userStateChanged.connect([this] {
+        this->updateHideButton();
+    });
+    this->updateHideButton();
+
     this->unpinButton_->disconnect();
     this->unpinButton_->setVisible(true);
     this->connect(this->unpinButton_, &Button::clicked,
@@ -748,20 +811,14 @@ void PinnedMessageBanner::setPinnedMessage(
     this->icon_->setCursor(Qt::PointingHandCursor);
     this->connect(
         this->icon_, &Button::leftClicked,
-        [this, currentChannel, hideHere, timed = pin->endsAt.has_value()]() {
+        [this, currentChannel, timed = pin->endsAt.has_value()]() {
             const auto channel = currentChannel();
-            if (!channel)
+            if (!channel || !channel->canManagePinnedMessages())
             {
                 return;
             }
             auto *menu = new QMenu(this);
             menu->setAttribute(Qt::WA_DeleteOnClose);
-
-            menu->addAction("Hide for me (keeps it pinned)", this,
-                            [hideHere]() {
-                                hideHere();
-                            });
-            if (channel->canManagePinnedMessages())
             {
                 menu->addAction("Unpin Message", this, [currentChannel]() {
                     if (auto channel = currentChannel();
@@ -809,6 +866,7 @@ void PinnedMessageBanner::scaleChangedEvent(float scale)
 
     this->icon_->setFixedSize(iconSize, iconSize);
     this->unpinButton_->setFixedSize(iconSize, iconSize);
+    this->hideButton_->setFixedSize(iconSize, iconSize);
     this->toggleButton_->setFixedSize(iconSize, iconSize);
 
     if (auto *lay = qobject_cast<QVBoxLayout *>(this->layout()))
@@ -1103,6 +1161,14 @@ void PinnedMessageBanner::updateScaling()
 
         this->moreLabel_->setVisible(isTruncated);
     }
+}
+
+void PinnedMessageBanner::updateHideButton()
+{
+    const bool xUnpins = this->hasPin_ && this->twitchChannel_ != nullptr &&
+                         getSettings()->pinCloseButtonAction == 1 &&
+                         this->twitchChannel_->canManagePinnedMessages();
+    this->hideButton_->setVisible(xUnpins);
 }
 
 bool PinnedMessageBanner::eventFilter(QObject *obj, QEvent *event)

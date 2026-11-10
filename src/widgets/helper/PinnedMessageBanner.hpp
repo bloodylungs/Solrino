@@ -27,6 +27,10 @@ public:
                           TwitchChannel *channel);
 
     bool hasPinnedMessage() const;
+    /// The channel has a pin that was hidden here
+    bool isPinHidden() const;
+    /// Brings a hidden pin back
+    void showHiddenPin();
 
     void setToggleButtonVisible(bool visible);
 
@@ -47,6 +51,7 @@ protected:
 
 private:
     void toggleExpansion();
+    void updateHideButton();
     void updateScaling();
     void updateTimer();
     void updateLabelStyles();
@@ -61,6 +66,10 @@ private:
     QLabel *timerLabel_{};
     QLabel *moreLabel_{};
     SvgButton *unpinButton_{};
+    /// Hides the pin just here. Only shown when the X would unpin it for
+    /// everyone, since otherwise the X already does this.
+    SvgButton *hideButton_{};
+    pajlada::Signals::ScopedConnection userStateConnection_;
     SvgButton *toggleButton_{};
     Split *split_{};
 

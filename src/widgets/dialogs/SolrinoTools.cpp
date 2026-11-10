@@ -10,6 +10,8 @@
 #include "messages/Message.hpp"
 #include "messages/MessageElement.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
+#include "providers/twitch/TwitchAccount.hpp"
+#include "controllers/accounts/AccountController.hpp"
 #include "providers/twitch/api/TwitchGql.hpp"
 #include "providers/moltorino/MoltorinoAuth.hpp"
 #include "singletons/Fonts.hpp"
@@ -31,6 +33,9 @@
 
 #include <pajlada/signals/signal.hpp>
 #include <pajlada/signals/signalholder.hpp>
+#include <QHash>
+#include <QRegularExpression>
+#include <QRandomGenerator>
 #include <QInputDialog>
 #include <QApplication>
 #include <QCursor>
@@ -962,6 +967,12 @@ protected:
         add("Share watch streak", [](Split *s) {
             shareWatchStreak(s);
         });
+        add("Show pinned message", [](Split *s) {
+            if (s != nullptr)
+            {
+                s->showHiddenPin();
+            }
+        });
         add("Solrino Wrapped", [](Split *) {
             SolrinoWrappedDialog::showDialog();
         });
@@ -1226,6 +1237,76 @@ QUrl channelSoundFor(const QString &channelName)
 bool hasChannelSound(const QString &channelName)
 {
     return !channelSoundFor(channelName).isEmpty();
+}
+
+void shoutoutRaider(const ChannelPtr &channel, const QString &raiderLogin)
+{
+    if (!getSettings()->solrinoAutoShoutoutRaids || channel == nullptr ||
+        !channel->hasModRights())
+    {
+        return;
+    }
+    const auto login = raiderLogin.trimmed().toLower();
+    static const QRegularExpression validLogin(
+        QStringLiteral("^[a-z0-9_]{1,25}$"));
+    const auto account = getApp()->getAccounts()->twitch.getCurrent();
+    if (!validLogin.match(login).hasMatch() || account->isAnon() ||
+        account->getUserName().compare(login, Qt::CaseInsensitive) == 0)
+    {
+        return;
+    }
+
+    // Twitch can repeat a raid notice; one shoutout per raider is enough
+    static QHash<QString, QDateTime> recent;
+    const auto key = channel->getName().toLower() + u'/' + login;
+    const auto now = QDateTime::currentDateTimeUtc();
+    if (recent.contains(key) && recent.value(key).secsTo(now) < 10 * 60)
+    {
+        return;
+    }
+    recent.insert(key, now);
+
+    // Several mods may use Solrino in the same chat. Each waits a different
+    // moment, and whoever goes first is the only one who sends it.
+    const int waitMs = 2000 + int(QRandomGenerator::global()->bounded(3000));
+    std::weak_ptr<Channel> weak = channel;
+    QTimer::singleShot(waitMs, qApp, [weak, login] {
+        auto channel = weak.lock();
+        if (channel == nullptr || !channel->hasModRights() ||
+            !getSettings()->solrinoAutoShoutoutRaids)
+        {
+            return;
+        }
+        for (const auto &message : channel->getMessageSnapshot(80))
+        {
+            const auto &text = message->messageText;
+            const bool shoutout =
+                text.startsWith(QStringLiteral("!so"), Qt::CaseInsensitive) ||
+                text.startsWith(QStringLiteral("!shoutout"),
+                                Qt::CaseInsensitive) ||
+                text.startsWith(QStringLiteral("/shoutout"),
+                                Qt::CaseInsensitive);
+            if (shoutout && text.contains(login, Qt::CaseInsensitive))
+            {
+                return;
+            }
+        }
+
+        auto command = getSettings()->solrinoRaidShoutoutCommand.getValue()
+                           .trimmed();
+        if (command.isEmpty())
+        {
+            command = QStringLiteral("!so @{user}");
+        }
+        command.replace(QStringLiteral("{user}"), login, Qt::CaseInsensitive);
+        // Through the same path as typing it, so /shoutout works too
+        const auto text =
+            getApp()->getCommands()->execCommand(command, channel, false);
+        if (!text.isEmpty())
+        {
+            channel->sendMessage(text);
+        }
+    });
 }
 
 void shareWatchStreakIn(const ChannelPtr &channel, const QString &message)

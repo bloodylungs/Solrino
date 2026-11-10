@@ -1926,6 +1926,23 @@ MoltorinoPage::MoltorinoPage()
         },
         this->managedConnections_);
 
+    this->moderationView_->addTitle("Raid shoutouts");
+    this->moderationView_->addDescription(
+        "When someone raids a channel you moderate, shout them out in chat "
+        "automatically. If another mod already did, it isn't sent twice.");
+    SettingWidget::checkbox("Shout out raiders automatically",
+                            s.solrinoAutoShoutoutRaids)
+        ->setTooltip("Sends the command below a few seconds after a raid, in "
+                     "channels where you're a mod or the broadcaster.")
+        ->addTo(*this->moderationView_);
+    SettingWidget::lineEdit("Shoutout command", s.solrinoRaidShoutoutCommand,
+                            "!so @{user}")
+        ->setTooltip("{user} becomes the raider's name. Use the command your "
+                     "channel's bot listens to, or /shoutout {user} for "
+                     "Twitch's own shoutout.")
+        ->conditionallyEnabledBy(s.solrinoAutoShoutoutRaids)
+        ->addTo(*this->moderationView_);
+
     this->moderationView_->addTitle("Repeated messages");
     this->moderationView_->addDescription(
         "Spot repeated or nearly identical messages while you moderate chat.");

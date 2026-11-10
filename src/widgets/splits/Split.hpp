@@ -187,6 +187,13 @@ private:
     void refreshInputState(const QString &inputText);
 
     PinnedMessageBanner *ensurePinnedBanner();
+
+public:
+    /// Whether this chat's pin was hidden here and can be shown again
+    bool hasHiddenPin() const;
+    void showHiddenPin();
+
+private:
     PredictionBanner *ensurePredictionBanner();
     PollBanner *ensurePollBanner();
     void cycleBannerSelection();

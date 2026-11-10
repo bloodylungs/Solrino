@@ -953,6 +953,12 @@ std::unique_ptr<QMenu> SplitHeader::createMainMenu()
                     h->getDisplaySequence(HotkeyCategory::Split, "pickFilters"),
                     this->split_, &Split::setFiltersDialog);
     solrino::addToolsMenu(menu.get(), this->split_);
+    if (this->split_->hasHiddenPin())
+    {
+        menu->addAction("Show pinned message", this->split_, [this] {
+            this->split_->showHiddenPin();
+        });
+    }
     menu->addSeparator();
 
     auto selected = this->split_->getSelectedChannel();
