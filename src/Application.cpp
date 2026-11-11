@@ -84,6 +84,7 @@
 #include "singletons/Toasts.hpp"
 #include "singletons/SolrinoDiscordPresence.hpp"
 #include "widgets/dialogs/SolrinoBadgeGifts.hpp"
+#include "widgets/dialogs/SolrinoTools.hpp"
 #include "singletons/SolrinoUpdater.hpp"
 #include "singletons/Updates.hpp"
 #include "singletons/WindowManager.hpp"
@@ -463,6 +464,7 @@ int Application::run()
     if (!this->args_.isFramelessEmbed)
     {
         solrino::startBadgeGifts();
+        solrino::startFirstWatcher();
     }
 
     QTimer::singleShot(2500, qApp, [] {

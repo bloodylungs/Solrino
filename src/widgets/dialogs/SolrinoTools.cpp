@@ -12,8 +12,11 @@
 #include "providers/twitch/TwitchChannel.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
 #include "controllers/accounts/AccountController.hpp"
+#include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/api/TwitchGql.hpp"
+#include "providers/twitch/TwitchIrcServer.hpp"
 #include "providers/moltorino/MoltorinoAuth.hpp"
+#include "widgets/dialogs/SolrinoBadgePanel.hpp"
 #include "singletons/Fonts.hpp"
 #include "singletons/Paths.hpp"
 #include "singletons/Settings.hpp"
@@ -55,6 +58,7 @@
 #include <QMessageBox>
 #include <QPointer>
 #include <QSaveFile>
+#include <QSet>
 #include <QTimer>
 #include <QUuid>
 #include <QVBoxLayout>
@@ -1239,10 +1243,26 @@ bool hasChannelSound(const QString &channelName)
     return !channelSoundFor(channelName).isEmpty();
 }
 
+namespace {
+
+/// True when the chat is in the tab you have selected in a Solrino window,
+/// not just open in some other tab
+bool isChatOnScreen(const Channel &channel)
+{
+    const auto visible = getApp()->getWindows()->getVisibleChannelNames();
+    return std::ranges::any_of(visible, [&channel](const QString &name) {
+        return name.compare(channel.getName(), Qt::CaseInsensitive) == 0;
+    });
+}
+
+}  // namespace
+
 void shoutoutRaider(const ChannelPtr &channel, const QString &raiderLogin)
 {
+    // Only for a chat you're looking at, so it never speaks in a chat
+    // you just have open in the background
     if (!getSettings()->solrinoAutoShoutoutRaids || channel == nullptr ||
-        !channel->hasModRights())
+        !channel->hasModRights() || !isChatOnScreen(*channel))
     {
         return;
     }
@@ -1273,7 +1293,8 @@ void shoutoutRaider(const ChannelPtr &channel, const QString &raiderLogin)
     QTimer::singleShot(waitMs, qApp, [weak, login] {
         auto channel = weak.lock();
         if (channel == nullptr || !channel->hasModRights() ||
-            !getSettings()->solrinoAutoShoutoutRaids)
+            !getSettings()->solrinoAutoShoutoutRaids ||
+            !isChatOnScreen(*channel))
         {
             return;
         }
@@ -1307,6 +1328,269 @@ void shoutoutRaider(const ChannelPtr &channel, const QString &raiderLogin)
             channel->sendMessage(text);
         }
     });
+}
+
+namespace {
+
+/// How sure we are that a reward is the channel's "First" reward: 2 for a
+/// title that is just "First" or "1st", 1 for a short one like "Be first!",
+/// 0 for anything else
+int firstRewardScore(const QString &title)
+{
+    QString plain;
+    for (const auto ch : title.toLower())
+    {
+        plain += ch.isLetterOrNumber() ? ch : QChar(u' ');
+    }
+    plain = plain.simplified();
+    if (plain == QStringLiteral("first") || plain == QStringLiteral("1st"))
+    {
+        return 2;
+    }
+    const auto words = plain.split(u' ', Qt::SkipEmptyParts);
+    const bool hasFirst = words.contains(QStringLiteral("first")) ||
+                          words.contains(QStringLiteral("1st"));
+    if (hasFirst && words.size() <= 3 &&
+        !plain.contains(QStringLiteral("first time")))
+    {
+        return 1;
+    }
+    return 0;
+}
+
+constexpr int FIRST_TRIES = 60;  // every 2 seconds, so two minutes
+constexpr int FIRST_RETRY_MS = 2000;
+
+void tryRedeemFirst(std::weak_ptr<TwitchChannel> weak, int attempt)
+{
+    auto channel = weak.lock();
+    if (channel == nullptr || !getSettings()->solrinoAutoRedeemFirst ||
+        !canGiveBadges() || !channel->isLive())
+    {
+        return;
+    }
+    const auto retry = [weak, attempt] {
+        if (attempt + 1 < FIRST_TRIES)
+        {
+            QTimer::singleShot(FIRST_RETRY_MS, qApp, [weak, attempt] {
+                tryRedeemFirst(weak, attempt + 1);
+            });
+        }
+    };
+
+    QString authError;
+    const auto auth = MoltorinoAuth::resolveCurrentUserToken(&authError);
+    if (!auth.hasToken())
+    {
+        channel->addSystemMessage(
+            QStringLiteral("Couldn't auto-redeem First: ") +
+            (authError.isEmpty() ? QStringLiteral("log in to Twitch first.")
+                                 : authError));
+        return;
+    }
+    const auto token = auth.token;
+
+    TwitchGql::getChannelPointRewards(
+        channel->getName(), channel->roomId(), token,
+        [weak, attempt, token, retry](GqlChannelPointRewards rewards) {
+            auto channel = weak.lock();
+            if (channel == nullptr)
+            {
+                return;
+            }
+            const GqlChannelPointReward *best = nullptr;
+            int bestScore = 0;
+            for (const auto &reward : rewards.rewards)
+            {
+                const auto score =
+                    reward.isAutomatic ? 0 : firstRewardScore(reward.title);
+                if (score > bestScore)
+                {
+                    best = &reward;
+                    bestScore = score;
+                }
+            }
+            // Streamers often switch it on a moment after going live
+            if (best == nullptr || !best->isEnabled || !best->isInStock)
+            {
+                if (attempt + 1 >= FIRST_TRIES)
+                {
+                    channel->addSystemMessage(
+                        best == nullptr
+                            ? QStringLiteral("Didn't auto-redeem First: this "
+                                             "channel has no First reward.")
+                            : QStringLiteral("Didn't auto-redeem First: it "
+                                             "never became available."));
+                }
+                retry();
+                return;
+            }
+            if (rewards.balance >= 0 && rewards.balance < best->cost)
+            {
+                channel->addSystemMessage(
+                    QStringLiteral("Couldn't auto-redeem %1: it costs %2 and "
+                                   "you have %3.")
+                        .arg(best->title, QString::number(best->cost),
+                             QString::number(rewards.balance)));
+                return;
+            }
+            const auto reward = *best;
+            TwitchGql::redeemCustomReward(
+                rewards.channelId, reward,
+                reward.isUserInputRequired ? QStringLiteral("First")
+                                           : QString(),
+                token,
+                [weak, reward](const GqlChannelPointRedeemResult &) {
+                    if (auto channel = weak.lock())
+                    {
+                        channel->addSystemMessage(
+                            QStringLiteral("Auto-redeemed %1.")
+                                .arg(reward.title));
+                    }
+                },
+                [weak](const QString &error) {
+                    if (auto channel = weak.lock())
+                    {
+                        channel->addSystemMessage(
+                            QStringLiteral("Couldn't auto-redeem First: ") +
+                            error);
+                    }
+                });
+        },
+        [weak, attempt, retry](const QString &error) {
+            if (attempt + 1 >= FIRST_TRIES)
+            {
+                if (auto channel = weak.lock())
+                {
+                    channel->addSystemMessage(
+                        QStringLiteral("Couldn't auto-redeem First: ") + error);
+                }
+            }
+            retry();
+        });
+}
+
+}  // namespace
+
+void autoRedeemFirst(const std::shared_ptr<TwitchChannel> &channel,
+                     bool initialUpdate)
+{
+    if (channel == nullptr || !getSettings()->solrinoAutoRedeemFirst ||
+        !canGiveBadges())
+    {
+        return;
+    }
+    // initialUpdate isn't enough on its own: a quick check can notice a stream
+    // before Twitch's first check does, so judge by how long it has been live
+    Q_UNUSED(initialUpdate);
+    QString streamId;
+    {
+        const auto status = channel->accessStreamStatus();
+        // A stream that has been going a while: First is long gone
+        if (status->uptimeSeconds > 3 * 60 || status->streamId.isEmpty())
+        {
+            return;
+        }
+        streamId = status->streamId;
+    }
+    // Once per stream
+    static QSet<QString> tried;
+    const auto key = channel->roomId() + u'/' + streamId;
+    if (tried.contains(key))
+    {
+        return;
+    }
+    tried.insert(key);
+    tryRedeemFirst(channel, 0);
+}
+
+void startFirstWatcher()
+{
+    // Twitch's own live check runs every 30 seconds. With auto-redeem on, the
+    // open chats that are offline are checked every few seconds instead.
+    auto *timer = new QTimer(qApp);
+    static int asking = 0;
+    // When each chat was first seen. A chat is only checked here once Twitch's
+    // own check has had its turn, so a stream that was already live when
+    // Solrino opened never looks like it just went live.
+    static QHash<QString, QDateTime> firstSeen;
+    timer->setInterval(4000);
+    static QDateTime askedAt;
+    QObject::connect(timer, &QTimer::timeout, qApp, [] {
+        const auto now = QDateTime::currentDateTimeUtc();
+        // Still waiting on the last check, unless its reply got lost
+        if ((asking > 0 && askedAt.secsTo(now) < 20) ||
+            !getSettings()->solrinoAutoRedeemFirst || !canGiveBadges())
+        {
+            return;
+        }
+        asking = 0;
+        askedAt = now;
+        auto offline =
+            std::make_shared<std::map<QString, std::weak_ptr<TwitchChannel>>>();
+        getApp()->getTwitch()->forEachChannel([&offline, &now](
+                                                  const ChannelPtr &c) {
+            auto twitch = std::dynamic_pointer_cast<TwitchChannel>(c);
+            if (twitch == nullptr || twitch->roomId().isEmpty())
+            {
+                return;
+            }
+            const auto seen = firstSeen.constFind(twitch->roomId());
+            if (seen == firstSeen.constEnd())
+            {
+                firstSeen.insert(twitch->roomId(), now);
+                return;
+            }
+            if (seen.value().secsTo(now) >= 40 && !twitch->isLive())
+            {
+                offline->emplace(twitch->roomId(), twitch);
+            }
+        });
+        if (offline->empty())
+        {
+            return;
+        }
+        // Twitch takes up to 100 channels per request
+        QStringList ids;
+        const auto send = [&offline](const QStringList &batch) {
+            ++asking;
+            getHelix()->fetchStreams(
+                batch, {},
+                [offline](const std::vector<HelixStream> &streams) {
+                    for (const auto &stream : streams)
+                    {
+                        const auto it = offline->find(stream.userId);
+                        if (it == offline->end())
+                        {
+                            continue;
+                        }
+                        auto channel = it->second.lock();
+                        if (channel != nullptr && !channel->isLive())
+                        {
+                            channel->updateStreamStatus(stream, false);
+                        }
+                    }
+                },
+                [](auto &&...) {},
+                [] {
+                    asking = std::max(0, asking - 1);
+                });
+        };
+        for (const auto &entry : *offline)
+        {
+            ids.append(entry.first);
+            if (ids.size() == 100)
+            {
+                send(ids);
+                ids.clear();
+            }
+        }
+        if (!ids.isEmpty())
+        {
+            send(ids);
+        }
+    });
+    timer->start();
 }
 
 void shareWatchStreakIn(const ChannelPtr &channel, const QString &message)

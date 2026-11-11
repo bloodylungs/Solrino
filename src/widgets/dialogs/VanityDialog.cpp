@@ -2641,6 +2641,7 @@ QWidget *VanityDialog::buildOtherBadgeTab()
     sort->setObjectName(QStringLiteral("VanitySort"));
     sort->setAccessibleName(QStringLiteral("Sort other badges"));
     sort->setToolTip(QStringLiteral("Sort these badges"));
+    sort->addItem(QStringLiteral("Solrino order"), QStringLiteral("solrino"));
     sort->addItem(QStringLiteral("A to Z"), QStringLiteral("az"));
     sort->addItem(QStringLiteral("Z to A"), QStringLiteral("za"));
     sort->addItem(QStringLiteral("Newest added"), QStringLiteral("newest"));
@@ -4880,6 +4881,20 @@ void VanityDialog::populateMoltorinoBadgeChoices()
             if (sort == QStringLiteral("mine") && a.owned != b.owned)
             {
                 return a.owned;
+            }
+            // Solrino's chosen badges first, in that order, then A to Z
+            if (sort == QStringLiteral("solrino"))
+            {
+                const auto rankA = solrino::otherBadgeRank(a.key);
+                const auto rankB = solrino::otherBadgeRank(b.key);
+                if (rankA != rankB)
+                {
+                    if (rankA < 0 || rankB < 0)
+                    {
+                        return rankA >= 0;
+                    }
+                    return rankA < rankB;
+                }
             }
             const auto order =
                 a.shortName.compare(b.shortName, Qt::CaseInsensitive);

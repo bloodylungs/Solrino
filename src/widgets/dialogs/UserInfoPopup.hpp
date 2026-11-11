@@ -57,6 +57,7 @@ class LabelButton;
 class PixmapButton;
 class DrawnButton;
 class LiveIndicator;
+class UsercardBanner;
 class ModeratorCommentsView;
 class UserBadgesView;
 class UserLogsView;
@@ -197,6 +198,11 @@ private:
                          const QString &filename) const;
 
     void updateAvatarUrl();
+
+    /// Shows the user's Twitch profile banner across the top, or black
+    void loadBanner(const QString &userId);
+    UsercardBanner *banner_{};
+    uint64_t bannerRequestGeneration_ = 0;
 
     void updateKickUserData();
     void onKickProfilePictureClick(Qt::MouseButton button);

@@ -8,10 +8,12 @@
 #include "providers/moltorino/MoltorinoSupporterBadges.hpp"
 #include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
+#include "singletons/Settings.hpp"
 #include "widgets/BaseWindow.hpp"
 #include "widgets/dialogs/SolrinoAnnouncement.hpp"
 
 #include <QButtonGroup>
+#include <QCheckBox>
 #include <QFrame>
 #include <QGridLayout>
 #include <QGuiApplication>
@@ -143,11 +145,18 @@ public:
         auto *grid = new QGridLayout();
         grid->setSpacing(6);
         this->group_ = new QButtonGroup(this);
-        // The same order as vanity: most important first, then A to Z
+        // The same order as vanity: the main badges, then the ones that
+        // lead Other Badges, then everything else A to Z
         std::vector<BadgeChoice> ordered(BADGES.begin(), BADGES.end());
         const auto placeOf = [](const BadgeChoice &choice) {
-            const auto rank = mainBadgeRank(QString::fromLatin1(choice.id));
-            return rank >= 0 ? rank : int(BADGES.size());
+            const auto id = QString::fromLatin1(choice.id);
+            const auto rank = mainBadgeRank(id);
+            if (rank >= 0)
+            {
+                return rank;
+            }
+            const auto other = otherBadgeRank(id);
+            return int(BADGES.size()) + (other >= 0 ? other : int(BADGES.size()));
         };
         std::ranges::stable_sort(
             ordered, [&placeOf](const auto &a, const auto &b) {
@@ -215,6 +224,26 @@ public:
         announceRow->addWidget(this->clearAnnouncementButton_);
         announceRow->addWidget(this->announceButton_);
         layout->addLayout(announceRow);
+
+        // Just for you: redeem First the moment an open chat goes live
+        auto *firstRule = new QFrame();
+        firstRule->setObjectName(QStringLiteral("rule"));
+        firstRule->setFixedHeight(1);
+        layout->addSpacing(4);
+        layout->addWidget(firstRule);
+        auto *firstBox = new QCheckBox(
+            QStringLiteral("Auto-redeem First when a chat goes live"));
+        firstBox->setChecked(getSettings()->solrinoAutoRedeemFirst);
+        layout->addWidget(firstBox);
+        auto *firstNote = new QLabel(QStringLiteral(
+            "Works in every chat you have open, even in tabs you aren't on."));
+        firstNote->setWordWrap(true);
+        firstNote->setStyleSheet(
+            QStringLiteral("color: rgba(248, 241, 239, 170);"));
+        layout->addWidget(firstNote);
+        QObject::connect(firstBox, &QCheckBox::toggled, this, [](bool on) {
+            getSettings()->solrinoAutoRedeemFirst = on;
+        });
 
         QObject::connect(this->announcementInput_, &QLineEdit::textChanged, this,
                          [this] {
@@ -416,12 +445,7 @@ int mainBadgeRank(const QString &badge)
     static const QStringList order{
         QStringLiteral("developer"),
         QStringLiteral("founder"),
-        QStringLiteral("staff"),
-        QStringLiteral("moderator"),
         QStringLiteral("contributor"),
-        QStringLiteral("top_bug_hunter"),
-        QStringLiteral("alpha_tester"),
-        QStringLiteral("beta_tester"),
         QStringLiteral("number_one_donor"),
         QStringLiteral("donor_of_the_year"),
         QStringLiteral("donor_of_the_month"),
@@ -431,13 +455,26 @@ int mainBadgeRank(const QString &badge)
         QStringLiteral("supporter_plus_plus_plus_alt"),
         QStringLiteral("supporter_plus_plus_plus"),
         QStringLiteral("obsidian"),
-        QStringLiteral("veteran"),
-        QStringLiteral("one_year_on_solrino"),
         QStringLiteral("supporter_plus_plus_alt"),
         QStringLiteral("supporter_plus_plus"),
         QStringLiteral("supporter_plus_alt"),
         QStringLiteral("supporter_plus"),
         QStringLiteral("supporter"),
+    };
+    return order.indexOf(badge);
+}
+
+int otherBadgeRank(const QString &badge)
+{
+    // These lead the Other Badges tab, in this order
+    static const QStringList order{
+        QStringLiteral("staff"),
+        QStringLiteral("moderator"),
+        QStringLiteral("top_bug_hunter"),
+        QStringLiteral("alpha_tester"),
+        QStringLiteral("beta_tester"),
+        QStringLiteral("veteran"),
+        QStringLiteral("one_year_on_solrino"),
     };
     return order.indexOf(badge);
 }
