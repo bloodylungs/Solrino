@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <shared_mutex>
+#include <vector>
 
 namespace chatterino {
 
@@ -21,8 +22,18 @@ public:
 
     void start();
 
+    struct OwnedBadge {
+        QString id;
+        std::shared_ptr<const Emote> emote;
+        /// The one Moltorino shows next to their name
+        bool active = false;
+    };
+
     /// The badge this person shows on Moltorino, or nullptr.
     std::shared_ptr<const Emote> getBadge(const QString &userId) const;
+
+    /// Every Moltorino badge this person has, the shown one first.
+    std::vector<OwnedBadge> getOwnedBadges(const QString &userId) const;
 
 private:
     void request();
@@ -30,6 +41,7 @@ private:
 
     mutable std::shared_mutex mutex_;
     QHash<QString, std::shared_ptr<const Emote>> users_;
+    QHash<QString, std::vector<OwnedBadge>> owned_;
 };
 
 }  // namespace chatterino

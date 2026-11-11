@@ -18,6 +18,7 @@
 #include "providers/ffzap/FfzApBadges.hpp"
 #include "providers/homies/HomiesBadges.hpp"
 #include "providers/moltorino/MoltorinoAuth.hpp"
+#include "providers/moltorino/MoltorinoOriginalBadges.hpp"
 #include "providers/moltorino/SolrinoPaints.hpp"
 #include "providers/seventv/SeventvBadges.hpp"
 #include "providers/seventv/SeventvPaints.hpp"
@@ -2215,7 +2216,7 @@ void VanityDialog::buildUi()
     for (auto *grid :
          {this->paintGrid_, this->globalBadgeGrid_, this->channelBadgeGrid_,
           this->sevenTVBadgeGrid_, this->moltorinoBadgeGrid_,
-          this->otherBadgeGrid_})
+          this->otherBadgeGrid_, this->moltorinoOriginalGrid_})
     {
         if (grid != nullptr)
         {
@@ -2612,6 +2613,8 @@ QWidget *VanityDialog::buildMoltorinoBadgeTab()
     this->moltorinoBadgeTabs_->addTab(page, QStringLiteral("Solrino Badges"));
     this->moltorinoBadgeTabs_->addTab(this->buildOtherBadgeTab(),
                                       QStringLiteral("Other Badges"));
+    this->moltorinoBadgeTabs_->addTab(this->buildMoltorinoOriginalTab(),
+                                      QStringLiteral("Moltorino Badges"));
     QObject::connect(this->moltorinoBadgeTabs_, &QTabWidget::currentChanged,
                      this, [this](int) {
                          this->populateCurrentTab();
@@ -2668,6 +2671,97 @@ QWidget *VanityDialog::buildOtherBadgeTab()
                      QStringLiteral("Search other badges"), page);
     layout->addWidget(this->otherBadgeGrid_, 1);
     return page;
+}
+
+QWidget *VanityDialog::buildMoltorinoOriginalTab()
+{
+    auto *page = new QWidget(this->moltorinoBadgeTabs_);
+    page->setObjectName(QStringLiteral("VanityTabPage"));
+    auto *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 7, 0, 0);
+    layout->setSpacing(6);
+
+    this->moltorinoOriginalHint_ = new QLabel(page);
+    this->moltorinoOriginalHint_->setObjectName(QStringLiteral("VanityHint"));
+    this->moltorinoOriginalHint_->setWordWrap(true);
+    layout->addWidget(this->moltorinoOriginalHint_);
+
+    this->moltorinoOriginalGrid_ =
+        new VanityChoiceGrid(VanityChoiceKind::Badge, 5, page);
+    // Moltorino's badges are only shown here: which one is worn is chosen on
+    // Moltorino, so a click just says so and keeps the worn one lit
+    this->moltorinoOriginalGrid_->selectionChanged =
+        [this](const VanityChoice &choice) {
+            this->populateMoltorinoOriginalChoices();
+            this->setStatus(
+                QStringLiteral("%1 is a Moltorino badge. Change which one you "
+                               "wear in Moltorino.")
+                    .arg(choice.name));
+        };
+    addGallerySearch(layout, this->moltorinoOriginalGrid_,
+                     QStringLiteral("Search Moltorino badges"), page);
+    layout->addWidget(this->moltorinoOriginalGrid_, 1);
+    return page;
+}
+
+void VanityDialog::populateMoltorinoOriginalChoices()
+{
+    if (this->moltorinoOriginalGrid_ == nullptr)
+    {
+        return;
+    }
+    const auto owned =
+        this->accountUserId_.isEmpty()
+            ? std::vector<MoltorinoOriginalBadges::OwnedBadge>{}
+            : MoltorinoOriginalBadges::instance().getOwnedBadges(
+                  this->accountUserId_);
+
+    QVector<VanityChoice> choices;
+    QString active;
+    for (const auto &badge : owned)
+    {
+        if (!badge.emote)
+        {
+            continue;
+        }
+        const auto &images = badge.emote->images;
+        const auto image = (images.getImage3()->isEmpty() ? images.getImage2()
+                                                          : images.getImage3())
+                               ->url()
+                               .string;
+        // Tooltips arrive escaped for chat; show them as plain text here
+        auto name = badge.emote->tooltip.string;
+        name.replace(QStringLiteral("&lt;"), QStringLiteral("<"))
+            .replace(QStringLiteral("&gt;"), QStringLiteral(">"))
+            .replace(QStringLiteral("&quot;"), QStringLiteral("\""))
+            .replace(QStringLiteral("&#39;"), QStringLiteral("'"))
+            .replace(QStringLiteral("&amp;"), QStringLiteral("&"));
+        if (name.trimmed().isEmpty())
+        {
+            name = badge.id;
+        }
+        if (badge.active)
+        {
+            active = badge.id;
+        }
+        choices.push_back({badge.id, name, image,
+                           compactMoltorinoBadgeName(name),
+                           badge.active
+                               ? QStringLiteral("Worn on Moltorino, and shown "
+                                                "in chat next to your Solrino "
+                                                "badge.")
+                               : QStringLiteral("One of your Moltorino badges."),
+                           true});
+    }
+
+    this->moltorinoOriginalGrid_->setChoices(std::move(choices), active,
+                                             this->accountDisplayName_,
+                                             this->selectedColor_);
+    this->moltorinoOriginalHint_->setText(
+        owned.empty()
+            ? QStringLiteral("You don't have any Moltorino badges.")
+            : QStringLiteral("Your Moltorino badges. The lit one shows in chat "
+                             "next to your Solrino badge."));
 }
 
 void VanityDialog::chooseMoltorinoBadge(const QString &key, const QString &name,
@@ -3201,7 +3295,7 @@ void VanityDialog::refreshStyle()
     for (auto *grid :
          {this->paintGrid_, this->globalBadgeGrid_, this->channelBadgeGrid_,
           this->sevenTVBadgeGrid_, this->moltorinoBadgeGrid_,
-          this->otherBadgeGrid_})
+          this->otherBadgeGrid_, this->moltorinoOriginalGrid_})
     {
         if (grid != nullptr)
         {
@@ -3242,9 +3336,15 @@ VanityChoiceGrid *VanityDialog::currentChoiceGrid() const
     }
     if (page == this->moltorinoBadgePage_)
     {
-        return this->moltorinoBadgeTabs_->currentIndex() == 1
-                   ? this->otherBadgeGrid_
-                   : this->moltorinoBadgeGrid_;
+        switch (this->moltorinoBadgeTabs_->currentIndex())
+        {
+            case 1:
+                return this->otherBadgeGrid_;
+            case 2:
+                return this->moltorinoOriginalGrid_;
+            default:
+                return this->moltorinoBadgeGrid_;
+        }
     }
     return nullptr;
 }
@@ -4810,6 +4910,11 @@ void VanityDialog::populateSevenTVBadgeChoices()
 void VanityDialog::populateMoltorinoBadgeChoices()
 {
     this->syncEffectiveMoltorinoSelection();
+    if (this->moltorinoBadgeTabs_ != nullptr &&
+        this->moltorinoBadgeTabs_->currentIndex() == 2)
+    {
+        this->populateMoltorinoOriginalChoices();
+    }
     if (this->moltorinoBadgeChoicesBuilt_)
     {
         this->selectMoltorinoTiles(this->previewMoltorinoBadge_.isEmpty()
@@ -5344,6 +5449,12 @@ void VanityDialog::refreshPreview()
         {
             addBadge(QStringLiteral("bh"), QStringLiteral("BadgeHQ"), badge);
         }
+    }
+    if (getSettings()->showBadgesMoltorino)
+    {
+        addBadge(QStringLiteral("mo"), QStringLiteral("Moltorino"),
+                 MoltorinoOriginalBadges::instance().getBadge(
+                     this->accountUserId_));
     }
     if (getApp()->getMoltorinoSupporterBadges() != nullptr)
     {
@@ -6307,6 +6418,10 @@ QString VanityDialog::layoutDisplayName(const QString &key) const
     if (key == QStringLiteral("c"))
     {
         return QStringLiteral("Chatterino");
+    }
+    if (key == QStringLiteral("mo"))
+    {
+        return QStringLiteral("Moltorino");
     }
     if (key == QStringLiteral("ff"))
     {

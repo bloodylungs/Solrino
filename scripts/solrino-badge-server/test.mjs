@@ -90,7 +90,7 @@ test("the list starts valid and empty", async () => {
   assert.equal(body.schemaVersion, 2);
   assert.ok(body.generation.length > 0);
   assert.ok(body.bundleVersion >= 0);
-  assert.equal(body.badges.length, 41);
+  assert.equal(body.badges.length, 40);
   for (const badge of body.badges) {
     for (const size of ["1x", "2x", "3x", "4x"]) {
       assert.ok(badge.images[size].endsWith(`/assets/badges/sizes/${badge.id}/${size}.webp`));

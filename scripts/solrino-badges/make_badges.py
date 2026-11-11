@@ -701,69 +701,67 @@ def spooky():
 
 
 def winter_2026():
-    """A cut-ice star with light turning across its facets and snow falling past it."""
+    """A cut-ice gem star: light turns across its bevels, a shine sweeps over it,
+    and a few flakes drift past behind."""
     outer = sd_emblem(FREE_SCALE, 0.0)
     cover = fill(outer)
     alpha = free_alpha()
     down, size, thickness = LETTER_FIT[SHAPE]
     letter = sd_letter(FREE_SCALE, down * FREE_SCALE, thickness * FREE_SCALE, size)
     letter_cover = fill(letter)
-    star_glow = np.exp(-np.maximum(outer, 0) / 0.09) * (outer > -0.001)
-    rim = smooth(-0.07, -0.03, outer)
-    deep = rgb("#123f86")
-    ice = rgb("#8fd8ff")
+    # A dark ring around the S keeps it readable at chat size
+    letter_edge = fill(letter - 0.035)
+    star_glow = np.exp(-np.maximum(outer, 0) / 0.08) * (outer > -0.001)
+    rim = smooth(-0.045, -0.02, outer)
+    deep = rgb("#0b2a66")
+    mid = rgb("#2f7fd6")
+    ice = rgb("#a6e4ff")
     white = rgb("#ffffff")
-    navy = rgb("#0a2150")
-    frost = rgb("#bfeaff")
-    # Ten flat faces, like a cut gem
-    angle = np.arctan2(Y - STAR_DOWN, X) + math.pi / 2
-    sector = np.floor((angle % TAU) / (TAU / 10))
+    navy = rgb("#06173d")
+    # Bevelled edge around a flat inner table, cut into twenty faces:
+    # each point is split down its ridge into a lit side and a shaded side
+    table = smooth(-0.2, -0.17, outer)
+    angle = (np.arctan2(Y - STAR_DOWN * FREE_SCALE, X) + math.pi / 2) % TAU
+    sector = np.floor(angle / (TAU / 10))
     middles = (sector + 0.5) * TAU / 10
-    # Frost grows in from the edge as fine feathers
-    feathers = 0.5 + 0.5 * np.sin(angle * 40 + np.sin(X * 19) * 2 + np.sin(Y * 23) * 2)
-    rime = smooth(-0.24, -0.07, outer) * smooth(0.45, 0.95, feathers)
+    # Thin bright seams where the faces meet
+    edge_dist = np.abs(((angle + TAU / 20) % (TAU / 10)) - TAU / 20)
+    seams = np.exp(-(edge_dist * np.hypot(X, Y) / 0.008) ** 2) * table
     rng = np.random.default_rng(26)
     # Whole-number speeds, so each flake lands back where it began
-    dots = [(rng.uniform(-1, 1), rng.uniform(0, 1), rng.integers(1, 3), rng.uniform(0, 1), rng.uniform(0.012, 0.026)) for _ in range(30)]
-    flakes = [(-0.7, 0.1, 0.1), (0.72, 0.55, 0.095), (0.05, 0.8, 0.085)]
+    dots = [(rng.uniform(-0.95, 0.95), rng.uniform(0, 1), int(rng.integers(1, 3)),
+             rng.uniform(0, 1), rng.uniform(0.014, 0.024)) for _ in range(14)]
 
     def run(f):
         phase = TAU * f
         out = np.ones((MASTER, MASTER, 3), np.float32) * 0.01
-        out = out + ice * (star_glow * (0.55 + 0.15 * math.sin(phase * 2)))[..., None]
-        light = 0.5 + 0.5 * np.cos(middles - phase)
-        body = mix(deep, ice, (light ** 1.6)[..., None])
-        # Every other face catches a little more light, so the cuts read as edges
-        body = body + (white - body) * (((sector % 2) * 0.13) * cover)[..., None]
-        body = body + (white - body) * (rime * 0.55)[..., None]
-        out = over(out, body, cover)
-        out = over(out, mix(frost, white, 0.5 + 0.5 * math.sin(phase * 2)), rim * cover)
-        out = over(out, navy, letter_cover)
-        shown = alpha
-        # Soft snow
+        # Snow behind the star only, so the S is never covered
         snow = np.zeros(X.shape, np.float32)
         for x, start, speed, sway, big in dots:
             y = ((start + speed * f) % 1.0) * 2.1 - 1.05
             px = x + 0.05 * math.sin(TAU * (f + sway))
             fade = min(1.0, (1.05 - abs(y)) / 0.15)
-            snow = np.maximum(snow, fill(np.hypot(X - px, Y - y) - big) * fade)
-        # A few big six-armed flakes drifting and turning
-        for x, start, big in flakes:
-            y = ((start + f) % 1.0) * 2.2 - 1.1
-            turn = phase + start * TAU
-            px = x + 0.07 * math.sin(phase + start * TAU)
-            d = np.full(X.shape, 1e9, np.float32)
-            for arm in range(3):
-                a = turn / 3 + arm * math.pi / 3
-                dx, dy = math.cos(a) * big, math.sin(a) * big
-                d = np.minimum(d, sd_capsule((px - dx, y - dy), (px + dx, y + dy), 0.012))
-            fade = min(1.0, max(0.0, (1.1 - abs(y)) / 0.15))
-            snow = np.maximum(snow, fill(d) * fade)
-        out = over(out, white, snow)
-        shown = np.maximum(shown, snow)
-        # A glint on the ice
+            snow = np.maximum(snow, fill(np.hypot(X - px, Y - y) - big) * fade * 0.85)
+        snow = snow * (1 - cover)
+        out = over(out, rgb("#dff4ff"), snow)
+        out = out + ice * (star_glow * (0.5 + 0.15 * math.sin(phase * 2)))[..., None]
+        # The light circles once a loop; bevel faces catch it in turn
+        light = 0.5 + 0.5 * np.cos(middles - phase)
+        bevel = mix(deep, ice, (light ** 2.2)[..., None])
+        flat = mix(mid, ice, 0.35 + 0.15 * math.sin(phase))
+        body = mix(flat * np.ones_like(bevel), bevel, table[..., None])
+        body = body + (white - body) * (seams * 0.45)[..., None]
+        # A broad shine sweeps diagonally across once a loop
+        sweep = (X + Y) * 0.7 - (f * 4.0 - 2.0)
+        body = body + (white - body) * (np.exp(-(sweep / 0.12) ** 2) * 0.55)[..., None]
+        out = over(out, body, cover)
+        out = over(out, white, rim * cover * 0.9)
+        out = over(out, navy, letter_edge * cover)
+        out = over(out, white, letter_cover)
+        shown = np.maximum(alpha, snow)
+        # A glint at a tip
         power = max(0.0, math.sin(phase * 2 + 0.6)) ** 4
-        glint = smooth(0.0, 0.4, sparkle(-0.3, -0.34, 0.2 * power))
+        glint = smooth(0.0, 0.4, sparkle(0.0, -0.74, 0.22 * power))
         out = over(out, white, glint)
         return out, np.maximum(shown, glint)
 
@@ -1640,61 +1638,6 @@ def halo():
     return run
 
 
-def demon():
-    """A black and red star with curved horns and ember eyes that slowly open."""
-    scale, cy = 0.8, 0.14
-    parts = star_parts(scale, cy)
-    horn_d = np.full(X.shape, 1e9, np.float32)
-    for side in (-1, 1):
-        for i in range(26):
-            t = i / 25
-            x = side * ((1 - t) ** 2 * 0.2 + 2 * (1 - t) * t * 0.68 + t ** 2 * 0.42)
-            y = (1 - t) ** 2 * -0.3 + 2 * (1 - t) * t * -0.5 + t ** 2 * -0.97
-            horn_d = np.minimum(horn_d, np.hypot(X - x, Y - y) - (0.11 * (1 - t) + 0.006))
-    horn = fill(horn_d)
-    body = mix(rgb("#090406"), rgb("#6a0812"), smooth(-0.3, 0.9, Y)[..., None])
-    horn_color = mix(rgb("#a3232a"), rgb("#fff0d8"), smooth(-0.4, -0.85, Y)[..., None])
-    horn_edge = fill(horn_d - 0.016)
-    red = rgb("#ff1f1f")
-    ember = rgb("#ffcc33")
-    rng = np.random.default_rng(66)
-    embers = [(rng.uniform(-0.8, 0.8), rng.uniform(0, 1), rng.uniform(0.012, 0.026), rng.uniform(0, 1)) for _ in range(10)]
-    shown_base = np.maximum(smooth(0.2, 0.0, parts["outer"]) * EDGE, smooth(0.05, 0.0, horn_d) * EDGE)
-    eye_y = -0.19
-
-    def run(f):
-        phase = TAU * f
-        opening = smooth(0.15, 0.3, np.float32(f)).item() * smooth(0.82, 0.68, np.float32(f)).item()
-        out = empty_canvas()
-        out = out + red * (parts["glow"] * (0.55 + 0.3 * opening))[..., None]
-        out = over(out, red * 0.8, horn_edge)
-        out = over(out, horn_color, horn)
-        out = over(out, body, parts["cover"])
-        out = over(out, red, parts["rim"] * parts["cover"])
-        out = over(out, red * (0.75 + 0.25 * opening), parts["letter"])
-        if opening > 0.01:
-            for side in (-1, 1):
-                dx, dy = X - side * 0.15, Y - eye_y
-                tilt = 0.45 * side
-                u = dx * math.cos(tilt) + dy * math.sin(tilt)
-                v = -dx * math.sin(tilt) + dy * math.cos(tilt)
-                eye = np.sqrt((u / 0.095) ** 2 + (v / (0.042 * opening + 0.002)) ** 2) - 1
-                cover = smooth(0.15, -0.1, eye)
-                out = out + ember * (np.exp(-np.maximum(eye, 0) / 0.5) * opening * parts["cover"] * 0.55)[..., None]
-                out = over(out, mix(ember, rgb("#ffffff"), 0.3), cover * parts["cover"])
-        shown = shown_base
-        for x, start, big, sway in embers:
-            t = (start + f) % 1.0
-            y = 0.98 - 1.9 * t
-            px = x + 0.06 * math.sin(TAU * (f + sway))
-            dot = fill(np.hypot(X - px, Y - y) - big) * min(1.0, t / 0.15, (1 - t) / 0.2) * EDGE
-            out = over(out, rgb("#ff7a2a"), dot)
-            shown = np.maximum(shown, dot)
-        return out, shown
-
-    return run
-
-
 def matrix_rain():
     """A black star with green characters falling through it."""
     parts = star_parts()
@@ -1967,7 +1910,6 @@ BADGES = [
     ("top_bug_hunter", top_bug_hunter),
     ("katana", katana),
     ("halo", halo),
-    ("demon", demon),
     ("matrix_rain", matrix_rain),
     ("plasma_ball", plasma_ball),
     ("clockwork", clockwork),

@@ -13,10 +13,12 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
+#include <QSet>
 #include <QSize>
 #include <QTimer>
 #include <QUrl>
 
+#include <algorithm>
 #include <limits>
 #include <mutex>
 
@@ -93,6 +95,13 @@ std::shared_ptr<const Emote> MoltorinoOriginalBadges::getBadge(
     return this->users_.value(userId);
 }
 
+std::vector<MoltorinoOriginalBadges::OwnedBadge>
+    MoltorinoOriginalBadges::getOwnedBadges(const QString &userId) const
+{
+    std::shared_lock lock(this->mutex_);
+    return this->owned_.value(userId);
+}
+
 void MoltorinoOriginalBadges::request()
 {
     NetworkRequest(QString::fromLatin1(LIST_URL))
@@ -159,41 +168,64 @@ bool MoltorinoOriginalBadges::apply(const QByteArray &payload)
     }
 
     QHash<QString, std::shared_ptr<const Emote>> users;
+    QHash<QString, std::vector<OwnedBadge>> ownedByUser;
     const auto people = root.value("users").toObject();
     for (auto it = people.constBegin(); it != people.constEnd(); ++it)
     {
         const auto person = it.value().toObject();
         // Someone who chose "No badge" on Moltorino doesn't show one here either
-        if (person.contains("activeBadge"))
-        {
-            const auto active =
-                person.value("activeBadge").toString().trimmed().toLower();
-            if (catalog.contains(active))
-            {
-                users.insert(it.key(), catalog.value(active).emote);
-            }
-            continue;
-        }
+        const bool chose = person.contains("activeBadge");
+        const auto active =
+            person.value("activeBadge").toString().trimmed().toLower();
 
         Catalogued best;
-        const auto owned = person.value("badges").toArray();
-        for (const auto &id : owned)
+        QString bestId;
+        std::vector<OwnedBadge> owned;
+        QSet<QString> seen;
+        for (const auto &value : person.value("badges").toArray())
         {
-            const auto found = catalog.constFind(id.toString().trimmed().toLower());
-            if (found != catalog.constEnd() &&
-                (best.emote == nullptr || found->priority < best.priority))
+            const auto id = value.toString().trimmed().toLower();
+            const auto found = catalog.constFind(id);
+            if (found == catalog.constEnd() || seen.contains(id))
+            {
+                continue;
+            }
+            seen.insert(id);
+            owned.push_back({id, found->emote, false});
+            if (best.emote == nullptr || found->priority < best.priority)
             {
                 best = *found;
+                bestId = id;
             }
         }
-        if (best.emote != nullptr)
+        // The active badge counts as owned even if the list leaves it out
+        if (chose && catalog.contains(active) && !seen.contains(active))
         {
-            users.insert(it.key(), best.emote);
+            owned.push_back({active, catalog.value(active).emote, false});
+        }
+
+        const auto shownId = chose ? active : bestId;
+        if (chose ? catalog.contains(active) : best.emote != nullptr)
+        {
+            users.insert(it.key(), catalog.value(shownId).emote);
+        }
+        for (auto &badge : owned)
+        {
+            badge.active = badge.id == shownId;
+        }
+        std::stable_partition(owned.begin(), owned.end(),
+                              [](const OwnedBadge &badge) {
+                                  return badge.active;
+                              });
+        if (!owned.empty())
+        {
+            ownedByUser.insert(it.key(), std::move(owned));
         }
     }
 
     std::unique_lock lock(this->mutex_);
     this->users_ = std::move(users);
+    this->owned_ = std::move(ownedByUser);
     return true;
 }
 

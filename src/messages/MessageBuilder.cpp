@@ -3727,6 +3727,14 @@ void MessageBuilder::applyVanityBadgeLayout(const QString &userID,
         }
         if (flags.has(MessageElementFlag::BadgeMoltorino))
         {
+            // Moltorino's own badge has its own place, apart from Solrino's
+            if (const auto *badge = dynamic_cast<const BadgeElement *>(&element);
+                badge != nullptr && badge->getEmote() != nullptr &&
+                badge->getEmote()->name.string.startsWith(
+                    QStringLiteral("moltorino-original:")))
+            {
+                return QStringLiteral("mo");
+            }
             return QStringLiteral("m");
         }
         if (flags.has(MessageElementFlag::BadgeBluzyrino))
@@ -3794,9 +3802,9 @@ void MessageBuilder::applyVanityBadgeLayout(const QString &userID,
     }
     const auto customRankCount = requestedRanks.size();
     const auto defaultRank = [](const QString &slot) {
-        static constexpr std::array<QStringView, 16> order{
-            u"ta", u"ts", u"tv", u"tp", u"c",  u"ff", u"fa", u"bt",
-            u"bl", u"jc", u"wy", u"bh", u"m",  u"7",  u"hc", u"hs",
+        static constexpr std::array<QStringView, 17> order{
+            u"ta", u"ts", u"tv", u"tp", u"c",  u"ff", u"fa", u"bt", u"bl",
+            u"jc", u"wy", u"bh", u"mo", u"m",  u"7",  u"hc", u"hs",
         };
         return static_cast<int>(std::ranges::find(order, slot) - order.begin());
     };

@@ -67,6 +67,7 @@ const QStringList TWITCH_DEFAULT_COMMANDS{
     "/warn",
 };
 
-const QStringList TWITCH_WHISPER_COMMANDS{"/w", ".w"};
+const QStringList TWITCH_WHISPER_COMMANDS{"/w", ".w", "/whisper",
+                                          ".whisper"};
 
 }  // namespace chatterino

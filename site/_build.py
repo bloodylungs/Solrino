@@ -42,7 +42,6 @@ BADGES = [
     ("black_hole", "Black Hole", "A very rare badge from Solrino's owner."),
     ("bug_hunter", "Bug Hunter", "Finds and reports bugs in Solrino."),
     ("clockwork", "Clockwork", "A rare badge from Solrino's owner."),
-    ("demon", "Demon", "A rare badge from Solrino's owner."),
     ("friend_of_solrino", "Friend of Solrino", "A friend of Solrino."),
     ("halo", "Halo", "A rare badge from Solrino's owner."),
     ("kaleidoscope", "Kaleidoscope", "A rare badge from Solrino's owner."),

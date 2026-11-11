@@ -150,5 +150,4 @@ aqtinstall.log
 /out/
 
 # Local website preview and deploy caches
-site/.claude/
 site/.wrangler/

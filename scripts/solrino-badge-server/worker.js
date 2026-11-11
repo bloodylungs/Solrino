@@ -27,7 +27,7 @@ const HUB_NAME = "badges";
 const USER_ID = /^[0-9]{1,20}$/;
 const IMAGE_BASE = "https://solrino.solrino-badge-server.workers.dev/assets/badges/sizes";
 
-const DEFAULT_ORDER = ["ta", "ts", "tv", "tp", "c", "ff", "fa", "bt", "bl", "jc", "bh", "m", "7", "hc", "hs"];
+const DEFAULT_ORDER = ["ta", "ts", "tv", "tp", "c", "ff", "fa", "bt", "bl", "jc", "bh", "mo", "m", "7", "hc", "hs"];
 
 const BADGES = [
   ["developer", "Solrino Developer", "Helps build Solrino.", false],
@@ -57,7 +57,6 @@ const BADGES = [
   ["black_hole", "Solrino Black Hole", "A very rare badge from Solrino's owner.", true],
   ["bug_hunter", "Solrino Bug Hunter", "Finds and reports bugs in Solrino.", true],
   ["clockwork", "Solrino Clockwork", "A rare badge from Solrino's owner.", true],
-  ["demon", "Solrino Demon", "A rare badge from Solrino's owner.", true],
   ["friend_of_solrino", "Friend of Solrino", "A friend of Solrino.", true],
   ["halo", "Solrino Halo", "A rare badge from Solrino's owner.", true],
   ["kaleidoscope", "Solrino Kaleidoscope", "A rare badge from Solrino's owner.", true],
