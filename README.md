@@ -26,6 +26,21 @@ Solrino is a Twitch chat client for people who are mid-game. It is a fork of [Mo
 
 Windows builds are on [the Solrino website](https://solrino.solrino-badge-server.workers.dev) and in the [releases section](https://github.com/bloodylungs/Solrino/releases).
 
+### Is Solrino safe?
+
+Yes. Some antivirus apps and Windows warn about it anyway, so here's what's going on:
+
+- **It's open source.** Everything Solrino does is in this repository, so anyone can read it. It builds on Chatterino, which thousands of people have used for years.
+- **Why you may see a warning.** The installer isn't signed yet. Signing costs money every year, and without it Windows can't tell who made the file. Each new version is also a brand new file with no reputation yet, and some antivirus apps flag any unsigned installer that unpacks a program. That's a false alarm, not a virus. If Windows shows a SmartScreen warning, click **More info**, then **Run anyway**.
+- **It never asks for admin.** Solrino installs only for your own Windows user, in `AppData\Local\Programs\Solrino`. You can remove it any time from **Installed apps** in Windows settings, and your settings are kept in case you come back.
+- **How to check your download.** Only download Solrino from [the Solrino website](https://solrino.solrino-badge-server.workers.dev) or the [releases page](https://github.com/bloodylungs/Solrino/releases). Then open PowerShell in the folder you saved it to and run:
+
+  ```powershell
+  Get-FileHash .\Solrino-Setup.exe
+  ```
+
+  The long code it prints must match the **sha256** code shown next to `Solrino-Setup.exe` on that version's release. You can also upload the file to [VirusTotal](https://www.virustotal.com) to see what every scanner says.
+
 ### Issues
 
 If you have issues such as crashes or weird behaviour, report them in [GitHub issues](https://github.com/bloodylungs/Solrino/issues).

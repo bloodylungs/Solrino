@@ -208,11 +208,14 @@ namespace SolrinoSetup
             string old = Path.Combine(root, "Emberino.exe");
             if (File.Exists(old)) { try { File.Delete(old); } catch (IOException) { } }
 
-            using (var stream = assembly.GetManifestResourceStream("uninstall.ps1"))
-            using (var output = File.Create(Path.Combine(root, "uninstall.ps1")))
+            using (var stream = assembly.GetManifestResourceStream("uninstall.exe"))
+            using (var output = File.Create(Path.Combine(root, UninstallerName)))
             {
                 stream.CopyTo(output);
             }
+            // Older versions uninstalled through a PowerShell script
+            string script = Path.Combine(root, "uninstall.ps1");
+            if (File.Exists(script)) { try { File.Delete(script); } catch (IOException) { } }
 
             string exe = Path.Combine(root, "Solrino.exe");
             if (!File.Exists(exe)) { throw new Exception("Solrino.exe wasn't installed. Please download the setup again."); }
@@ -238,15 +241,56 @@ namespace SolrinoSetup
             CurrentFile = "";
         }
 
+        public const string UninstallerName = "Uninstall Solrino.exe";
+
+        /// Through Windows' own shell link object, not the script host
         static void MakeShortcut(string folder, string exe, string workingDirectory)
         {
-            dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell"));
-            dynamic link = shell.CreateShortcut(Path.Combine(folder, "Solrino.lnk"));
-            link.TargetPath = exe;
-            link.WorkingDirectory = workingDirectory;
-            link.IconLocation = exe + ",0";
-            link.Description = "Solrino chat client";
-            link.Save();
+            var link = (IShellLinkW)new ShellLink();
+            link.SetPath(exe);
+            link.SetWorkingDirectory(workingDirectory);
+            link.SetIconLocation(exe, 0);
+            link.SetDescription("Solrino chat client");
+            ((IPersistFile)link).Save(Path.Combine(folder, "Solrino.lnk"), true);
+        }
+
+        [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
+        class ShellLink { }
+
+        [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown),
+         Guid("000214F9-0000-0000-C000-000000000046")]
+        interface IShellLinkW
+        {
+            void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder file, int max, IntPtr data, int flags);
+            void GetIDList(out IntPtr list);
+            void SetIDList(IntPtr list);
+            void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder name, int max);
+            void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string name);
+            void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder dir, int max);
+            void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string dir);
+            void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder args, int max);
+            void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string args);
+            void GetHotkey(out short hotkey);
+            void SetHotkey(short hotkey);
+            void GetShowCmd(out int show);
+            void SetShowCmd(int show);
+            void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder path, int max, out int index);
+            void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string path, int index);
+            void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string path, int reserved);
+            void Resolve(IntPtr hwnd, int flags);
+            void SetPath([MarshalAs(UnmanagedType.LPWStr)] string file);
+        }
+
+        [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown),
+         Guid("0000010b-0000-0000-C000-000000000046")]
+        interface IPersistFile
+        {
+            void GetClassID(out Guid id);
+            [PreserveSig] int IsDirty();
+            void Load([MarshalAs(UnmanagedType.LPWStr)] string file, int mode);
+            void Save([MarshalAs(UnmanagedType.LPWStr)] string file, [MarshalAs(UnmanagedType.Bool)] bool remember);
+            void SaveCompleted([MarshalAs(UnmanagedType.LPWStr)] string file);
+            void GetCurFile([MarshalAs(UnmanagedType.LPWStr)] out string file);
         }
 
         static void Register(string exe, string root)
@@ -259,8 +303,7 @@ namespace SolrinoSetup
                 key.SetValue("InstallLocation", root);
                 key.SetValue("NoModify", 1, RegistryValueKind.DWord);
                 key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
-                key.SetValue("UninstallString",
-                    "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"" + root + "\\uninstall.ps1\"");
+                key.SetValue("UninstallString", "\"" + Path.Combine(root, UninstallerName) + "\"");
             }
         }
     }

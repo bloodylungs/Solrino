@@ -3,10 +3,10 @@
 IDI_ICON1   ICON    "@RES_DIR@/icon.ico"
 
 VS_VERSION_INFO VERSIONINFO
-    FILEVERSION        @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,@PROJECT_VERSION_TWEAK@
-    PRODUCTVERSION     @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,@PROJECT_VERSION_TWEAK@
+    FILEVERSION        @SOLRINO_VERSION_MAJOR@,@SOLRINO_VERSION_MINOR@,@SOLRINO_VERSION_PATCH@,0
+    PRODUCTVERSION     @SOLRINO_VERSION_MAJOR@,@SOLRINO_VERSION_MINOR@,@SOLRINO_VERSION_PATCH@,0
     FILEFLAGSMASK      VS_FFI_FILEFLAGSMASK
-    FILEFLAGS          VS_FF_SPECIALBUILD
+    FILEFLAGS          0x0L
     FILEOS             VOS__WINDOWS32
     FILETYPE           VFT_APP
     FILESUBTYPE        0x0L
@@ -16,14 +16,14 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "ProductName",      "Solrino"
-            VALUE "ProductVersion",   "@PROJECT_VERSION@"
-            VALUE "CompanyName",      "MoltoBenne, https://github.com/MoltoBenne/Moltorino"
-            VALUE "FileDescription",  "Solrino"
-            VALUE "FileVersion",      "@PROJECT_VERSION@"
-            VALUE "SpecialBuild",     "@GIT_COMMIT@"
+            VALUE "ProductVersion",   "@SOLRINO_VERSION@"
+            VALUE "CompanyName",      "Solrino"
+            VALUE "FileDescription",  "Solrino chat client"
+            VALUE "FileVersion",      "@SOLRINO_VERSION@"
+            VALUE "Comments",         "@GIT_COMMIT@"
             VALUE "InternalName",     "Solrino"
             VALUE "OriginalFilename", "Solrino.exe"
-            VALUE "LegalCopyright",   "Project contributors 2016-@CURRENT_YEAR@"
+            VALUE "LegalCopyright",   "Solrino, Chatterino and Moltorino contributors 2016-@CURRENT_YEAR@"
             VALUE "Licence",          "MIT"
         END
     END

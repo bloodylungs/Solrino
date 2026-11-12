@@ -157,6 +157,25 @@ FAQ = [
     ("How do I get a badge?", "Solrino's owner gives out most badges, and event badges are free for everyone. Once you have one, type <code>/vanity</code> in chat and equip it."),
     ("Who can see my badge?", "Everyone using Solrino, usually within a couple of seconds of it changing. People on the Twitch website or other chat apps won't see it."),
 ]
+SAFE = [
+    ("It's open source",
+     'Every line of Solrino is public on <a href="https://github.com/bloodylungs/Solrino">GitHub</a>, so anyone can read exactly what it does. '
+     'It builds on Chatterino, which thousands of people have used for years.'),
+    ("Why Windows or antivirus warns about it",
+     "The installer isn't signed yet. Signing costs money every year, and without it Windows can't tell who made the file. "
+     "Every new version is also a brand new file that hasn't built up a reputation. Some antivirus apps flag any unsigned installer that unpacks a program, "
+     "so you may see a warning or a generic detection. That's a false alarm, not a virus."),
+    ("It never asks for admin",
+     "Solrino installs only for your own Windows user, in <b>AppData\\Local\\Programs\\Solrino</b>, and never asks for administrator rights. "
+     "You can remove it any time from <b>Installed apps</b> in Windows settings, and your settings are kept in case you come back."),
+    ("How to check your download",
+     'Only download Solrino from this website or the <a href="https://github.com/bloodylungs/Solrino/releases">GitHub releases page</a>. '
+     'To be sure the file is the real one, open PowerShell in the folder you saved it to and run <code>Get-FileHash .\\Solrino-Setup.exe</code>. '
+     "The long code it prints must match the <b>sha256</b> code shown next to <b>Solrino-Setup.exe</b> on that version's GitHub release. "
+     'You can also upload it to <a href="https://www.virustotal.com">VirusTotal</a> to see what every scanner says.'),
+]
+safe = "\n".join(f"""    <details class="faq-item glass" id="{slug(q)}"><summary>{q}<i aria-hidden="true"></i></summary><p>{a}</p></details>""" for q, a in SAFE)
+
 faq = "\n".join(f'''    <details class="faq-item glass" id="{slug(q)}"><summary>{q}<i aria-hidden="true"></i></summary><p>{a}</p></details>''' for q, a in FAQ)
 
 CHAT_APP = '''<div class="app" aria-label="Demo of Solrino's chat window. The chatters are made up.">
@@ -237,6 +256,15 @@ home = f'''<section class="hero">
   {marquee(BADGES[5:] + BADGES[:1], True)}
 </section>
 
+<section class="faq safe reveal" id="safe">
+  <div class="faq-wrap">
+    <div class="sec-title sec-left"><h2>Is Solrino <em>safe?</em></h2><p>Yes. Here's why some antivirus apps warn about it anyway, and how to check your download yourself.</p></div>
+    <div class="faq-list">
+{safe}
+    </div>
+  </div>
+</section>
+
 <section class="faq reveal">
   <div class="faq-wrap">
     <div class="sec-title sec-left"><h2>Common <em>questions.</em></h2><p>Something else? <a href="https://github.com/bloodylungs/Solrino/issues">Ask on GitHub.</a></p></div>
@@ -252,7 +280,7 @@ home = f'''<section class="hero">
   <p>It's free and updates itself. Setup can bring over your settings and tabs from another fork.</p>
   <p class="small latest-line" data-latest-full hidden></p>
   {DOWNLOAD.format(cls="btn btn-big", label="Download for Windows")}
-  <p class="small">Windows may show a SmartScreen warning because the app isn't signed yet. Click <b>More info</b>, then <b>Run anyway</b>.</p>
+  <p class="small">Windows may show a SmartScreen warning because the app isn't signed yet. Click <b>More info</b>, then <b>Run anyway</b>. <a href="#safe">Why it warns</a>.</p>
 </section>'''
 page("index", "Solrino: Twitch chat that reaches you mid-game",
      "Solrino is a free Twitch chat app for Windows. It shows pings on top of your game, puts mod tools next to the chat box, and shows your chat on your Discord profile.", home)
@@ -373,7 +401,7 @@ badges = page_head("Badges everyone on Solrino <em>can see.</em>",
   </ol>
   <p class="note center reveal">Badges only show inside Solrino. People on the Twitch website or other chat apps won't see them.</p>
 </section>'''
-page("badges", "Badges", "Forty-one animated star badges that everyone using Solrino can see.", badges, scripts=("badges",), current="badges")
+page("badges", "Badges", "Forty animated star badges that everyone using Solrino can see.", badges, scripts=("badges",), current="badges")
 
 updates = page_head("It keeps itself <em>up to date.</em>",
                     "When a new version is ready, a card asks whether to update now, update when you quit, or remind you later.") + f'''

@@ -30,6 +30,42 @@ $items = $items | Where-Object { $_.Extension -ne '.pdb' }
 $zip = Join-Path $work 'app.zip'
 Compress-Archive -Path $items.FullName -DestinationPath $zip -CompressionLevel Optimal
 
+$versionFile = Get-Content (Join-Path $ProjectRoot 'src\common\SolrinoVersion.hpp') -Raw
+if ($versionFile -notmatch '#define SOLRINO_VERSION "([0-9.]+)"') { throw 'SOLRINO_VERSION was not found.' }
+$version = $Matches[1]
+
+# File details Windows shows for the setup and uninstaller (Properties > Details).
+# Unlabelled programs look more suspicious to antivirus.
+function Write-FileDetails([string]$path, [string]$title) {
+    $year = (Get-Date).Year
+    Set-Content $path -Encoding UTF8 -Value @"
+using System.Reflection;
+[assembly: AssemblyTitle("$title")]
+[assembly: AssemblyDescription("$title")]
+[assembly: AssemblyCompany("Solrino")]
+[assembly: AssemblyProduct("Solrino")]
+[assembly: AssemblyCopyright("Solrino contributors $year")]
+[assembly: AssemblyVersion("$version.0")]
+[assembly: AssemblyFileVersion("$version.0")]
+[assembly: AssemblyInformationalVersion("$version")]
+"@
+}
+$setupDetails = Join-Path $work 'SetupDetails.cs'
+$uninstallDetails = Join-Path $work 'UninstallDetails.cs'
+Write-FileDetails $setupDetails 'Solrino Setup'
+Write-FileDetails $uninstallDetails 'Solrino Uninstall'
+
+# The uninstaller the setup puts next to the app
+$uninstaller = Join-Path $work 'uninstall.exe'
+$result = & $csc '/nologo' '/optimize+' '/target:winexe' '/platform:anycpu' "/out:$uninstaller" `
+    "/win32icon:$(Join-Path $ProjectRoot 'resources\icon.ico')" `
+    "/win32manifest:$(Join-Path $PSScriptRoot 'uninstall.manifest')" `
+    '/r:System.dll' '/r:System.Windows.Forms.dll' $uninstallDetails (Join-Path $PSScriptRoot 'SolrinoUninstall.cs') 2>&1
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $uninstaller)) {
+    $result | ForEach-Object { "$_" } | Select-Object -First 30
+    throw 'Compiling the uninstaller failed.'
+}
+
 if (Test-Path $output) { Remove-Item $output -Force -Confirm:$false }
 $arguments = @(
     '/nologo', '/optimize+', '/target:winexe', '/platform:anycpu',
@@ -38,10 +74,10 @@ $arguments = @(
     "/win32manifest:$(Join-Path $PSScriptRoot 'setup.manifest')",
     "/resource:$zip,app.zip",
     "/resource:$(Join-Path $ProjectRoot 'resources\icon.png'),logo.png",
-    "/resource:$(Join-Path $PSScriptRoot 'uninstall.ps1'),uninstall.ps1",
+    "/resource:$uninstaller,uninstall.exe",
     '/r:System.dll', '/r:System.Core.dll', '/r:System.Drawing.dll', '/r:System.Windows.Forms.dll',
-    '/r:System.IO.Compression.dll', '/r:Microsoft.CSharp.dll',
-    (Join-Path $PSScriptRoot 'SolrinoSetup.cs')
+    '/r:System.IO.Compression.dll',
+    $setupDetails, (Join-Path $PSScriptRoot 'SolrinoSetup.cs')
 )
 $result = & $csc @arguments 2>&1
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $output)) {
@@ -52,9 +88,6 @@ Remove-Item $work -Recurse -Force -Confirm:$false
 "Created $output ($([int]((Get-Item $output).Length / 1MB)) MB)"
 
 # What the app's updater reads. See RELEASING.md.
-$versionFile = Get-Content (Join-Path $ProjectRoot 'src\common\SolrinoVersion.hpp') -Raw
-if ($versionFile -notmatch '#define SOLRINO_VERSION "([0-9.]+)"') { throw 'SOLRINO_VERSION was not found.' }
-$version = $Matches[1]
 $manifest = [ordered]@{ version = $version; sha256 = (Get-FileHash $output -Algorithm SHA256).Hash.ToLower(); notes = $Notes }
 
 # Each change for the card's sections: its kind, a short title from the first
