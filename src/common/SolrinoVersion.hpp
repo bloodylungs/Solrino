@@ -2,7 +2,7 @@
 
 /// Solrino's own version. Raise it for every release: the updater only installs
 /// versions newer than this, and build-installer.ps1 reads it from here.
-#define SOLRINO_VERSION "1.0.33"
+#define SOLRINO_VERSION "1.0.34"
 
 /// The GitHub project holding the releases, as "owner/name". While it's empty
 /// the updater stays off.

@@ -64,7 +64,9 @@
 #include "util/QStringHash.hpp"
 #include "util/Twitch.hpp"
 
+#include "common/SolrinoVersion.hpp"
 #include "widgets/dialogs/SolrinoTools.hpp"
+#include "widgets/dialogs/SolrinoUpdatePrompt.hpp"
 #include <QString>
 #include <QStringBuilder>
 #include <QTime>
@@ -710,6 +712,30 @@ CommandController::CommandController(const Paths &paths)
     this->registerCommand("/gigantify", &commands::sendGigantifiedEmote);
     this->registerCommand("/cancelpoll", &commands::cancelPoll);
     this->registerCommand("/endpoll", &commands::endPoll);
+
+    // Shows the update card with a made-up update, to see how it looks. Its
+    // buttons only close it.
+    this->registerCommand(
+        "/debug-update-card", [](const QStringList &, ChannelPtr) -> QString {
+            auto *card = new SolrinoUpdatePrompt(
+                QString::fromLatin1(SOLRINO_VERSION),
+                QStringLiteral("A preview of the update card."),
+                [](SolrinoUpdatePrompt::Choice) {},
+                {
+                    {"new", "Emote-only and sub-only buttons",
+                     "Mods see \"emote only\" and \"sub only\" at the top of "
+                     "each chat. Click one to turn it on, and again to turn it "
+                     "off."},
+                    {"new", "Automatic bonus points",
+                     "Solrino claims the \"Claim bonus\" chest for you while "
+                     "you watch."},
+                    {"fixed", "Tabs after unhooking from Twitch chat",
+                     "Every tab goes back to its own row."},
+                });
+            card->setReady();
+            card->show();
+            return "";
+        });
 
     this->registerCommand("/saved", [](const QStringList &, ChannelPtr) -> QString {
         solrino::showSavedMessages(nullptr);

@@ -1,13 +1,13 @@
 #pragma once
 
+#include "widgets/dialogs/SolrinoUpdatePrompt.hpp"
+
 #include <QObject>
 #include <QPointer>
 #include <QString>
 #include <QTimer>
 
 namespace chatterino {
-
-class SolrinoUpdatePrompt;
 
 /// Keeps Solrino up to date from the project's GitHub releases.
 ///
@@ -73,6 +73,8 @@ private:
     QString onlineVersion_;
     QString onlineHash_;
     QString notes_;
+    /// The update log in sections, from newer update files
+    QVector<SolrinoUpdatePrompt::Change> changes_;
     bool installWhenQuitting_ = false;
     /// Pressed "Update now" before the download had finished
     bool installWhenReady_ = false;

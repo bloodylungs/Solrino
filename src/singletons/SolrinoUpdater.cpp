@@ -17,6 +17,7 @@
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
@@ -153,6 +154,21 @@ void SolrinoUpdater::readManifest(const QByteArray &data, bool /*byUser*/)
     this->onlineVersion_ = version;
     this->onlineHash_ = hash;
     this->notes_ = manifest["notes"].toString().simplified().left(300);
+    this->changes_.clear();
+    // Newer update files also list each change, so the card can show sections
+    for (const auto &value : manifest["changes"].toArray())
+    {
+        const auto item = value.toObject();
+        SolrinoUpdatePrompt::Change change{
+            .kind = item["kind"].toString().trimmed().toLower(),
+            .title = item["title"].toString().simplified().left(140),
+            .detail = item["detail"].toString().simplified().left(240),
+        };
+        if (!change.title.isEmpty() && this->changes_.size() < 8)
+        {
+            this->changes_.push_back(change);
+        }
+    }
     this->answered_ = false;
     this->download();
     // Doesn't wait for the download, which can take a while
@@ -343,7 +359,8 @@ void SolrinoUpdater::showPromptOnceWindowIsUp(int triesLeft)
                     break;
             }
             Q_EMIT this->changed();
-        });
+        },
+        this->changes_);
     this->prompt_ = prompt;
     if (this->state_ == State::Ready)
     {
