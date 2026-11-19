@@ -2053,7 +2053,7 @@ QWidget *PredictionDialog::buildMostUsedRow(int controlHeight,
     rowLayout->setContentsMargins(0, 0, 0, 0);
     rowLayout->setSpacing(std::max(2, controlHeight / 8));
 
-    auto *label = new QLabel(QStringLiteral("Your most used here"), row);
+    auto *label = new QLabel(QStringLiteral("Your most used here, click one to start it"), row);
     label->setObjectName("PredictionSectionTitle");
     label->setFont(font);
     rowLayout->addWidget(label);
@@ -2076,14 +2076,26 @@ QWidget *PredictionDialog::buildMostUsedRow(int controlHeight,
         chip->setProperty("fullTitle", item.saved.title);
         chip->setText(item.saved.title);
         chip->setToolTip(
-            QStringLiteral("%1\n%2\nStarted %3 %4 here. Right-click to remove it.")
+            QStringLiteral("%1\n%2\nStarted %3 %4 here. Click to start it now, "
+                           "or right-click to remove it.")
                 .arg(item.saved.title, item.saved.outcomes.join(QStringLiteral(" / ")))
                 .arg(item.count)
                 .arg(item.count == 1 ? QStringLiteral("time")
                                      : QStringLiteral("times")));
         chip->setContextMenuPolicy(Qt::CustomContextMenu);
+        // One click starts it straight away with the saved options and length
         QObject::connect(chip, &QPushButton::clicked, this, [this, item] {
+            if (this->createInFlight_)
+            {
+                return;
+            }
             this->applyTemplate(item.saved);
+            QTimer::singleShot(0, this, [this] {
+                if (!this->createInFlight_)
+                {
+                    this->startPrediction();
+                }
+            });
         });
         const auto key = usedPredictionKey(item.saved.title, item.saved.outcomes);
         QObject::connect(

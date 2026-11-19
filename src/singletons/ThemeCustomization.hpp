@@ -191,6 +191,9 @@ std::optional<ThemeCustomizationProfile> buildThemePalette(
 std::optional<ThemeCustomizationProfile> builtInCustomizationProfile(
     QStringView id);
 
+/// The built-in theme id for today's season, such as "season-autumn"
+QString currentSeasonThemeId();
+
 QImage loadThemeWallpaper(const QString &source, int maxDimension = 1536);
 
 QImage blurThemeWallpaper(QImage image, int radius);

@@ -4,6 +4,7 @@
 #include "singletons/ThemeVideoDecoder.hpp"
 #include "singletons/ThemeWallpaper.hpp"
 
+#include <QDate>
 #include <QImage>
 #include <QImageReader>
 #include <QJsonArray>
@@ -1923,11 +1924,119 @@ std::optional<ThemeCustomizationProfile> buildThemePalette(
     return profile;
 }
 
+QString currentSeasonThemeId()
+{
+    // Months for the northern half of the world, where most viewers are
+    switch (QDate::currentDate().month())
+    {
+        case 12:
+        case 1:
+        case 2:
+            return u"season-winter"_s;
+        case 3:
+        case 4:
+        case 5:
+            return u"season-spring"_s;
+        case 6:
+        case 7:
+        case 8:
+            return u"season-summer"_s;
+        default:
+            return u"season-autumn"_s;
+    }
+}
+
 std::optional<ThemeCustomizationProfile> builtInCustomizationProfile(
     QStringView id)
 {
+    if (id == u"seasonal")
+    {
+        auto season = builtInCustomizationProfile(currentSeasonThemeId());
+        if (season)
+        {
+            season->name = u"Seasonal"_s;
+        }
+        return season;
+    }
+
     ThemeCustomizationProfile profile;
-    if (id == u"solrino-ember")
+    const auto seasonLook = [&profile](const char *background,
+                                       const char *chat, const char *surface,
+                                       const char *raised, const char *text,
+                                       const char *muted, const char *accent,
+                                       const char *border) {
+        profile.useThemeFonts = false;
+        profile.useThemeFontSizes = false;
+        profile.background = QColor(QLatin1String(background));
+        profile.chatBackground = QColor(QLatin1String(chat));
+        profile.surface = QColor(QLatin1String(surface));
+        profile.raisedSurface = QColor(QLatin1String(raised));
+        profile.text = QColor(QLatin1String(text));
+        profile.mutedText = QColor(QLatin1String(muted));
+        profile.accent = QColor(QLatin1String(accent));
+        profile.foundation = ThemeFoundation::MoltorinoPolished;
+        profile.surfaceDepth = ThemeSurfaceDepth::Layered;
+        profile.panelContrast = 40;
+        profile.accentStrength = ThemeAccentStrength::Balanced;
+        profile.tabShape = ThemeTabShape::Connected;
+        profile.tabCornerRadius = 6;
+        profile.tabSpacing = 0;
+        profile.inactiveTabContrast = 64;
+        profile.channelBarContrast = 44;
+        profile.cornerStyle = ThemeCornerStyle::Soft;
+        profile.roundChat = true;
+        profile.chatCornerRadius = 9;
+        profile.chatBorderColor = QColor(QLatin1String(border));
+        profile.chatBorderOpacity = 28;
+        profile.alternateMessageRows = true;
+        profile.alternateMessageOpacity = 14;
+        profile.alternateMessageContrast = 32;
+        profile.messageShadow = true;
+        profile.messageShadowEmotes = true;
+        profile.messageShadowColor = QColor(Qt::black);
+        profile.messageShadowOpacity = 48;
+        profile.messageShadowOffsetX = 0;
+        profile.messageShadowOffsetY = 0;
+        profile.messageShadowBlur = 2;
+        profile.chatFontFamily = QStringLiteral(DEFAULT_FONT_FAMILY);
+        profile.chatFontSize = 14;
+        profile.chatFontWeight = QFont::Normal;
+        profile.usernameFontFamily = QStringLiteral(DEFAULT_FONT_FAMILY);
+        profile.usernameFontSize = 14;
+        profile.usernameFontWeight = QFont::DemiBold;
+        profile.interfaceFontFamily = QStringLiteral(DEFAULT_FONT_FAMILY);
+        profile.interfaceFontSize = 10;
+    };
+
+    if (id == u"season-autumn")
+    {
+        // Brown leaves and pumpkin orange
+        profile.name = u"Autumn"_s;
+        seasonLook("#140d08", "#1a110a", "#2a1a0f", "#3a2414", "#f6eadc",
+                   "#b89a80", "#e8792b", "#a0522d");
+    }
+    else if (id == u"season-winter")
+    {
+        // Night snow and ice blue
+        profile.name = u"Winter"_s;
+        seasonLook("#0a0f16", "#0d141d", "#16212e", "#213041", "#eaf3fb",
+                   "#9fb2c4", "#8fd3ff", "#6f9cc0");
+    }
+    else if (id == u"season-spring")
+    {
+        // New leaves and blossom pink
+        profile.name = u"Spring"_s;
+        seasonLook("#0d120c", "#111810", "#1c2a1b", "#283b26", "#f1f7ec",
+                   "#a6b99f", "#f49ac1", "#8fbf7f");
+    }
+    else if (id == u"season-summer")
+    {
+        // Warm evening water and sunshine yellow
+        profile.name = u"Summer"_s;
+        seasonLook("#0b1213", "#0e1718", "#172628", "#213638", "#f2fbf8",
+                   "#a3c0bb", "#ffc94a", "#3fc1b0");
+    }
+    else if (id == u"solrino-ember")
     {
         // Red and near-black, matching the Solrino logo
         profile.useThemeFonts = false;
