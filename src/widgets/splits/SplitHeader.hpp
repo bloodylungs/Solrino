@@ -97,6 +97,10 @@ private:
     QSpacerItem *autoModHeaderBalance_{};
 
     LabelButton *modeButton_{};
+    /// One click turns the mode on, the next turns it back off
+    LabelButton *emoteOnlyButton_{};
+    LabelButton *subOnlyButton_{};
+    void toggleChatMode(bool emoteOnly);
     SvgButton *recordingButton_{};
     LabelButton *sharedChatButton_{};
     QAction *modeActionSetEmote{};

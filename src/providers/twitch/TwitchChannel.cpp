@@ -474,6 +474,15 @@ QString getUserPointsChannelId(const QJsonObject &payload)
     }
 
     const auto data = dataValue.toObject();
+
+    // "Claim bonus" notices keep the channel inside the claim, not the balance
+    const auto claimChannelId =
+        data.value("claim").toObject().value("channel_id").toString();
+    if (!claimChannelId.isEmpty())
+    {
+        return claimChannelId;
+    }
+
     const auto balanceValue = data.value("balance");
     if (!balanceValue.isObject())
     {
@@ -1146,6 +1155,15 @@ TwitchChannel::TwitchChannel(const QString &name, bool anonymous)
                 });
             }
         });
+
+    // Twitch's bonus notice can be missed (for example while reconnecting),
+    // so live channels also check for a waiting bonus now and then
+    this->pointsBonusTimer_.setInterval(5 * 60 * 1000);
+    QObject::connect(&this->pointsBonusTimer_, &QTimer::timeout,
+                     &this->lifetimeGuard_, [this] {
+                         this->checkForPointsBonus();
+                     });
+    this->pointsBonusTimer_.start();
 
     QObject::connect(&this->sendWaitTimer_, &QTimer::timeout,
                      &this->lifetimeGuard_, [this] {
@@ -3974,7 +3992,8 @@ void TwitchChannel::refreshPubSub()
                     authUserId, auth.token);
             }
 
-            if (getSettings()->enableChannelPointsDisplay)
+            if (getSettings()->enableChannelPointsDisplay ||
+                getSettings()->autoClaimPointsBonus)
             {
                 getApp()->getTwitchPubSub()->listenToUserChannelPoints(
                     authUserId, auth.token);
@@ -5351,6 +5370,21 @@ void TwitchChannel::handleUserPointsUpdate(const QJsonObject &payload)
 
     const QString type = payload.value("type").toString();
 
+    if (type == "claim-available")
+    {
+        const auto claimId = payload.value("data")
+                                 .toObject()
+                                 .value("claim")
+                                 .toObject()
+                                 .value("id")
+                                 .toString();
+        if (!claimId.isEmpty())
+        {
+            this->claimPointsBonus(claimId);
+        }
+        return;
+    }
+
     if (type != "points-earned" && type != "points-spent")
     {
         return;
@@ -6229,6 +6263,8 @@ void TwitchChannel::refreshChannelPoints()
                 channel->setChannelPointBalance(points);
                 channel->lastChannelPointsError_.clear();
                 channel->channelPointsChanged.invoke();
+                // A bonus may already be waiting from before the chat was open
+                channel->checkForPointsBonus();
             });
         },
         [weak, requestRevision, requestRoomId, authGeneration,
@@ -6267,6 +6303,110 @@ void TwitchChannel::refreshChannelPoints()
                     << "[Points] Failed to fetch points for"
                     << channel->getName() << ':' << error;
                 channel->channelPointsChanged.invoke();
+            });
+        });
+}
+
+void TwitchChannel::checkForPointsBonus()
+{
+    assertInGuiThread();
+
+    if (!getSettings()->autoClaimPointsBonus || this->roomId().isEmpty() ||
+        !this->isLive() || this->pointsBonusCheckInFlight_ ||
+        !this->pointsBonusClaimInFlight_.isEmpty())
+    {
+        return;
+    }
+
+    const auto auth = MoltorinoAuth::resolveCurrentUserToken();
+    if (!auth.hasToken() || authTokenBelongsToChannel(auth, *this))
+    {
+        return;
+    }
+
+    this->pointsBonusCheckInFlight_ = true;
+    const auto weak = this->weak_from_this();
+    auto done = [weak](const QString &claimId) {
+        runInGuiThread([weak, claimId] {
+            auto shared = std::dynamic_pointer_cast<TwitchChannel>(weak.lock());
+            if (!shared)
+            {
+                return;
+            }
+            shared->pointsBonusCheckInFlight_ = false;
+            if (!claimId.isEmpty())
+            {
+                shared->claimPointsBonus(claimId);
+            }
+        });
+    };
+
+    TwitchGql::getAvailablePointsBonus(
+        this->getName(), auth.token, done, [done, name = this->getName()](
+                                               const QString &error) {
+            qCDebug(chatterinoTwitch)
+                << "[Points] Couldn't check for a bonus in" << name << ':'
+                << error;
+            done({});
+        });
+}
+
+void TwitchChannel::claimPointsBonus(const QString &claimId)
+{
+    assertInGuiThread();
+
+    if (!getSettings()->autoClaimPointsBonus || claimId.isEmpty() ||
+        claimId == this->pointsBonusClaimInFlight_ ||
+        claimId == this->lastClaimedPointsBonus_ || this->roomId().isEmpty())
+    {
+        return;
+    }
+
+    const auto auth = MoltorinoAuth::resolveCurrentUserToken();
+    if (!auth.hasToken() || authTokenBelongsToChannel(auth, *this))
+    {
+        return;
+    }
+
+    this->pointsBonusClaimInFlight_ = claimId;
+    const auto weak = this->weak_from_this();
+
+    TwitchGql::claimPointsBonus(
+        this->roomId(), claimId, auth.token,
+        [weak, claimId](qint64 earned) {
+            runInGuiThread([weak, claimId, earned] {
+                auto shared =
+                    std::dynamic_pointer_cast<TwitchChannel>(weak.lock());
+                if (!shared)
+                {
+                    return;
+                }
+                shared->pointsBonusClaimInFlight_.clear();
+                shared->lastClaimedPointsBonus_ = claimId;
+                qCDebug(chatterinoTwitch)
+                    << "[Points] Claimed a bonus of" << earned << "in"
+                    << shared->getName();
+                shared->addSystemMessage(
+                    earned > 0
+                        ? QString("Claimed %1 bonus channel points.")
+                              .arg(QLocale().toString(earned))
+                        : QString("Claimed your bonus channel points."));
+                // The balance next to the chat box catches up straight away
+                shared->refreshChannelPointsIfStale(true);
+            });
+        },
+        [weak, claimId](const QString &error) {
+            runInGuiThread([weak, claimId, error] {
+                auto shared =
+                    std::dynamic_pointer_cast<TwitchChannel>(weak.lock());
+                if (!shared)
+                {
+                    return;
+                }
+                shared->pointsBonusClaimInFlight_.clear();
+                qCWarning(chatterinoTwitch)
+                    << "[Points] Couldn't claim the bonus in"
+                    << shared->getName() << ':' << error;
             });
         });
 }

@@ -1595,6 +1595,9 @@ void NotebookTab::moveAnimated(QPoint targetPos, bool animated)
 
     if (!animated || !this->notebook_->isVisible())
     {
+        // A slide that's still running would otherwise carry the tab back to
+        // where an older layout wanted it, leaving it in the wrong spot
+        this->positionChangedAnimation_.stop();
         this->move(targetPos);
         return;
     }

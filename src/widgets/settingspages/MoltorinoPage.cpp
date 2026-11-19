@@ -1561,6 +1561,14 @@ MoltorinoPage::MoltorinoPage()
         ->setTooltip("Show your channel points next to the message input.")
         ->addTo(*view);
 
+    SettingWidget::checkbox("Claim bonus points automatically",
+                            s.autoClaimPointsBonus)
+        ->setTooltip(
+            "When a channel offers a \"Claim bonus\" chest, Solrino claims it "
+            "for you. Twitch only offers the bonus while you're watching the "
+            "stream.")
+        ->addTo(*view);
+
     SettingWidget::checkbox("Open rewards when you click your points",
                             s.openRewardsWithChannelPointsClick)
         ->setTooltip(
@@ -1697,6 +1705,14 @@ MoltorinoPage::MoltorinoPage()
 
     SettingWidget::checkbox("Show poll button", s.showPollButton)
         ->setTooltip("Show the poll button next to the message input.")
+        ->addTo(*view);
+
+    SettingWidget::checkbox("Show emote-only and sub-only buttons",
+                            s.showChatModeButtons)
+        ->setTooltip(
+            "Show \"emote only\" and \"sub only\" at the top of the chat, for "
+            "moderators and the broadcaster. Click one to turn that mode on, "
+            "and again to turn it off. It lights up while the mode is on.")
         ->addTo(*view);
 
     SettingWidget::checkbox("Show game button", s.showGameButton)

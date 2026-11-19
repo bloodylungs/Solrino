@@ -544,6 +544,16 @@ void TwitchChatDock::restoreTabs()
     this->addedSplit_.clear();
     this->previousPage_ = nullptr;
     notebook.setShowTabs(this->restoreShowTabs_);
+
+    // Windows can finish giving the window back its real size after this, and
+    // the tabs were last laid out for the narrow docked chat. Lay them out once
+    // more when the size has settled so every tab lands in its row.
+    QTimer::singleShot(120, this, [this] {
+        if (!this->docked_)
+        {
+            this->window_.getNotebook().refresh();
+        }
+    });
 }
 
 void TwitchChatDock::followBrowser()
