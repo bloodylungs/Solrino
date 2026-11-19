@@ -1773,6 +1773,11 @@ void SplitInput::initLayout()
             &this->ui_.vbox);
     layout->setSpacing(0);
     this->applyOuterMargin();
+    getSettings()->solrinoCompactInput.connect(
+        [this](bool, auto) {
+            this->themeChangedEvent();
+        },
+        this->signalHolder_, false);
 
     {
         auto wrapper =
@@ -2414,6 +2419,11 @@ void SplitInput::themeChangedEvent()
             "background: transparent; }");
 #endif
     }
+
+    // Compact input: less space around the text
+    this->ui_.textEdit->document()->setDocumentMargin(
+        getSettings()->solrinoCompactInput ? 1 : 4);
+    this->ui_.textEdit->updateGeometry();
 
     // update vbox
     this->applyOuterMargin();

@@ -79,7 +79,7 @@ bool isValidVanitySlotKey(const QString &value)
         QStringLiteral("fa"), QStringLiteral("bt"), QStringLiteral("m"),
         QStringLiteral("7"),  QStringLiteral("hs"), QStringLiteral("hc"),
         QStringLiteral("bl"), QStringLiteral("jc"), QStringLiteral("wy"),
-        QStringLiteral("bh"), QStringLiteral("mo"),
+        QStringLiteral("bh"), QStringLiteral("mo"), QStringLiteral("sn"),
     };
     return slots.contains(value);
 }
@@ -692,6 +692,13 @@ MoltorinoVanityLayout normalizeLayout(MoltorinoVanityLayout layout)
     {
         const auto jilChat = std::ranges::find(order, QStringLiteral("jc"));
         order.insert(std::next(jilChat), QStringLiteral("bh"));
+    }
+    // StreamNook, new, goes after BadgeHQ
+    if (present.insert(QStringLiteral("sn")).second)
+    {
+        const auto badgeHQ = std::ranges::find(order, QStringLiteral("bh"));
+        order.insert(badgeHQ == order.end() ? badgeHQ : std::next(badgeHQ),
+                     QStringLiteral("sn"));
     }
     // The Moltorino badge has always sat just before the Solrino one
     if (present.insert(QStringLiteral("mo")).second)

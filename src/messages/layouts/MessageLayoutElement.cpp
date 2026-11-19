@@ -34,10 +34,38 @@
 #include <atomic>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <span>
 #include <utility>
 
 namespace {
+
+/// "5" and "m" from a timeout mod button, as seconds
+std::optional<qint64> timeoutIconSeconds(const QString &number,
+                                         const QString &unit)
+{
+    bool ok = false;
+    const auto n = number.toLongLong(&ok);
+    if (!ok || n <= 0 || unit.size() != 1)
+    {
+        return std::nullopt;
+    }
+    switch (unit.at(0).unicode())
+    {
+        case 's':
+            return n;
+        case 'm':
+            return n * 60;
+        case 'h':
+            return n * 3600;
+        case 'd':
+            return n * 86400;
+        case 'w':
+            return n * 604800;
+        default:
+            return std::nullopt;
+    }
+}
 
 constexpr int MODIFIER_FILTER_CACHE_KIB = 8 * 1024;
 
@@ -2534,6 +2562,44 @@ void TextIconLayoutElement::paint(QPainter &painter,
 
     QFont font = app->getFonts()->getFont(FontStyle::Tiny, this->scale);
 
+    // Timeouts ("5" over "m") get a stopwatch icon drawn like the ban,
+    // delete and pin icons, with the length on one line next to it
+    if (timeoutIconSeconds(this->line1, this->line2))
+    {
+        painter.save();
+        painter.setRenderHint(QPainter::Antialiasing);
+        // The same grey as the other mod icons
+        const QColor colour(143, 138, 158);
+        const QRectF area = this->getRect();
+        const double icon = std::min(area.height(), area.width() * 0.5);
+        const double r = icon * 0.36;
+        const QPointF centre(area.left() + icon / 2,
+                             area.center().y() + icon * 0.06);
+        QPen line(colour, std::max(1.2, icon * 0.12));
+        line.setCapStyle(Qt::RoundCap);
+        painter.setPen(line);
+        painter.setBrush(Qt::NoBrush);
+        painter.drawEllipse(centre, r, r);
+        // The button on top, and the hands
+        painter.drawLine(QPointF(centre.x(), centre.y() - r),
+                         QPointF(centre.x(), centre.y() - r * 1.3));
+        painter.drawLine(QPointF(centre.x() - r * 0.3, centre.y() - r * 1.32),
+                         QPointF(centre.x() + r * 0.3, centre.y() - r * 1.32));
+        painter.drawLine(centre, QPointF(centre.x(), centre.y() - r * 0.55));
+        painter.drawLine(centre,
+                         QPointF(centre.x() + r * 0.42, centre.y() + r * 0.1));
+
+        font.setBold(true);
+        painter.setFont(font);
+        painter.setPen(colour);
+        painter.drawText(QRectF(area.left() + icon + 1, area.top(),
+                                area.width() - icon - 1, area.height()),
+                         Qt::AlignVCenter | Qt::AlignLeft,
+                         this->line1 + this->line2);
+        painter.restore();
+        return;
+    }
+
     painter.setPen(messageColors.systemText);
     painter.setFont(font);
 
@@ -2566,6 +2632,25 @@ QRegion TextIconLayoutElement::paintAnimated(QPainter & /*painter*/,
                                              const AnimatedMessageShadow *)
 {
     return {};
+}
+
+QString TextIconLayoutElement::getFragmentTooltip(QPointF point) const
+{
+    if (const auto seconds = timeoutIconSeconds(this->line1, this->line2))
+    {
+        const auto unit = [](qint64 n, const char *word) {
+            return QStringLiteral("Timeout for %1 %2%3")
+                .arg(n)
+                .arg(QLatin1String(word), n == 1 ? "" : "s");
+        };
+        const auto s = *seconds;
+        return s % 604800 == 0 ? unit(s / 604800, "week")
+               : s % 86400 == 0 ? unit(s / 86400, "day")
+               : s % 3600 == 0  ? unit(s / 3600, "hour")
+               : s % 60 == 0    ? unit(s / 60, "minute")
+                                : unit(s, "second");
+    }
+    return MessageLayoutElement::getFragmentTooltip(point);
 }
 
 int TextIconLayoutElement::getMouseOverIndex(QPointF abs) const
@@ -2644,6 +2729,42 @@ void ClientDetectionLayoutElement::paint(
     painter.drawPixmap(rect, *this->platformIcon_,
                        QRectF(this->platformIcon_->rect()));
     painter.restore();
+}
+
+SpacerLayoutElement::SpacerLayoutElement(MessageElement &creator, qreal width)
+    : MessageLayoutElement(creator, QSizeF(std::max<qreal>(0, width), 1))
+{
+    this->setTrailingSpace(false);
+}
+
+void SpacerLayoutElement::addCopyTextToString(QString &, uint32_t,
+                                              uint32_t) const
+{
+}
+
+size_t SpacerLayoutElement::getSelectionIndexCount() const
+{
+    return 0;
+}
+
+void SpacerLayoutElement::paint(QPainter &, const MessageColors &)
+{
+}
+
+QRegion SpacerLayoutElement::paintAnimated(QPainter &, qreal,
+                                           const AnimatedMessageShadow *)
+{
+    return {};
+}
+
+int SpacerLayoutElement::getMouseOverIndex(QPointF) const
+{
+    return 0;
+}
+
+qreal SpacerLayoutElement::getXFromIndex(size_t)
+{
+    return this->getRect().left();
 }
 
 QRegion ClientDetectionLayoutElement::paintAnimated(

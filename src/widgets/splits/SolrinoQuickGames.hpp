@@ -46,6 +46,7 @@ public:
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
+    void leaveEvent(QEvent *event) override;
     void scaleChangedEvent(float newScale) override;
     void themeChangedEvent() override;
 
@@ -60,6 +61,7 @@ private:
 
     Split *split_;
     bool allowed_ = false;
+    bool rebuildOnLeave_ = false;
     QHBoxLayout *layout_{};
     std::vector<QPushButton *> boxes_;
     pajlada::Signals::SignalHolder connections_;

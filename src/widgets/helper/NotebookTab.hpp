@@ -126,6 +126,11 @@ public:
     void setGroupDropTarget(bool value);
     void setGroupMuted(bool value, bool notifyNotebook = true);
     bool isGroupMuted() const;
+    /// Mutes this one tab's alerts: sounds, flashing, unread marks and ping cards
+    void setTabMuted(bool value);
+    bool isTabMuted() const;
+    /// Muted by itself or by its group
+    bool isMuted() const;
 
 protected:
     void themeChangedEvent() override;
@@ -198,6 +203,8 @@ private:
     int groupMemberCount_ = 0;
     bool groupCollapsed_ = false;
     bool groupMuted_ = false;
+    bool tabMuted_ = false;
+    QAction *muteTabAction_{};
     bool groupDropTarget_ = false;
     QString groupColorMode_ = QStringLiteral("theme");
     QString groupIcon_ = QStringLiteral("folder");

@@ -119,7 +119,8 @@ public:
     static ImagePtr fromResourcePixmap(const QPixmap &pixmap, qreal scale = 1);
     static ImagePtr getEmpty();
 
-    static ImagePtr fromAutoscaledUrl(const Url &url, uint16_t autoScale);
+    static ImagePtr fromAutoscaledUrl(const Url &url, uint16_t autoScale,
+                                      qreal scale = 1.0);
 
     static void releaseUnusedCacheEntries();
 

@@ -76,6 +76,8 @@ private:
     /// The update log in sections, from newer update files
     QVector<SolrinoUpdatePrompt::Change> changes_;
     bool installWhenQuitting_ = false;
+    /// A check for a newer release while one waits to install on quit
+    bool lookingForNewer_ = false;
     /// Pressed "Update now" before the download had finished
     bool installWhenReady_ = false;
     /// Chose something on the popup, so it won't come back this session unasked

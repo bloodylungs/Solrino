@@ -65,6 +65,8 @@ void noteGameUsed(const QString &name)
         entries.append(it.key() + USAGE_SEPARATOR + QString::number(it.value()));
     }
     getSettings()->solrinoGameUsage = entries;
+    // Saved straight away, like the game commands, so a crash can't lose it
+    getSettings()->requestSave();
 }
 
 QString gameCommand(const QString &channel)
@@ -112,7 +114,20 @@ SolrinoQuickGames::SolrinoQuickGames(Split *split, QWidget *parent)
         this->rebuild();
     };
     settings->gameSelectorGames.connect(rebuild, this->connections_, false);
-    settings->solrinoGameUsage.connect(rebuild, this->connections_, false);
+    // A new order waits until the mouse leaves, so the boxes don't swap
+    // places under it between two quick clicks
+    settings->solrinoGameUsage.connect(
+        [this](const auto &, auto) {
+            if (this->underMouse())
+            {
+                this->rebuildOnLeave_ = true;
+            }
+            else
+            {
+                this->rebuild();
+            }
+        },
+        this->connections_, false);
     settings->solrinoGameBar.connect(rebuild, this->connections_, false);
     settings->solrinoGameBarCount.connect(rebuild, this->connections_, false);
     settings->solrinoGameBarAlign.connect(rebuild, this->connections_, false);
@@ -142,6 +157,16 @@ void SolrinoQuickGames::resizeEvent(QResizeEvent *event)
 {
     BaseWidget::resizeEvent(event);
     this->hideWhatDoesntFit();
+}
+
+void SolrinoQuickGames::leaveEvent(QEvent *event)
+{
+    BaseWidget::leaveEvent(event);
+    if (this->rebuildOnLeave_)
+    {
+        this->rebuildOnLeave_ = false;
+        this->rebuild();
+    }
 }
 
 void SolrinoQuickGames::scaleChangedEvent(float /*newScale*/)
@@ -180,6 +205,7 @@ QString SolrinoQuickGames::boxStyle(bool sent) const
 
 void SolrinoQuickGames::rebuild()
 {
+    this->rebuildOnLeave_ = false;
     for (auto *box : this->boxes_)
     {
         box->hide();

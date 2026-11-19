@@ -113,6 +113,8 @@ enum class MessageElementFlag : int64_t {
     BadgeWydios = (1LL << 45),
 
     BadgeBadgeHQ = (1LL << 46),
+    /// Badges from StreamNook
+    BadgeStreamNook = (1LL << 60),
 
     BadgeHomiesCustom = (1LL << 35),
     BadgeMoltorino = (1LL << 34),
@@ -121,7 +123,8 @@ enum class MessageElementFlag : int64_t {
              BadgeSubscription | BadgeVanity | BadgeChatterino | BadgeSevenTV |
              BadgeFfz | BadgeFfzAp | BadgeSharedChannel | BadgeBttv |
              BadgeHomiesSupporter | BadgeHomiesCustom | BadgeMoltorino |
-             BadgeBluzyrino | BadgeJilChat | BadgeWydios | BadgeBadgeHQ,
+             BadgeBluzyrino | BadgeJilChat | BadgeWydios | BadgeBadgeHQ |
+             BadgeStreamNook,
 
     ChannelName = (1LL << 20),
 
@@ -189,6 +192,10 @@ enum class MessageElementFlag : int64_t {
 
     /// Applied to all elements of watch streak headers
     WatchStreakHeader = (1LL << 58),
+
+    /// The "First time chatter" line above someone's first message in a channel
+    FirstMessageHeader = (1LL << 59),
+
 
     Default = Timestamp | Badges | Username | BitsStatic | EmoteImage |
               BitsAmount | Text | AlwaysShow,

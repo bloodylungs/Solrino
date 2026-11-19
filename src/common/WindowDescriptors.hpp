@@ -115,6 +115,7 @@ struct TabDescriptor {
     bool selected_{false};
     bool highlightsEnabled_{true};
     bool alwaysVisible_{false};
+    bool muted_{false};
 
     std::optional<NodeDescriptor> rootNode_;
 };

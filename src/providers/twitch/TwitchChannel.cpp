@@ -2158,6 +2158,43 @@ void TwitchChannel::sendMessage(const QString &message)
         }
     };
 
+    // Experimental: send like twitch.tv, so the message may count toward
+    // Twitch Recap. Commands, and anything that can't go this way, are sent
+    // the normal way.
+    if (getSettings()->solrinoSendLikeWebsite &&
+        !parsedMessage.startsWith('/') && !parsedMessage.startsWith('.') &&
+        !this->roomId().isEmpty() && !shouldUseBotBadgeForSelectedAccount())
+    {
+        const auto auth = MoltorinoAuth::resolveCurrentUserToken();
+        if (auth.hasToken())
+        {
+            this->lastSentMessage_ = parsedMessage;
+            this->updateBttvActivity();
+            this->updateSevenTVActivity();
+            TwitchGql::sendChatMessageLikeWebsite(
+                this->roomId(), parsedMessage, auth.token,
+                [weak = weakOf<Channel>(this)](const QString &dropReason) {
+                    auto channel = weak.lock();
+                    if (channel != nullptr && !dropReason.isEmpty())
+                    {
+                        channel->addSystemMessage(
+                            QStringLiteral("Twitch didn't send your message: ") +
+                            dropReason);
+                    }
+                },
+                [weak = weakOf<Channel>(this), parsedMessage](const QString &) {
+                    // Couldn't go the website's way: send it normally instead
+                    if (auto channel = std::dynamic_pointer_cast<TwitchChannel>(
+                            weak.lock()))
+                    {
+                        bool sent = false;
+                        channel->sendMessageSignal.invoke(parsedMessage, sent);
+                    }
+                });
+            return;
+        }
+    }
+
     // Intercept for Bot Badge mode
     if (shouldUseBotBadgeForSelectedAccount())
     {

@@ -197,6 +197,7 @@ WindowManager::WindowManager(const Args &appArgs_, const Paths &paths,
     this->updateWordTypeMaskListener.add(settings.showAnnouncementHeader);
     this->updateWordTypeMaskListener.add(settings.showSubscriptionHeader);
     this->updateWordTypeMaskListener.add(settings.showWatchStreakHeader);
+    this->updateWordTypeMaskListener.add(settings.showFirstMessageHeader);
     this->updateWordTypeMaskListener.add(settings.showBadgesGlobalAuthority);
     this->updateWordTypeMaskListener.add(settings.showBadgesPredictions);
     this->updateWordTypeMaskListener.add(settings.showBadgesChannelAuthority);
@@ -209,6 +210,7 @@ WindowManager::WindowManager(const Args &appArgs_, const Paths &paths,
     this->updateWordTypeMaskListener.add(settings.showBadgesJilChat);
     this->updateWordTypeMaskListener.add(settings.showBadgesWydios);
     this->updateWordTypeMaskListener.add(settings.showBadgesBadgeHQ);
+    this->updateWordTypeMaskListener.add(settings.showBadgesStreamNook);
     this->updateWordTypeMaskListener.add(settings.showBadgesBttv);
     this->updateWordTypeMaskListener.add(settings.showBadgesSevenTV);
     this->updateWordTypeMaskListener.add(settings.showBadgesHomiesSupporter);
@@ -221,6 +223,7 @@ WindowManager::WindowManager(const Args &appArgs_, const Paths &paths,
         settings.showAbnormalClientDetectionHighlights);
     this->updateWordTypeMaskListener.add(settings.showPronounsInChat);
 
+    this->forceLayoutChannelViewsListener.add(settings.solrinoModButtonGap);
     this->forceLayoutChannelViewsListener.add(
         settings.moderationActions.delayedItemsChanged);
     this->forceLayoutChannelViewsListener.add(
@@ -358,6 +361,10 @@ void WindowManager::updateWordTypeMask()
     {
         flags.set(MEF::WatchStreakHeader);
     }
+    if (settings->showFirstMessageHeader)
+    {
+        flags.set(MEF::FirstMessageHeader);
+    }
     flags.set(MEF::Mention);
 
     // emotes
@@ -391,6 +398,7 @@ void WindowManager::updateWordTypeMask()
     flags.set(settings->showBadgesJilChat ? MEF::BadgeJilChat : MEF::None);
     flags.set(settings->showBadgesWydios ? MEF::BadgeWydios : MEF::None);
     flags.set(settings->showBadgesBadgeHQ ? MEF::BadgeBadgeHQ : MEF::None);
+    flags.set(settings->showBadgesStreamNook ? MEF::BadgeStreamNook : MEF::None);
     flags.set(settings->showBadgesBttv ? MEF::BadgeBttv : MEF::None);
     flags.set(settings->showBadgesSevenTV ? MEF::BadgeSevenTV : MEF::None);
     flags.set(settings->showBadgesHomiesSupporter.getValue()
@@ -470,6 +478,25 @@ void WindowManager::repaintTwitchGifs()
     }
 }
 
+bool WindowManager::isTwitchChannelOpen(const QString &login) const
+{
+    bool open = false;
+    for (auto *window : this->windows_)
+    {
+        if (window == nullptr || open)
+        {
+            continue;
+        }
+        window->getNotebook().forEachSplit([&](Split *split) {
+            const auto channel = split->getChannel();
+            open = open ||
+                   (channel && channel->getType() == Channel::Type::Twitch &&
+                    channel->getName().compare(login, Qt::CaseInsensitive) == 0);
+        });
+    }
+    return open;
+}
+
 bool WindowManager::shouldSuppressTabGroupAlerts(const Channel *channel) const
 {
     assertInGuiThread();
@@ -525,7 +552,7 @@ bool WindowManager::shouldSuppressTabGroupAlerts(const Channel *channel) const
 
             foundMatchingTab = true;
             const auto *tab = page->getTab();
-            if (tab == nullptr || !tab->isGroupMuted())
+            if (tab == nullptr || !tab->isMuted())
             {
 
                 return false;
@@ -1216,6 +1243,11 @@ void WindowManager::encodeTab(SplitContainer *tab, bool isSelected,
         obj.insert("alwaysVisible", true);
     }
 
+    if (tab->getTab()->isTabMuted())
+    {
+        obj.insert("muted", true);
+    }
+
     // splits
     QJsonObject splits;
 
@@ -1507,6 +1539,7 @@ void WindowManager::applyWindowLayout(const WindowLayout &layout)
             // highlighting on new messages
             page->getTab()->setHighlightsEnabled(tab.highlightsEnabled_);
             page->getTab()->setAlwaysVisible(tab.alwaysVisible_);
+            page->getTab()->setTabMuted(tab.muted_);
             restoredTabPlacements.push_back({
                 .page = page,
                 .groupId = tab.groupId_,

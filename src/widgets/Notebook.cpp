@@ -140,6 +140,19 @@ Notebook::Notebook(QWidget *parent)
             this->updateGroupButtonVisibility();
         },
         this->settingConnections_);
+    for (auto *setting : {&getSettings()->solrinoTabAreaCustom})
+    {
+        setting->connect(
+            [this](bool, auto) {
+                this->update();
+            },
+            this->settingConnections_, false);
+    }
+    getSettings()->solrinoTabAreaColor.connect(
+        [this](const QString &, auto) {
+            this->update();
+        },
+        this->settingConnections_, false);
 
     QObject::connect(
         this->addButton_, &Button::dropEvent, this, [this](QDropEvent *event) {
@@ -3075,6 +3088,32 @@ void Notebook::paintEvent(QPaintEvent *event)
     auto scale = this->scale();
 
     QPainter painter(this);
+
+    // A chosen colour behind the tabs only; the chats keep their own
+    if (const QColor area(getSettings()->solrinoTabAreaColor.getValue());
+        getSettings()->solrinoTabAreaCustom && area.isValid())
+    {
+        QRect strip;
+        switch (this->tabLocation_)
+        {
+            case NotebookTabLocation::Top:
+                strip = QRect(0, 0, this->width(), this->lineOffset_);
+                break;
+            case NotebookTabLocation::Bottom:
+                strip = QRect(0, this->lineOffset_, this->width(),
+                              this->height() - this->lineOffset_);
+                break;
+            case NotebookTabLocation::Left:
+                strip = QRect(0, 0, this->lineOffset_, this->height());
+                break;
+            case NotebookTabLocation::Right:
+                strip = QRect(this->lineOffset_, 0,
+                              this->width() - this->lineOffset_, this->height());
+                break;
+        }
+        painter.fillRect(strip, area);
+    }
+
     if (this->tabLocation_ == NotebookTabLocation::Top ||
         this->tabLocation_ == NotebookTabLocation::Bottom)
     {

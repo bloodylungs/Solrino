@@ -1817,6 +1817,7 @@ void TextElement::addWordsToContainer(const QStringList &words,
                 MessageElementFlag::AnnouncementHeader,
                 MessageElementFlag::SubscriptionHeader,
                 MessageElementFlag::WatchStreakHeader,
+                MessageElementFlag::FirstMessageHeader,
             });
 
         for (qsizetype wordIndex = 0; wordIndex < words.size(); ++wordIndex)
@@ -2758,20 +2759,41 @@ void addModerationActionToContainer(MessageElement &source,
                                     MessageLayoutContainer &container,
                                     const QSizeF &size)
 {
+    MessageLayoutElement *added = nullptr;
     if (const auto &image = action.getImage())
     {
-        container.addElement(
-            (new ImageLayoutElement(source, *image, size))
-                ->setLink(Link(Link::UserAction, action.getAction())));
+        added = (new ImageLayoutElement(source, *image, size))
+                    ->setLink(Link(Link::UserAction, action.getAction()));
     }
     else
     {
-        container.addElement(
-            (new TextIconLayoutElement(source, action.getLine1(),
-                                       action.getLine2(),
-                                       container.getScale(), size))
-                ->setLink(Link(Link::UserAction, action.getAction())));
+        // Timeouts are a little wider, to fit a stopwatch and "15m"
+        auto iconSize = size;
+        if (action.getType() == ModerationAction::Type::Timeout)
+        {
+            iconSize.setWidth(size.width() * 2.3);
+        }
+        added = (new TextIconLayoutElement(source, action.getLine1(),
+                                           action.getLine2(),
+                                           container.getScale(), iconSize))
+                    ->setLink(Link(Link::UserAction, action.getAction()));
     }
+
+    // A chosen gap, 0 to 5, instead of a normal space
+    bool ok = false;
+    const int gap = getSettings()->solrinoModButtonGap.getValue().toInt(&ok);
+    if (ok && gap >= 0 && gap <= 5)
+    {
+        added->setTrailingSpace(false);
+        container.addElement(added);
+        if (gap > 0)
+        {
+            container.addElement(new SpacerLayoutElement(
+                source, gap * 2 * container.getScale()));
+        }
+        return;
+    }
+    container.addElement(added);
 }
 
 std::optional<ModerationAction> makeYouTubeModerationAction(

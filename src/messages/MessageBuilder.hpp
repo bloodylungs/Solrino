@@ -294,11 +294,14 @@ private:
     void appendJilChatBadges(const QString &userID);
     void appendWydiosBadges(const QString &userID);
     void appendBadgeHQBadges(const QString &userID);
+    void appendStreamNookBadges(const QString &userID);
     void appendBttvBadges(const QString &userID);
     void appendSeventvBadges(const QString &userID);
     void appendHomiesBadges(const QString &userID, bool senderIsCurrentUser);
     void appendMoltorinoBadges(const QString &userID);
     void applyVanityBadgeLayout(const QString &userID, size_t firstBadge);
+    /// Past the chosen number of badges, the rest become a "+N" to hover
+    void collapseBadges(size_t firstBadge);
 
     [[nodiscard]] static bool isIgnored(const QString &originalMessage,
                                         const QString &userID,

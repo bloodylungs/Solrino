@@ -528,6 +528,18 @@ set(SOURCE_FILES
         providers/moltorino/MoltorinoDailyMessage.hpp
         providers/moltorino/MoltorinoFeatureFlags.hpp
         providers/moltorino/MoltorinoPresence.cpp
+        providers/moltorino/SolrinoReactions.cpp
+        providers/moltorino/StreamNookBadges.cpp
+        providers/moltorino/StreamNookBadges.hpp
+        singletons/SolrinoAutoOpen.cpp
+        singletons/SolrinoAutoOpen.hpp
+        singletons/SolrinoNowPlaying.cpp
+        singletons/SolrinoNowPlaying.hpp
+        widgets/helper/SolrinoNowPlayingOverlay.cpp
+        widgets/helper/SolrinoNowPlayingOverlay.hpp
+        widgets/settingspages/NowPlayingPage.cpp
+        widgets/settingspages/NowPlayingPage.hpp
+        providers/moltorino/SolrinoReactions.hpp
         providers/moltorino/MoltorinoPresence.hpp
         providers/moltorino/MoltorinoSupporterBadges.cpp
         providers/moltorino/MoltorinoSupporterBadges.hpp
@@ -1428,6 +1440,10 @@ target_link_libraries(${LIBRARY_PROJECT}
         BoostCertify
         )
 target_link_libraries(${LIBRARY_PROJECT} PRIVATE ${CHATTERINO_WEBP_TARGETS})
+if (WIN32)
+    # Windows' media controls, for the now playing overlay
+    target_link_libraries(${LIBRARY_PROJECT} PRIVATE windowsapp)
+endif ()
 
 if(MOLTORINO_YOUTUBE_ACCOUNTS OR MOLTORINO_TIKTOK_ACCOUNTS)
     target_link_libraries(${LIBRARY_PROJECT} PUBLIC keychain::keychain)

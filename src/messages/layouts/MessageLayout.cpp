@@ -12,6 +12,9 @@
 #include "messages/Message.hpp"
 #include "messages/MessageElement.hpp"
 #include "messages/Selection.hpp"
+#include "providers/moltorino/SolrinoReactions.hpp"
+#include "singletons/Fonts.hpp"
+#include "singletons/Theme.hpp"
 #include "providers/colors/ColorProvider.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/StreamerMode.hpp"
@@ -203,6 +206,16 @@ bool MessageLayout::layoutImpl(const MessageLayoutContext &ctx,
     this->badgeScale_ = ctx.badgeScale;
     this->centerBadges_ = ctx.centerBadges;
 
+    const int reactionsVersion =
+        this->message_->id.isEmpty()
+            ? 0
+            : SolrinoReactions::instance().version(this->message_->id);
+    if (reactionsVersion != this->reactionsVersion_)
+    {
+        this->reactionsVersion_ = reactionsVersion;
+        layoutRequired = true;
+    }
+
     if (!layoutRequired)
     {
         if (shouldInvalidateBuffer)
@@ -363,6 +376,17 @@ void MessageLayout::actuallyLayout(const MessageLayoutContext &ctx)
 
     container.endLayout();
     this->height_ = container.getHeight();
+    this->reactionsTop_ = -1;
+    if (solrinoReactionsEnabled() && !this->message_->id.isEmpty())
+    {
+        if (const auto *reactions =
+                SolrinoReactions::instance().get(this->message_->id);
+            reactions != nullptr && !reactions->empty())
+        {
+            this->reactionsTop_ = this->height_;
+            this->height_ += std::round(26 * this->scale_);
+        }
+    }
     this->firstLineHeight_ = container.getFirstLineHeight();
     this->width_ = static_cast<int>(container.getWidth());
     this->lineCount_ = toCachedMessageMetric(container.getLineCount());
@@ -416,6 +440,8 @@ MessagePaintResult MessageLayout::paint(const MessagePaintContext &ctx)
         ctx.hoverAnimateOnly);
     result.animatedRegion += animatedRegions.periodic;
     result.selfTimedAnimatedRegion += animatedRegions.selfTimed;
+
+    this->paintReactions(ctx.painter, ctx.y);
 
     if (this->message_->flags.has(MessageFlag::Disabled))
     {
@@ -863,6 +889,109 @@ void MessageLayout::addSelectionText(QString &str, uint32_t from, uint32_t to,
     {
         this->container_->addSelectionText(str, from, to, copymode);
     }
+}
+
+
+std::vector<MessageLayout::ReactionChip> MessageLayout::reactionChips() const
+{
+    std::vector<ReactionChip> chips;
+    if (this->reactionsTop_ < 0)
+    {
+        return chips;
+    }
+    const auto *reactions = SolrinoReactions::instance().get(this->message_->id);
+    if (reactions == nullptr)
+    {
+        return chips;
+    }
+    const qreal s = this->scale_;
+    const auto font = getApp()->getFonts()->getFont(FontStyle::ChatMedium, s);
+    const QFontMetricsF metrics(font);
+    qreal x = 8 * s;
+    const qreal top = this->reactionsTop_ + 2 * s;
+    for (const auto &reaction : *reactions)
+    {
+        const qreal icon = reaction.picture != nullptr
+                               ? 18 * s
+                               : metrics.horizontalAdvance(reaction.key);
+        const qreal width = 7 * s + icon + 5 * s +
+                            metrics.horizontalAdvance(
+                                QString::number(reaction.count)) +
+                            7 * s;
+        chips.push_back({QRectF(x, top, width, 21 * s), reaction.key,
+                         reaction.image});
+        x += width + 5 * s;
+    }
+    return chips;
+}
+
+void MessageLayout::paintReactions(QPainter &painter, int y) const
+{
+    const auto chips = this->reactionChips();
+    const auto *reactions =
+        chips.empty() ? nullptr
+                      : SolrinoReactions::instance().get(this->message_->id);
+    if (reactions == nullptr || reactions->size() != chips.size())
+    {
+        return;
+    }
+    const qreal s = this->scale_;
+    const auto font = getApp()->getFonts()->getFont(FontStyle::ChatMedium, s);
+    const QFontMetricsF metrics(font);
+    const auto text = getTheme()->messages.textColors.regular;
+    auto accent = getTheme()->tabs.selected.line.regular;
+    accent.setAlpha(255);
+
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setFont(font);
+    for (size_t i = 0; i < chips.size(); ++i)
+    {
+        const auto &reaction = (*reactions)[i];
+        const auto rect = chips[i].rect.translated(0, y);
+        // Yours stand out, so you can see what you can take back
+        auto fill = reaction.mine ? accent : text;
+        fill.setAlpha(reaction.mine ? 60 : 22);
+        auto border = reaction.mine ? accent : text;
+        border.setAlpha(reaction.mine ? 200 : 45);
+        painter.setPen(QPen(border, 1));
+        painter.setBrush(fill);
+        painter.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5),
+                                rect.height() / 2, rect.height() / 2);
+
+        qreal x = rect.left() + 7 * s;
+        if (reaction.picture != nullptr)
+        {
+            const QRectF area(x, rect.center().y() - 9 * s, 18 * s, 18 * s);
+            if (auto pixmap = reaction.picture->pixmapOrLoad();
+                pixmap && !pixmap->isNull())
+            {
+                // Kept in proportion inside its square
+                auto size = QSizeF(pixmap->size()).scaled(area.size(),
+                                                          Qt::KeepAspectRatio);
+                painter.drawPixmap(
+                    QRectF(area.center() - QPointF(size.width() / 2,
+                                                   size.height() / 2),
+                           size),
+                    *pixmap, QRectF(pixmap->rect()));
+            }
+            x += 18 * s;
+        }
+        else
+        {
+            painter.setPen(text);
+            const qreal width = metrics.horizontalAdvance(reaction.key);
+            painter.drawText(QRectF(x, rect.top(), width, rect.height()),
+                             Qt::AlignCenter, reaction.key);
+            x += width;
+        }
+        x += 5 * s;
+        painter.setPen(text);
+        painter.drawText(QRectF(x, rect.top(), rect.right() - x, rect.height()),
+                         Qt::AlignVCenter | Qt::AlignLeft,
+                         QString::number(reaction.count));
+    }
+    painter.restore();
 }
 
 }

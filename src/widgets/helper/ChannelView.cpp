@@ -4,11 +4,20 @@
 
 #include "widgets/dialogs/SolrinoTools.hpp"
 #include "widgets/helper/ChannelView.hpp"
+#include "providers/moltorino/SolrinoReactions.hpp"
+#include "widgets/dialogs/EmotePopup.hpp"
+#include "controllers/emotes/EmoteController.hpp"
+#include "providers/emoji/Emojis.hpp"
+#include "providers/bttv/BttvEmotes.hpp"
+#include "providers/ffz/FfzEmotes.hpp"
+#include "providers/seventv/SeventvEmotes.hpp"
 
 #include "Application.hpp"
 #include "common/Common.hpp"
 #include "common/QLogging.hpp"
 #include "controllers/accounts/AccountController.hpp"
+#include "common/network/NetworkRequest.hpp"
+#include "common/network/NetworkResult.hpp"
 #include "controllers/automod/AutoModReviewController.hpp"
 #include "controllers/commands/Command.hpp"
 #include "controllers/commands/builtin/twitch/Pin.hpp"
@@ -100,6 +109,10 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPointer>
+#include <QGuiApplication>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QRegularExpression>
 #include <QScreen>
 #include <QScopeGuard>
 #include <QSet>
@@ -1424,6 +1437,59 @@ void addEmoteContextMenuItems(
     }
 }
 
+/// Adds or removes a 7TV emote in a channel's 7TV emote set, with the 7TV
+/// login from Vanity. 7TV itself checks you may edit that set.
+void editSevenTVEmote(const QString &channelName, const QString &setId,
+                      const QString &emoteId, const QString &emoteName,
+                      bool add)
+{
+    static constexpr auto ADD = R"(
+mutation SolrinoAddEmote($set: Id!, $emote: Id!, $alias: String) {
+  emoteSets { emoteSet(id: $set) { addEmote(id: { emoteId: $emote, alias: $alias }) { id } } }
+}
+)";
+    static constexpr auto REMOVE = R"(
+mutation SolrinoRemoveEmote($set: Id!, $emote: Id!, $alias: String) {
+  emoteSets { emoteSet(id: $set) { removeEmote(id: { emoteId: $emote, alias: $alias }) { id } } }
+}
+)";
+    QJsonObject variables{{"set", setId}, {"emote", emoteId}, {"alias", emoteName}};
+    QJsonObject payload{{"query", QString::fromUtf8(add ? ADD : REMOVE)},
+                        {"variables", variables}};
+    const auto report = [channelName](const QString &text) {
+        auto channel = getApp()->getTwitch()->getChannelOrEmpty(channelName);
+        channel->addSystemMessage(text);
+    };
+    NetworkRequest(QStringLiteral("https://api.7tv.app/v4/gql"),
+                   NetworkRequestType::Post)
+        .header("Authorization", QStringLiteral("Bearer ") +
+                                     getSettings()->sevenTVVanityToken.getValue())
+        .json(payload)
+        .timeout(15000)
+        .maximumResponseSize(1024 * 1024)
+        .onSuccess([report, emoteName, add](const NetworkResult &result) {
+            const auto errors =
+                result.parseJson().value(QStringLiteral("errors")).toArray();
+            if (!errors.isEmpty())
+            {
+                report(QStringLiteral("7TV didn't %1 %2: %3")
+                           .arg(add ? QStringLiteral("add") : QStringLiteral("remove"),
+                                emoteName,
+                                errors.first().toObject().value("message").toString(
+                                    QStringLiteral("not allowed"))));
+                return;
+            }
+            report(add ? QStringLiteral("Added %1 to this channel's 7TV emotes.")
+                             .arg(emoteName)
+                       : QStringLiteral("Removed %1 from this channel's 7TV emotes.")
+                             .arg(emoteName));
+        })
+        .onError([report](const NetworkResult &result) {
+            report(QStringLiteral("Couldn't reach 7TV: ") + result.formatError());
+        })
+        .execute();
+}
+
 void addImageContextMenuItems(QMenu *menu,
                               const MessageLayoutElement *hoveredElement,
                               const TwitchChannel *twitchChannel)
@@ -1456,6 +1522,39 @@ void addImageContextMenuItems(QMenu *menu,
                 dynamic_cast<const EmoteElement *>(&creator))
         {
             addEmoteContextMenuItems(menu, *emoteElement->getEmote(), u"emote");
+
+            // 7TV emotes: add to or remove from this channel's set, for its
+            // streamer and mods connected to 7TV in Vanity
+            const auto &emote = *emoteElement->getEmote();
+            static const QRegularExpression sevenTVPage(
+                QStringLiteral("7tv\\.app/emotes/([A-Za-z0-9]+)"));
+            const auto match = sevenTVPage.match(emote.homePage.string);
+            const auto owner = getSettings()->sevenTVVanityTwitchUserId.getValue();
+            const auto me = getApp()->getAccounts()->twitch.getCurrent()->getUserId();
+            if (match.hasMatch() && twitchChannel != nullptr &&
+                !twitchChannel->seventvEmoteSetID().isEmpty() &&
+                (twitchChannel->isBroadcaster() || twitchChannel->hasModRights()) &&
+                !getSettings()->sevenTVVanityToken.getValue().isEmpty() &&
+                (owner.isEmpty() || owner == me))
+            {
+                const auto emoteId = match.captured(1);
+                const auto existing =
+                    twitchChannel->seventvEmote(EmoteName{emote.name.string});
+                const bool inSet =
+                    existing && *existing && (*existing)->homePage.string ==
+                                                 emote.homePage.string;
+                const auto channelName = twitchChannel->getName();
+                const auto setId = twitchChannel->seventvEmoteSetID();
+                const auto name = emote.name.string;
+                menu->addSeparator();
+                menu->addAction(
+                    inSet ? QStringLiteral("Remove from #%1's 7TV").arg(channelName)
+                          : QStringLiteral("Add to #%1's 7TV").arg(channelName),
+                    [channelName, setId, emoteId, name, inSet] {
+                        editSevenTVEmote(channelName, setId, emoteId, name,
+                                         !inSet);
+                    });
+            }
         }
         else if (const auto *layeredElement =
                      dynamic_cast<const LayeredEmoteElement *>(&creator))
@@ -6061,6 +6160,40 @@ void ChannelView::drawMessages(QPainter &painter, const QRegion &area)
         if (area.intersects(messageRect))
         {
             auto paintResult = layout->paint(ctx);
+            if (const auto hovered = this->reactionHoverLayout_.lock();
+                hovered.get() == layout &&
+                this->canReactTo(layout->getMessage()))
+            {
+                const auto s = this->scale();
+                const QRect button(
+                    layout->getWidth() - int(40 * s), ctx.y + int(2 * s),
+                    int(28 * s), int(20 * s));
+                this->reactionButtonRect_ = button;
+                painter.save();
+                painter.setRenderHint(QPainter::Antialiasing);
+                auto back = this->messageColors_.regularBg;
+                back.setAlpha(235);
+                auto line = getTheme()->messages.textColors.regular;
+                line.setAlpha(70);
+                painter.setPen(QPen(line, 1));
+                painter.setBrush(back);
+                painter.drawRoundedRect(QRectF(button).adjusted(0.5, 0.5, -0.5, -0.5),
+                                        button.height() / 2.0, button.height() / 2.0);
+                // A smiley with a plus: add a reaction
+                auto ink = getTheme()->messages.textColors.regular;
+                painter.setPen(QPen(ink, std::max(1.0, 1.3 * s)));
+                painter.setBrush(Qt::NoBrush);
+                const QPointF face(button.left() + 11 * s, button.center().y());
+                painter.drawEllipse(face, 5.5 * s, 5.5 * s);
+                painter.drawArc(QRectF(face.x() - 3 * s, face.y() - 1 * s, 6 * s, 4 * s),
+                                200 * 16, 140 * 16);
+                painter.drawPoint(face + QPointF(-2 * s, -1.6 * s));
+                painter.drawPoint(face + QPointF(2 * s, -1.6 * s));
+                const QPointF plus(button.left() + 22 * s, button.center().y());
+                painter.drawLine(plus - QPointF(2.5 * s, 0), plus + QPointF(2.5 * s, 0));
+                painter.drawLine(plus - QPointF(0, 2.5 * s), plus + QPointF(0, 2.5 * s));
+                painter.restore();
+            }
             const auto &message = layout->getMessagePtr();
             if (message != nullptr &&
                 this->nukePreviewMessageIds_.contains(message->id))
@@ -6327,6 +6460,12 @@ void ChannelView::enterEvent(QEvent * /*event*/)
 
 void ChannelView::leaveEvent(QEvent * /*event*/)
 {
+    if (this->reactionHoverLayout_.lock() != nullptr)
+    {
+        this->reactionHoverLayout_.reset();
+        this->reactionButtonRect_ = {};
+        this->update();
+    }
     this->hideTooltip();
     this->clearHoveredAnimation();
 
@@ -6428,10 +6567,30 @@ void ChannelView::mouseMoveEvent(QMouseEvent *event)
     // no message under cursor
     if (!this->tryGetMessageAt(event->pos(), layout, relativePos, messageIndex))
     {
+        if (this->reactionHoverLayout_.lock() != nullptr)
+        {
+            this->reactionHoverLayout_.reset();
+            this->reactionButtonRect_ = {};
+            this->update();
+        }
         this->clearHoveredAnimation();
         this->setCursor(Qt::ArrowCursor);
         this->hideTooltip();
         return;
+    }
+
+    if (this->reactionHoverLayout_.lock() != layout)
+    {
+        this->reactionHoverLayout_ = layout;
+        this->reactionButtonRect_ = {};
+        this->update();
+    }
+    if (this->reactionButtonRect_.contains(event->pos()) ||
+        std::ranges::any_of(layout->reactionChips(), [&](const auto &chip) {
+            return chip.rect.contains(relativePos);
+        }))
+    {
+        this->setCursor(Qt::PointingHandCursor);
     }
 
     if (this->isScrolling_)
@@ -6761,6 +6920,18 @@ void ChannelView::mousePressEvent(QMouseEvent *event)
 {
     this->mouseDown.invoke(event);
 
+    if (event->button() == Qt::LeftButton &&
+        this->reactionButtonRect_.contains(event->pos()))
+    {
+        if (const auto hovered = this->reactionHoverLayout_.lock();
+            hovered && this->canReactTo(hovered->getMessage()))
+        {
+            this->openReactionPicker(hovered->getMessagePtr(),
+                                     event->globalPosition().toPoint());
+            return;
+        }
+    }
+
     std::shared_ptr<MessageLayout> layout;
     QPointF relativePos;
     int messageIndex;
@@ -6785,6 +6956,21 @@ void ChannelView::mousePressEvent(QMouseEvent *event)
             this->setSelection(selectionItem, selectionItem);
         }
         return;
+    }
+
+    if (event->button() == Qt::LeftButton &&
+        this->canReactTo(layout->getMessage()))
+    {
+        for (const auto &chip : layout->reactionChips())
+        {
+            if (chip.rect.contains(relativePos))
+            {
+                SolrinoReactions::instance().toggle(
+                    this->reactionChannelId(), layout->getMessage()->id,
+                    chip.key, chip.image);
+                return;
+            }
+        }
     }
 
     const auto *pressedElement = layout->getElementAt(relativePos);
@@ -9100,4 +9286,101 @@ ChannelView::ChannelViewID ChannelView::getID() const
     return this->id_;
 }
 
+
+QString ChannelView::reactionChannelId() const
+{
+    const auto twitch =
+        std::dynamic_pointer_cast<TwitchChannel>(this->underlyingChannel_);
+    return twitch != nullptr ? twitch->roomId() : QString{};
+}
+
+bool ChannelView::canReactTo(const Message *message) const
+{
+    // Ordinary chat messages in a Twitch chat, for logged-in Solrino users
+    return solrinoReactionsEnabled() && message != nullptr &&
+           !message->id.isEmpty() && !message->loginName.isEmpty() &&
+           !message->flags.hasAny({MessageFlag::System, MessageFlag::Timeout,
+                                   MessageFlag::Whisper,
+                                   MessageFlag::ModerationAction}) &&
+           !this->reactionChannelId().isEmpty() &&
+           !getApp()->getAccounts()->twitch.getCurrent()->isAnon();
+}
+
+void ChannelView::openReactionPicker(const MessagePtr &message, QPoint at)
+{
+    if (message == nullptr)
+    {
+        return;
+    }
+    const auto channelId = this->reactionChannelId();
+    const auto messageId = message->id;
+    const auto twitch =
+        std::dynamic_pointer_cast<TwitchChannel>(this->underlyingChannel_);
+
+    auto *popup = new EmotePopup(this->window());
+    popup->setAttribute(Qt::WA_DeleteOnClose);
+    popup->loadChannel(this->underlyingChannel_);
+    QPointer<EmotePopup> guard(popup);
+    std::ignore = popup->linkClicked.connect(
+        [guard, channelId, messageId,
+         weak = std::weak_ptr<TwitchChannel>(twitch)](const Link &link) {
+            if (link.type != Link::InsertText || link.value.isEmpty())
+            {
+                return;
+            }
+            QString key = link.value.trimmed();
+            QString image;
+            if (key.size() > 2 && key.startsWith(':') && key.endsWith(':'))
+            {
+                // An emoji's short code: react with the emoji itself
+                key = getApp()->getEmotes()->getEmojis()->replaceShortCodes(key);
+            }
+            else
+            {
+                const EmoteName name{key};
+                std::optional<EmotePtr> emote;
+                if (auto channel = weak.lock())
+                {
+                    emote = channel->seventvEmote(name);
+                    if (!emote) emote = channel->bttvEmote(name);
+                    if (!emote) emote = channel->ffzEmote(name);
+                    if (!emote) emote = channel->twitchEmote(name);
+                }
+                if (!emote) emote = getApp()->getSeventvEmotes()->globalEmote(name);
+                if (!emote) emote = getApp()->getBttvEmotes()->emote(name);
+                if (!emote) emote = getApp()->getFfzEmotes()->emote(name);
+                if (emote && *emote)
+                {
+                    image = (*emote)->images.getImage1()->url().string;
+                }
+            }
+            SolrinoReactions::instance().toggle(channelId, messageId, key,
+                                                image);
+            if (guard)
+            {
+                guard->close();
+            }
+        });
+    popup->show();
+    // Next to the button, on whichever side has room, and never off screen
+    const auto *screen = QGuiApplication::screenAt(at);
+    if (screen == nullptr)
+    {
+        screen = QGuiApplication::primaryScreen();
+    }
+    const auto area = screen->availableGeometry();
+    const auto size = popup->frameGeometry().size();
+    QPoint place(at.x() - size.width() / 2, at.y() + 14);
+    if (place.y() + size.height() > area.bottom())
+    {
+        place.setY(at.y() - size.height() - 14);
+    }
+    place.setX(std::clamp(place.x(), area.left(),
+                          std::max(area.left(), area.right() - size.width())));
+    place.setY(std::clamp(place.y(), area.top(),
+                          std::max(area.top(), area.bottom() - size.height())));
+    popup->move(place);
+    popup->raise();
+    popup->activateWindow();
+}
 }  // namespace chatterino

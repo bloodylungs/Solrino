@@ -22,6 +22,9 @@
 #include "providers/badgehq/BadgeHQBadges.hpp"
 #include "providers/bluzyrino/BluzyrinoBadges.hpp"
 #include "providers/moltorino/MoltorinoOriginalBadges.hpp"
+#include "providers/moltorino/StreamNookBadges.hpp"
+#include "widgets/helper/SolrinoNowPlayingOverlay.hpp"
+#include "singletons/SolrinoAutoOpen.hpp"
 #include "providers/bttv/BttvBadges.hpp"
 #include "providers/bttv/BttvEmotes.hpp"
 #include "providers/ffz/FfzEmotes.hpp"
@@ -342,6 +345,7 @@ void Application::initialize(Settings &settings, const Modes &modes,
     SolrinoUpdater::instance().start();
     SolrinoDiscordPresence::instance().start();
     MoltorinoOriginalBadges::instance().start();
+    StreamNookBadges::instance().start();
 
     {
         auto &s = *getSettings();
@@ -465,6 +469,9 @@ int Application::run()
     {
         solrino::startBadgeGifts();
         solrino::startFirstWatcher();
+        solrino::startUnbanRequestWatcher();
+        startSolrinoNowPlayingOverlay();
+        startSolrinoAutoOpen();
     }
 
     QTimer::singleShot(2500, qApp, [] {

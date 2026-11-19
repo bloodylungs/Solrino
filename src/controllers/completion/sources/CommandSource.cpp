@@ -157,6 +157,7 @@ QString commandUsage(const QString &command)
         {"/chatwarnings", ""},
         {".w", "<username> <message>"},
         {"/w", "<username> <message>"},
+        {"/cheer", "<amount> [message]"},
         {"/whisper", "<username> <message>"},
     };
 

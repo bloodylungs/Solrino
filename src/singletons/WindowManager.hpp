@@ -133,6 +133,8 @@ public:
 
     std::set<QString> getVisibleChannelNames() const;
     bool shouldSuppressTabGroupAlerts(const Channel *channel) const;
+    /// Whether a split in any window shows this Twitch channel
+    bool isTwitchChannelOpen(const QString &login) const;
     std::span<Window *const> windows() const;
 
     pajlada::Signals::NoArgSignal gifRepaintRequested;

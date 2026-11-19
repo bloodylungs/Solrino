@@ -19,6 +19,7 @@
 #include "providers/homies/HomiesBadges.hpp"
 #include "providers/moltorino/MoltorinoAuth.hpp"
 #include "providers/moltorino/MoltorinoOriginalBadges.hpp"
+#include "providers/moltorino/StreamNookBadges.hpp"
 #include "providers/moltorino/SolrinoPaints.hpp"
 #include "providers/seventv/SeventvBadges.hpp"
 #include "providers/seventv/SeventvPaints.hpp"
@@ -2692,11 +2693,25 @@ QWidget *VanityDialog::buildMoltorinoOriginalTab()
     // Moltorino, so a click just says so and keeps the worn one lit
     this->moltorinoOriginalGrid_->selectionChanged =
         [this](const VanityChoice &choice) {
-            this->populateMoltorinoOriginalChoices();
+            // Runs inside the tile's own click, so the tiles must stay as they
+            // are: only the highlight moves back to the badge that's worn
+            const auto name = choice.name;
+            QString worn;
+            for (const auto &badge :
+                 MoltorinoOriginalBadges::instance().getOwnedBadges(
+                     this->accountUserId_))
+            {
+                if (badge.active)
+                {
+                    worn = badge.id;
+                    break;
+                }
+            }
+            this->moltorinoOriginalGrid_->setSelected(worn);
             this->setStatus(
                 QStringLiteral("%1 is a Moltorino badge. Change which one you "
                                "wear in Moltorino.")
-                    .arg(choice.name));
+                    .arg(name));
         };
     addGallerySearch(layout, this->moltorinoOriginalGrid_,
                      QStringLiteral("Search Moltorino badges"), page);
@@ -5450,6 +5465,11 @@ void VanityDialog::refreshPreview()
             addBadge(QStringLiteral("bh"), QStringLiteral("BadgeHQ"), badge);
         }
     }
+    if (getSettings()->showBadgesStreamNook)
+    {
+        addBadge(QStringLiteral("sn"), QStringLiteral("StreamNook"),
+                 StreamNookBadges::instance().getBadge(this->accountUserId_));
+    }
     if (getSettings()->showBadgesMoltorino)
     {
         addBadge(QStringLiteral("mo"), QStringLiteral("Moltorino"),
@@ -6454,6 +6474,10 @@ QString VanityDialog::layoutDisplayName(const QString &key) const
     if (key == QStringLiteral("bh"))
     {
         return QStringLiteral("BadgeHQ");
+    }
+    if (key == QStringLiteral("sn"))
+    {
+        return QStringLiteral("StreamNook");
     }
     if (key == QStringLiteral("7"))
     {

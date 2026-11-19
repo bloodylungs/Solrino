@@ -16,6 +16,7 @@
 #include <QAbstractItemView>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QMenu>
 #include <QCompleter>
 #include <QCursor>
 #include <QFont>
@@ -318,6 +319,43 @@ ChannelManagementDialog::ChannelManagementDialog(
     auto *titleHeader = new QHBoxLayout;
     titleHeader->setContentsMargins(0, 0, 0, 0);
     titleHeader->addWidget(makeFieldLabel("Title", broadcastSection));
+    // Titles you've used here before, one click to reuse
+    auto *recentTitles = new QToolButton(broadcastSection);
+    recentTitles->setText(QStringLiteral("Recent"));
+    recentTitles->setToolTip(QStringLiteral("Reuse a title you've used before"));
+    recentTitles->setCursor(Qt::PointingHandCursor);
+    recentTitles->setAutoRaise(true);
+    recentTitles->setPopupMode(QToolButton::InstantPopup);
+    auto *recentMenu = new QMenu(recentTitles);
+    recentTitles->setMenu(recentMenu);
+    QObject::connect(recentMenu, &QMenu::aboutToShow, this, [this, recentMenu] {
+        recentMenu->clear();
+        const auto prefix = this->channel_->getName().toLower() + u'	';
+        int count = 0;
+        for (const auto &entry : getSettings()->solrinoRecentTitles.getValue())
+        {
+            if (!entry.startsWith(prefix) || count >= 10)
+            {
+                continue;
+            }
+            const auto title = entry.mid(prefix.size());
+            auto *action = recentMenu->addAction(
+                title.size() > 70 ? title.left(67) + QStringLiteral("...")
+                                  : title);
+            action->setToolTip(title);
+            QObject::connect(action, &QAction::triggered, this, [this, title] {
+                this->titleEdit_->setPlainText(title);
+                this->titleEdit_->setFocus();
+            });
+            ++count;
+        }
+        if (count == 0)
+        {
+            recentMenu->addAction(QStringLiteral("No saved titles yet"))
+                ->setEnabled(false);
+        }
+    });
+    titleHeader->addWidget(recentTitles);
     this->titleValidationLabel_ = makeHelperLabel({}, broadcastSection);
     this->titleValidationLabel_->setObjectName(
         "ChannelManagementTitleValidation");
@@ -856,6 +894,22 @@ void ChannelManagementDialog::applySuccessfulUpdate(
     if (update.title)
     {
         this->originalMetadata_.title = *update.title;
+        // Remembered for this channel, newest first, without repeats
+        const auto title = update.title->trimmed();
+        if (!title.isEmpty())
+        {
+            const auto entry =
+                this->channel_->getName().toLower() + u'	' + title;
+            auto titles = getSettings()->solrinoRecentTitles.getValue();
+            titles.removeAll(entry);
+            titles.prepend(entry);
+            while (titles.size() > 200)
+            {
+                titles.removeLast();
+            }
+            getSettings()->solrinoRecentTitles = titles;
+            getSettings()->requestSave();
+        }
     }
     if (update.language)
     {

@@ -322,6 +322,8 @@ public:
     TextIconLayoutElement(MessageElement &creator_, const QString &line1,
                           const QString &line2, float scale, QSizeF size);
 
+    QString getFragmentTooltip(QPointF point) const override;
+
 protected:
     void addCopyTextToString(QString &str, uint32_t from = 0,
                              uint32_t to = UINT32_MAX) const override;
@@ -361,6 +363,23 @@ private:
     QColor color_;
     QString tooltip_;
     float badgeScale_;
+};
+
+/// Empty space of a set width, for gaps that aren't a whole text space
+class SpacerLayoutElement : public MessageLayoutElement
+{
+public:
+    SpacerLayoutElement(MessageElement &creator, qreal width);
+
+protected:
+    void addCopyTextToString(QString &str, uint32_t from = 0,
+                             uint32_t to = UINT32_MAX) const override;
+    size_t getSelectionIndexCount() const override;
+    void paint(QPainter &painter, const MessageColors &messageColors) override;
+    QRegion paintAnimated(QPainter &painter, qreal yOffset,
+                          const AnimatedMessageShadow *shadow) override;
+    int getMouseOverIndex(QPointF abs) const override;
+    qreal getXFromIndex(size_t index) override;
 };
 
 class ReplyCurveLayoutElement : public MessageLayoutElement

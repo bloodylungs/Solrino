@@ -734,6 +734,13 @@ public:
         const QString &oauthToken,
         std::function<void(GqlChannelPointRedeemResult)> successCallback,
         std::function<void(const QString &)> failureCallback);
+    /// Sends a chat message the way the Twitch website does. Calls back with
+    /// Twitch's reason when it drops the message, or an empty string.
+    static void sendChatMessageLikeWebsite(
+        const QString &channelId, const QString &message,
+        const QString &oauthToken,
+        std::function<void(const QString &dropReason)> successCallback,
+        std::function<void(const QString &)> failureCallback);
     static void sendSubOnlyBypassMessage(
         const QString &channelId, int cost, const QString &message,
         const QString &oauthToken,

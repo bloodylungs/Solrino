@@ -9,10 +9,13 @@
 #include "messages/layouts/MessageLayoutContainer.hpp"
 
 #include <QPixmap>
+#include <QRectF>
 #include <QRegion>
+#include <QString>
 
 #include <cinttypes>
 #include <memory>
+#include <vector>
 
 namespace chatterino {
 
@@ -93,7 +96,16 @@ public:
 
     bool isDisabled() const;
 
+    /// A Solrino reaction under the message, in the message's own coordinates
+    struct ReactionChip {
+        QRectF rect;
+        QString key;
+        QString image;
+    };
+    std::vector<ReactionChip> reactionChips() const;
+
 private:
+    void paintReactions(QPainter &painter, int y) const;
 
     bool layoutImpl(const MessageLayoutContext &ctx,
                     bool shouldInvalidateBuffer, bool retainContainer);
@@ -123,6 +135,9 @@ private:
     bool autoModReviewExpanded_ = false;
     bool showHighlights_ = true;
     MessageElementFlags currentWordFlags_;
+    /// Where the reactions row starts, or -1 without one
+    qreal reactionsTop_ = -1;
+    int reactionsVersion_ = 0;
 
 #ifdef FOURTF
 

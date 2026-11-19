@@ -168,6 +168,61 @@ void GeneralPage::initLayout(GeneralPageView &layout)
                      "Use \"Test ping popup\" in the Solrino tools menu to see "
                      "the new size.")
         ->addTo(layout);
+    SettingWidget::checkbox("Compact chat input", s.solrinoCompactInput)
+        ->setTooltip("A slimmer chat box, with less space around the text.")
+        ->addTo(layout);
+
+    SettingWidget::checkbox("Custom tab area colour", s.solrinoTabAreaCustom)
+        ->setTooltip("Use your own colour for the space around the tabs.")
+        ->addTo(layout);
+    SettingWidget::colorButton("Tab area colour", s.solrinoTabAreaColor)
+        ->addTo(layout);
+
+    SettingWidget::dropdown("Mod button spacing", s.solrinoModButtonGap,
+                            {{"Normal", ""},
+                             {"0 (touching)", "0"},
+                             {"1", "1"},
+                             {"2", "2"},
+                             {"3", "3"},
+                             {"4", "4"},
+                             {"5 (widest)", "5"}})
+        ->setTooltip("The gap between the mod buttons next to messages.")
+        ->addTo(layout);
+
+    SettingWidget::dropdown("Most badges to show", s.solrinoBadgeLimit,
+                            {{"All", "0"},
+                             {"2", "2"},
+                             {"3", "3"},
+                             {"4", "4"},
+                             {"5", "5"}})
+        ->setTooltip("Past this many, the rest of someone's badges become a "
+                     "+N. Hover it to see them.")
+        ->addTo(layout);
+
+    SettingWidget::checkbox("Reactions on messages", s.solrinoReactions)
+        ->setTooltip("Hover a message to react to it. Only other Solrino "
+                     "users see reactions.")
+        ->addTo(layout);
+
+    SettingWidget::dropdown("Ping popup colour", s.solrinoPingColor,
+                            {{"Ember", "ember"},
+                             {"Ocean", "ocean"},
+                             {"Violet", "violet"},
+                             {"Lime", "lime"},
+                             {"Gold", "gold"},
+                             {"Rose", "rose"}})
+        ->setTooltip("The colour of ping popups.")
+        ->addTo(layout);
+    SettingWidget::dropdown("Ping popup time", s.solrinoPingSeconds,
+                            {{"4 seconds", "4"},
+                             {"6 seconds", "6"},
+                             {"10 seconds", "10"}})
+        ->setTooltip("How long a ping popup stays before it fades away.")
+        ->addTo(layout);
+    SettingWidget::dropdown("Ping popup animation", s.solrinoPingAnimation,
+                            {{"Slide in", "slide"}, {"Fade", "fade"}})
+        ->setTooltip("How ping popups appear and leave.")
+        ->addTo(layout);
     layout.addButton("Move ping popup", [] {
         moveSolrinoPingPopup();
     });
@@ -218,6 +273,10 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         ->conditionallyEnabledBy(s.solrinoDiscordPresence)
         ->addTo(layout);
 
+    SettingWidget::checkbox("Update popups", s.solrinoUpdatePopups)
+        ->setTooltip("Turn off to stop the update popup. Updates still "
+                     "download and install when you quit Solrino.")
+        ->addTo(layout);
     SettingWidget::checkbox("Update automatically", s.solrinoAutoUpdate)
         ->setTooltip("Checks for new versions of Solrino and downloads them in "
                      "the background. Nothing installs until you restart or "
@@ -710,6 +769,12 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         ->addTo(layout);
 
     SettingWidget::checkbox("Show watch streak header", s.showWatchStreakHeader)
+        ->addTo(layout);
+
+    SettingWidget::checkbox("Show \"First time chatter\" header",
+                            s.showFirstMessageHeader)
+        ->setTooltip("Shows a line above someone's first ever message in a "
+                     "channel, like Twitch does.")
         ->addTo(layout);
 
     layout.addDropdown<int>(
@@ -1337,6 +1402,12 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         ->setTooltip("e.g. prime, bits, sub gifter")
         ->addTo(layout);
 
+    SettingWidget::checkbox("StreamNook", s.showBadgesStreamNook)
+        ->addKeywords({"streamnook", "stream nook"})
+        ->setTooltip("Badges from StreamNook. Solrino only reads StreamNook's "
+                     "public badge list; nothing is sent to it.")
+        ->addTo(layout);
+
     SettingWidget::checkbox("BadgeHQ", s.showBadgesBadgeHQ)
         ->addKeywords({"badgehq", "badge hq", "supporter", "founder"})
         ->setTooltip("Supporter and Founder badges from BadgeHQ. Nothing is "
@@ -1897,6 +1968,15 @@ void GeneralPage::initLayout(GeneralPageView &layout)
                             s.connectAnonymouslyWhenBanned)
         ->setTooltip("Keep reading chat after a ban. Turn this off or use "
                      "Reconnect to try your account again after an unban.")
+        ->addTo(layout);
+
+    SettingWidget::checkbox("Chat spoofer (experimental)",
+                            s.solrinoSendLikeWebsite)
+        ->setTooltip(
+            "Sends your chat messages the same way twitch.tv does, so they "
+            "may count toward your Twitch Recap. Needs a Twitch web login in "
+            "Authentication settings. If it can't be used, messages are sent "
+            "the normal way instead. Commands always go the normal way.")
         ->addTo(layout);
 
     SettingWidget::dropdown("Chat send protocol", s.chatSendProtocol)

@@ -170,7 +170,8 @@ QString Message::getHeaderText() const
         if (flags.has(MessageElementFlag::Text) &&
             flags.hasAny(MessageElementFlag::AnnouncementHeader,
                          MessageElementFlag::SubscriptionHeader,
-                         MessageElementFlag::WatchStreakHeader))
+                         MessageElementFlag::WatchStreakHeader,
+                         MessageElementFlag::FirstMessageHeader))
         {
             if (const auto *text =
                     dynamic_cast<const TextElement *>(element.get()))

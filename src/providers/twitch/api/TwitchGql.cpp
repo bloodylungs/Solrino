@@ -6704,6 +6704,60 @@ void TwitchGql::sendHighlightedChatMessage(
         .execute();
 }
 
+void TwitchGql::sendChatMessageLikeWebsite(
+    const QString &channelId, const QString &message,
+    const QString &oauthToken,
+    std::function<void(const QString &dropReason)> successCallback,
+    std::function<void(const QString &)> failureCallback)
+{
+    static const char *query = R"(
+        mutation SolrinoSendChatMessage($input: SendChatMessageInput!) {
+            sendChatMessage(input: $input) {
+                dropReason
+                message {
+                    id
+                }
+            }
+        }
+    )";
+
+    QJsonObject input;
+    input.insert("channelID", channelId);
+    input.insert("message", message);
+    input.insert("nonce", makeTransactionId());
+    QJsonObject variables;
+    variables.insert("input", input);
+
+    makeInlineGqlRequest(query, variables, oauthToken)
+        .onSuccess([successCallback,
+                    failureCallback](const NetworkResult &result) {
+            const auto root = result.parseJsonValue();
+            if (root.isUndefined() || root.isNull())
+            {
+                failureCallback("Failed to parse GQL response");
+                return;
+            }
+            const auto gqlError = extractFirstGqlErrorMessage(root);
+            if (!gqlError.isEmpty())
+            {
+                failureCallback(gqlError);
+                return;
+            }
+            const auto payload =
+                payloadDataObject(root).value("sendChatMessage").toObject();
+            if (payload.isEmpty())
+            {
+                failureCallback("Twitch didn't answer");
+                return;
+            }
+            successCallback(payload.value("dropReason").toString());
+        })
+        .onError([failureCallback](const NetworkResult &result) {
+            failureCallback("Network Error: " + result.formatError());
+        })
+        .execute();
+}
+
 void TwitchGql::sendSubOnlyBypassMessage(
     const QString &channelId, int cost, const QString &message,
     const QString &oauthToken,

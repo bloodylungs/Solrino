@@ -443,6 +443,17 @@ NotebookTab::NotebookTab(Notebook *notebook, Role role)
                      });
     this->menu_.addAction(this->highlightNewMessagesAction_);
 
+    this->muteTabAction_ = new QAction("Mute Tab", &this->menu_);
+    this->muteTabAction_->setCheckable(true);
+    this->muteTabAction_->setChecked(this->tabMuted_);
+    this->muteTabAction_->setToolTip(
+        "No sounds, flashing, unread marks or ping cards from this tab");
+    QObject::connect(this->muteTabAction_, &QAction::triggered,
+                     [this](bool checked) {
+                         this->setTabMuted(checked);
+                     });
+    this->menu_.addAction(this->muteTabAction_);
+
     auto *tabColorMenu = this->menu_.addMenu("Tab Color");
     const std::vector<std::pair<QString, QColor>> tabColorPresets = {
         {"Blue", QColor(91, 157, 255)},
@@ -1162,6 +1173,41 @@ bool NotebookTab::isGroupMuted() const
     return this->groupMuted_;
 }
 
+void NotebookTab::setTabMuted(bool value)
+{
+    if (this->muteTabAction_ != nullptr)
+    {
+        this->muteTabAction_->setChecked(value);
+    }
+    if (this->tabMuted_ == value)
+    {
+        return;
+    }
+    this->tabMuted_ = value;
+    if (value)
+    {
+        this->highlightSources_.clear();
+        this->highlightColor_.reset();
+        this->highlightState_ = HighlightState::None;
+    }
+    this->update();
+    if (this->notebook_ != nullptr)
+    {
+        this->notebook_->tabStatusChanged(this);
+    }
+    getApp()->getWindows()->queueSave();
+}
+
+bool NotebookTab::isTabMuted() const
+{
+    return this->tabMuted_;
+}
+
+bool NotebookTab::isMuted() const
+{
+    return this->groupMuted_ || this->tabMuted_;
+}
+
 void NotebookTab::setVisibleEdgeFlags(bool first, bool last)
 {
     if (this->isFirstVisible_ == first && this->isLastVisible_ == last)
@@ -1321,7 +1367,7 @@ void NotebookTab::updateHighlightStateDueSourcesChange()
 
 void NotebookTab::copyHighlightStateAndSourcesFrom(const NotebookTab *sourceTab)
 {
-    if (this->isSelected() || this->groupMuted_)
+    if (this->isSelected() || this->isMuted())
     {
         assert(this->highlightSources_.empty());
         assert(this->highlightState_ == HighlightState::None);
@@ -1446,7 +1492,7 @@ HighlightState NotebookTab::highlightState() const
 
 void NotebookTab::setHighlightState(HighlightState newHighlightStyle)
 {
-    if (this->isSelected() || this->groupMuted_)
+    if (this->isSelected() || this->isMuted())
     {
         assert(this->highlightSources_.empty());
         assert(this->highlightState_ == HighlightState::None);
@@ -1535,7 +1581,7 @@ void NotebookTab::updateHighlightState(const TabHighlight &highlight,
 bool NotebookTab::shouldMessageHighlight(
     const ChannelView &channelViewSource) const
 {
-    if (this->groupMuted_)
+    if (this->isMuted())
     {
         return false;
     }
@@ -1808,8 +1854,17 @@ void NotebookTab::paintEvent(QPaintEvent *)
         painter.drawEllipse(liveIndicatorRect);
     }
 
-    // set the pen color
-    painter.setPen(colors.text);
+    // set the pen color. A muted tab's title is dimmed.
+    if (this->tabMuted_ && this->role_ != Role::GroupHeader)
+    {
+        auto dimmed = colors.text;
+        dimmed.setAlphaF(dimmed.alphaF() * 0.5);
+        painter.setPen(dimmed);
+    }
+    else
+    {
+        painter.setPen(colors.text);
+    }
 
     float compactDivider = getCompactDivider(getSettings()->tabStyle);
     // set area for text

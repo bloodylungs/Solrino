@@ -1,4 +1,5 @@
 #include "providers/moltorino/MoltorinoPresence.hpp"
+#include "providers/moltorino/SolrinoReactions.hpp"
 #include "common/SolrinoVersion.hpp"
 
 #include "Application.hpp"
@@ -375,6 +376,11 @@ void MoltorinoPresence::handleBadgeSocketOpen(int generation)
     {
         badges->refreshPassive();
     }
+    // Reactions made while this was disconnected
+    if (solrinoReactionsEnabled())
+    {
+        SolrinoReactions::instance().refresh();
+    }
 }
 
 void MoltorinoPresence::handleBadgeSocketClosed(int generation)
@@ -421,6 +427,14 @@ void MoltorinoPresence::handleBadgeSocketMessage(int generation,
     const auto root = doc.object();
     const auto type =
         root.value(QStringLiteral("type")).toString().trimmed().toLower();
+    if (type == QStringLiteral("reaction"))
+    {
+        if (solrinoReactionsEnabled())
+        {
+            SolrinoReactions::instance().apply(root);
+        }
+        return;
+    }
     if (type == QStringLiteral("badge_v2_changed"))
     {
         const auto badgeGeneration =

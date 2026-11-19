@@ -665,6 +665,12 @@ private:
     const MessageLayoutElement *hoveredLayoutElement_ = nullptr;
     std::weak_ptr<Image> hoveredAnimationImage_;
     std::weak_ptr<MessageLayout> hoveredMessageLayout_;
+    /// Solrino reactions: the message under the mouse, and its button
+    std::weak_ptr<MessageLayout> reactionHoverLayout_;
+    QRect reactionButtonRect_;
+    QString reactionChannelId() const;
+    bool canReactTo(const Message *message) const;
+    void openReactionPicker(const MessagePtr &message, QPoint at);
     QRect hoveredElementRect_;
 
     void updateHoveredAnimationImage(const MessageLayoutElement *layoutElement);

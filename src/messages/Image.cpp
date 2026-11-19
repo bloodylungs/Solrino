@@ -708,9 +708,10 @@ void Image::releaseUnusedCacheEntries()
     urlImageCacheInsertionsSinceSweep() = 0;
 }
 
-ImagePtr Image::fromAutoscaledUrl(const Url &url, uint16_t autoScale)
+ImagePtr Image::fromAutoscaledUrl(const Url &url, uint16_t autoScale,
+                                  qreal scale)
 {
-    return Image::fromUrlCached(url, 1.0, {autoScale, autoScale}, autoScale,
+    return Image::fromUrlCached(url, scale, {autoScale, autoScale}, autoScale,
                                 false, 0, false);
 }
 

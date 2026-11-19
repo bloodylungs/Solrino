@@ -8,6 +8,7 @@
 #include "controllers/filters/FilterRecord.hpp"
 #include "messages/Emote.hpp"
 #include "messages/Message.hpp"
+#include "messages/MessageBuilder.hpp"
 #include "messages/MessageElement.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
@@ -1284,6 +1285,10 @@ void shoutoutRaider(const ChannelPtr &channel, const QString &raiderLogin)
     {
         return;
     }
+    // Old ones no longer matter, so the list stays small however long it runs
+    recent.removeIf([&now](const auto &entry) {
+        return entry.value().secsTo(now) >= 10 * 60;
+    });
     recent.insert(key, now);
 
     // Several mods may use Solrino in the same chat. Each waits a different
@@ -1358,8 +1363,8 @@ int firstRewardScore(const QString &title)
     return 0;
 }
 
-constexpr int FIRST_TRIES = 60;  // every 2 seconds, so two minutes
-constexpr int FIRST_RETRY_MS = 2000;
+constexpr int FIRST_TRIES = 120;  // every second, so two minutes
+constexpr int FIRST_RETRY_MS = 1000;
 
 void tryRedeemFirst(std::weak_ptr<TwitchChannel> weak, int attempt)
 {
@@ -1504,28 +1509,122 @@ void autoRedeemFirst(const std::shared_ptr<TwitchChannel> &channel,
         }
         streamId = status->streamId;
     }
-    // Once per stream
-    static QSet<QString> tried;
+    // Once per stream. A stream is only tried in its first few minutes, so one
+    // older than a day is long over and can be forgotten.
+    static QHash<QString, QDateTime> tried;
     const auto key = channel->roomId() + u'/' + streamId;
     if (tried.contains(key))
     {
         return;
     }
-    tried.insert(key);
+    const auto now = QDateTime::currentDateTimeUtc();
+    tried.removeIf([&now](const auto &entry) {
+        return entry.value().secsTo(now) >= 24 * 60 * 60;
+    });
+    tried.insert(key, now);
     tryRedeemFirst(channel, 0);
+}
+
+void startUnbanRequestWatcher()
+{
+    // Requests already seen in each channel. The first look at a channel only
+    // records what's there, so opening Solrino doesn't repeat old requests.
+    static QHash<QString, QSet<QString>> seen;
+    const auto check = [] {
+        if (!getSettings()->solrinoUnbanRequestAlerts)
+        {
+            return;
+        }
+        getApp()->getTwitch()->forEachChannel([](const ChannelPtr &c) {
+            auto twitch = std::dynamic_pointer_cast<TwitchChannel>(c);
+            if (twitch == nullptr || twitch->roomId().isEmpty() ||
+                !twitch->hasModRights())
+            {
+                return;
+            }
+            const auto auth = MoltorinoAuth::resolveModerationToken(
+                twitch->roomId(), twitch->getName());
+            if (!auth.hasToken())
+            {
+                return;
+            }
+            std::weak_ptr<TwitchChannel> weak = twitch;
+            const auto roomId = twitch->roomId();
+            TwitchGql::getUnbanRequests(
+                twitch->getName(), roomId, {}, true, auth.token,
+                [weak, roomId](GqlUnbanRequestPage page) {
+                    auto channel = weak.lock();
+                    if (channel == nullptr)
+                    {
+                        return;
+                    }
+                    const bool firstLook = !seen.contains(roomId);
+                    auto &known = seen[roomId];
+                    for (const auto &request : page.requests)
+                    {
+                        if (request.id.isEmpty() || known.contains(request.id))
+                        {
+                            continue;
+                        }
+                        known.insert(request.id);
+                        if (firstLook)
+                        {
+                            continue;
+                        }
+                        const auto name = request.requester.displayName.isEmpty()
+                                              ? request.requester.login
+                                              : request.requester.displayName;
+                        const auto said = request.requesterMessage.trimmed();
+                        const auto text =
+                            said.isEmpty()
+                                ? QStringLiteral("%1 asked to be unbanned.")
+                                      .arg(name)
+                                : QStringLiteral("%1 asked to be unbanned: \"%2\"")
+                                      .arg(name, said);
+
+                        MessageBuilder builder;
+                        builder->flags.set(MessageFlag::System);
+                        builder->flags.set(MessageFlag::DoNotTriggerNotification);
+                        builder->messageText = text;
+                        builder->searchText = text;
+                        builder.emplace<TimestampElement>();
+                        builder.emplace<TextElement>(text,
+                                                     MessageElementFlag::Text,
+                                                     MessageColor::System);
+                        builder
+                            .emplace<TextElement>(
+                                QStringLiteral("Open unban requests"),
+                                MessageElementFlag::Text, MessageColor::Link)
+                            ->setLink({Link::UserAction,
+                                       QStringLiteral("/unbanrequests")});
+                        channel->addMessage(builder.release(),
+                                            MessageContext::Original);
+                    }
+                },
+                [](const QString &) {});
+        });
+    };
+    auto *timer = new QTimer(qApp);
+    timer->setTimerType(Qt::VeryCoarseTimer);
+    timer->setInterval(60 * 1000);
+    QObject::connect(timer, &QTimer::timeout, qApp, check);
+    timer->start();
+    // A first look soon after starting, so later requests are noticed
+    QTimer::singleShot(15 * 1000, qApp, check);
 }
 
 void startFirstWatcher()
 {
     // Twitch's own live check runs every 30 seconds. With auto-redeem on, the
-    // open chats that are offline are checked every few seconds instead.
+    // open chats that are offline are checked every 2 seconds instead.
     auto *timer = new QTimer(qApp);
     static int asking = 0;
     // When each chat was first seen. A chat is only checked here once Twitch's
     // own check has had its turn, so a stream that was already live when
     // Solrino opened never looks like it just went live.
     static QHash<QString, QDateTime> firstSeen;
-    timer->setInterval(4000);
+    // Every 2 seconds: Twitch allows far more than this, even with many chats open
+    timer->setInterval(2000);
     static QDateTime askedAt;
     QObject::connect(timer, &QTimer::timeout, qApp, [] {
         const auto now = QDateTime::currentDateTimeUtc();

@@ -177,8 +177,9 @@ int ResizingTextEdit::heightForWidth(int width) const
     auto margins = this->contentsMargins();
     auto documentWidth = qMax(width - margins.left() - margins.right(), 1);
 
+    // Compact input drops the extra room under the text
     return margins.top() + qCeil(this->documentHeightForWidth(documentWidth)) +
-           margins.bottom() + 5;
+           margins.bottom() + (getSettings()->solrinoCompactInput ? 1 : 5);
 }
 
 qreal ResizingTextEdit::documentHeightForWidth(int width) const

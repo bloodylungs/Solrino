@@ -49,6 +49,9 @@ void autoRedeemFirst(const std::shared_ptr<TwitchChannel> &channel,
 /// Checks open offline chats every few seconds while auto-redeem is on, so
 /// going live is noticed quickly.
 void startFirstWatcher();
+/// In channels where you're the streamer or a mod, posts each new unban
+/// request in chat with the person's message and a link to the inbox.
+void startUnbanRequestWatcher();
 
 /// Messages per minute, unique chatters and top emotes for a channel.
 void showChatStats(Split *split);

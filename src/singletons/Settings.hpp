@@ -234,6 +234,10 @@ public:
         "/appearance/messages/watchstreaks/showHeader",
         true,
     };
+    BoolSetting showFirstMessageHeader = {
+        "/appearance/messages/firstMessage/showHeader",
+        true,
+    };
     BoolSetting animationsWhenFocused = {
         "/appearance/enableAnimationsWhenFocused", false};
     BoolSetting hideMessageTimestampsWhenLive = {
@@ -403,6 +407,7 @@ public:
     BoolSetting showBadgesJilChat = {"/appearance/badges/jilchat", true};
     BoolSetting showBadgesWydios = {"/appearance/badges/wydios", false}; // False because it's my self-project that not many users use
     BoolSetting showBadgesBadgeHQ = {"/appearance/badges/badgehq", true};
+    BoolSetting showBadgesStreamNook = {"/appearance/badges/streamnook", true};
     BoolSetting useCustomFfzModeratorBadges = {
         "/appearance/badges/useCustomFfzModeratorBadges", true};
     BoolSetting useCustomFfzVipBadges = {
@@ -1182,6 +1187,10 @@ public:
     QStringSetting solrinoLayoutAccount{"/solrino/layout/account", "right"};
     BoolSetting solrinoSmoothAnimations{"/solrino/smoothAnimations", true};
     BoolSetting solrinoAutoUpdate{"/solrino/autoUpdate", true};
+    /// Off: updates download quietly and install when you quit, with no popup
+    BoolSetting solrinoUpdatePopups{"/solrino/updatePopups", true};
+    /// A version chosen with Skip, which isn't offered again
+    QStringSetting solrinoSkippedVersion{"/solrino/skippedVersion", ""};
     BoolSetting solrinoDiscordPresence{"/solrino/discord/enabled", true};
     BoolSetting solrinoDiscordShowChat{"/solrino/discord/showChat", true};
     BoolSetting solrinoGameBar{"/solrino/gameBar/enabled", true};
@@ -1205,6 +1214,8 @@ public:
                                               "!so @{user}"};
     /// Owner only: redeem "First" in open chats the moment they go live
     BoolSetting solrinoAutoRedeemFirst{"/solrino/owner/autoRedeemFirst", false};
+    /// New unban requests appear in chat for streamers and mods
+    BoolSetting solrinoUnbanRequestAlerts{"/solrino/unbanRequestAlerts", true};
     /// How the Other Badges tab in /vanity is sorted
     QStringSetting solrinoOtherBadgeSort{"/solrino/vanity/otherBadgeSort",
                                          "solrino"};
@@ -1225,6 +1236,72 @@ public:
     BoolSetting solrinoPingHideWhileStreaming{
         "/solrino/ping/hideWhileStreaming", false};
     QStringSetting solrinoPingSize{"/solrino/ping/size", "normal"};
+    /// Ping card colour: ember, ocean, violet, lime, gold or rose
+    QStringSetting solrinoPingColor{"/solrino/ping/color", "ember"};
+    /// Reactions that Solrino users put on chat messages
+    BoolSetting solrinoReactions{"/solrino/reactions", true};
+    /// Most badges shown next to a name; the rest become "+N". 0 shows all.
+    QStringSetting solrinoBadgeLimit{"/solrino/badgeLimit", "0"};
+    /// A slimmer chat input box
+    BoolSetting solrinoCompactInput{"/solrino/compactInput", false};
+    /// Your own colour behind the tabs
+    BoolSetting solrinoTabAreaCustom{"/solrino/tabArea/custom", false};
+    QStringSetting solrinoTabAreaColor{"/solrino/tabArea/color", "#ff1a1214"};
+    /// Gap between mod buttons, 0 to 5. Empty keeps the normal space.
+    QStringSetting solrinoModButtonGap{"/solrino/modButtonGap", ""};
+    /// Stream titles you've saved, newest first, as "channel<TAB>title"
+    ChatterinoSetting<QStringList> solrinoRecentTitles = {"/solrino/recentTitles", {}};
+    /// Experimental: send chat messages the way the Twitch website does
+    BoolSetting solrinoSendLikeWebsite{"/solrino/sendLikeWebsite", false};
+    /// The now playing overlay on your screen
+    BoolSetting solrinoNowPlaying{"/solrino/nowPlaying/enabled", false};
+    /// "art" for the album art only, "song" for art, song and artist
+    QStringSetting solrinoNowPlayingLayout{"/solrino/nowPlaying/layout", "song"};
+    /// "glass", "solid" or "transparent"
+    QStringSetting solrinoNowPlayingStyle{"/solrino/nowPlaying/style", "glass"};
+    /// small, normal, large or xlarge
+    QStringSetting solrinoNowPlayingSize{"/solrino/nowPlaying/size", "normal"};
+    /// How solid it is, from 20 to 100
+    QStringSetting solrinoNowPlayingOpacity{"/solrino/nowPlaying/opacity", "100"};
+    BoolSetting solrinoNowPlayingPrevious{"/solrino/nowPlaying/previous", true};
+    BoolSetting solrinoNowPlayingPlayPause{"/solrino/nowPlaying/playPause", true};
+    BoolSetting solrinoNowPlayingNext{"/solrino/nowPlaying/next", true};
+    BoolSetting solrinoNowPlayingProgress{"/solrino/nowPlaying/progress", true};
+    BoolSetting solrinoNowPlayingHideWhenPaused{"/solrino/nowPlaying/hideWhenPaused", false};
+    /// Follow any player Windows knows about, not only Spotify
+    BoolSetting solrinoNowPlayingAnyPlayer{"/solrino/nowPlaying/anyPlayer", false};
+    BoolSetting solrinoNowPlayingLocked{"/solrino/nowPlaying/locked", false};
+    /// Where it is: "screen;x;y", with x and y from 0 to 1
+    QStringSetting solrinoNowPlayingPlace{"/solrino/nowPlaying/place", ""};
+    /// "always", or "change" to pop up for a few seconds when the song changes
+    QStringSetting solrinoNowPlayingShow{"/solrino/nowPlaying/show", "always"};
+    /// Progress bar colour: "spotify", "cover" (from the album art) or "white"
+    QStringSetting solrinoNowPlayingAccent{"/solrino/nowPlaying/accent", "spotify"};
+    /// Time played and song length next to the progress bar
+    BoolSetting solrinoNowPlayingTimes{"/solrino/nowPlaying/times", false};
+    /// Slide long song names along instead of cutting them off
+    BoolSetting solrinoNowPlayingScroll{"/solrino/nowPlaying/scroll", true};
+    /// The album art: "none", "spin" like a record, or "glow"
+    QStringSetting solrinoNowPlayingCoverAnim{"/solrino/nowPlaying/coverAnim", "none"};
+    /// Little bars that bounce with the music
+    BoolSetting solrinoNowPlayingVisualiser{"/solrino/nowPlaying/visualiser", false};
+    /// Slides in when the song changes
+    BoolSetting solrinoNowPlayingSlideIn{"/solrino/nowPlaying/slideIn", true};
+    /// "round" or "square"
+    QStringSetting solrinoNowPlayingCorners{"/solrino/nowPlaying/corners", "round"};
+    /// "default", "none", "accent" (the bar colour) or "white"
+    QStringSetting solrinoNowPlayingBorder{"/solrino/nowPlaying/border", "default"};
+    BoolSetting solrinoNowPlayingShuffle{"/solrino/nowPlaying/shuffle", false};
+    BoolSetting solrinoNowPlayingRepeat{"/solrino/nowPlaying/repeat", false};
+    /// Scroll the mouse wheel over it to change the player's volume
+    /// Twitch channels to open a tab for when they go live
+    ChatterinoSetting<QStringList> solrinoAutoOpenChannels = {"/solrino/autoOpen/channels", {}};
+    BoolSetting solrinoAutoOpenSwitch{"/solrino/autoOpen/switch", false};
+    BoolSetting solrinoNowPlayingVolumeScroll{"/solrino/nowPlaying/volumeScroll", true};
+    /// How many seconds a ping card stays before fading
+    QStringSetting solrinoPingSeconds{"/solrino/ping/seconds", "6"};
+    /// "slide" in from the side, or a plain "fade"
+    QStringSetting solrinoPingAnimation{"/solrino/ping/animation", "slide"};
     QSizeSetting solrinoToolPopupSize = {"/appearance/popups/solrinoTool", {}};
     ChatterinoSetting<QStringList> solrinoQuickPhrases = {
         "/solrino/quickPhrases",
@@ -1417,7 +1494,7 @@ public:
         "/moltorino/showCommandSuggestions", true};
     BoolSetting showCommandArgumentHints{"/moltorino/showCommandArgumentHints",
                                          true};
-    BoolSetting showEmoteTabCarousel{"/moltorino/showEmoteTabCarousel", false};
+    BoolSetting showEmoteTabCarousel{"/moltorino/showEmoteTabCarousel", true};
     QStringSetting emoteTabCarouselSize{"/moltorino/emoteTabCarouselSize",
                                         "standard"};
     BoolSetting showEmoteTabCarouselNames{

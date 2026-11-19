@@ -575,6 +575,7 @@ void MessageLayoutContainer::addSelectionText(QString &str, uint32_t from,
                     MessageElementFlag::AnnouncementHeader,
                     MessageElementFlag::SubscriptionHeader,
                     MessageElementFlag::WatchStreakHeader,
+                    MessageElementFlag::FirstMessageHeader,
                 }))
             {
                 continue;
@@ -698,6 +699,7 @@ size_t MessageLayoutContainer::getFirstMessageCharacterIndex() const
         MessageElementFlag::AnnouncementHeader,
         MessageElementFlag::SubscriptionHeader,
         MessageElementFlag::WatchStreakHeader,
+        MessageElementFlag::FirstMessageHeader,
     };
 
     // Get the index of the first character of the real message

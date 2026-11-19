@@ -50,7 +50,6 @@ constexpr int MAX_VISIBLE = 4;
 constexpr double RADIUS = 13;
 
 constexpr qint64 SLIDE_IN_MS = 340;
-constexpr qint64 DRAIN_MS = 6000;
 constexpr qint64 FADE_OUT_MS = 420;
 constexpr qint64 FLASH_MS = 900;
 constexpr int SLIDE_DISTANCE = 46;
@@ -64,6 +63,29 @@ const QColor WHITE(248, 241, 239);
 const QColor MUTED(186, 164, 162);
 const QColor ACCENT(255, 92, 92);
 const QColor RED(227, 16, 28);
+
+/// The card's reds, turned to the colour chosen in settings. Ember keeps them.
+QColor tint(QColor color)
+{
+    static const QHash<QString, int> hues{
+        {QStringLiteral("ocean"), 205}, {QStringLiteral("violet"), 272},
+        {QStringLiteral("lime"), 96},   {QStringLiteral("gold"), 44},
+        {QStringLiteral("rose"), 330},
+    };
+    const auto hue = hues.value(getSettings()->solrinoPingColor.getValue(), -1);
+    if (hue < 0)
+    {
+        return color;
+    }
+    return QColor::fromHsv(hue, color.hsvSaturation(), color.value(),
+                           color.alpha());
+}
+
+qint64 chosenDrainMs()
+{
+    const auto seconds = getSettings()->solrinoPingSeconds.getValue().toInt();
+    return qint64(std::clamp(seconds > 0 ? seconds : 6, 2, 30)) * 1000;
+}
 
 double easeOut(double t)
 {
@@ -322,6 +344,8 @@ public:
         , isWhisper_(isWhisper)
         , logo_(QStringLiteral(":/icon.png"))
         , smooth_(solrino::smoothAnimationsEnabled())
+        , slide_(getSettings()->solrinoPingAnimation.getValue() != "fade")
+        , drainMs_(chosenDrainMs())
         , scale_(chosenScale())
     {
         // A big card still has to fit in a narrow chat
@@ -499,26 +523,26 @@ private:
     {
         if (this->clock_.isValid() && !this->isLeaving())
         {
-            this->drainStart_ = this->clock_.elapsed() - DRAIN_MS;
+            this->drainStart_ = this->clock_.elapsed() - this->drainMs_;
         }
     }
 
     bool isLeaving() const
     {
         return this->clock_.isValid() &&
-               this->clock_.elapsed() - this->drainStart_ >= DRAIN_MS;
+               this->clock_.elapsed() - this->drainStart_ >= this->drainMs_;
     }
 
     double drainProgress(qint64 elapsed) const
     {
-        return std::clamp(double(elapsed - this->drainStart_) / DRAIN_MS, 0.0,
+        return std::clamp(double(elapsed - this->drainStart_) / this->drainMs_, 0.0,
                           1.0);
     }
 
     double leavingProgress(qint64 elapsed) const
     {
         return std::clamp(
-            double(elapsed - this->drainStart_ - DRAIN_MS) / FADE_OUT_MS, 0.0,
+            double(elapsed - this->drainStart_ - this->drainMs_) / FADE_OUT_MS, 0.0,
             1.0);
     }
 
@@ -551,7 +575,7 @@ private:
         const double in = easeOut(double(elapsed) / SLIDE_IN_MS);
         const double out = smooth(this->leavingProgress(elapsed));
         const int offset =
-            this->smooth_ ? int((1.0 - in) * SLIDE_DISTANCE +
+            this->smooth_ && this->slide_ ? int((1.0 - in) * SLIDE_DISTANCE +
                                 out * (SLIDE_DISTANCE * 0.5))
                           : 0;
         const QPoint next(int(std::lround(this->position_.x())) + offset,
@@ -611,7 +635,7 @@ private:
             painter.drawPixmap(area.topLeft(), this->circle_);
 
             painter.setBrush(Qt::NoBrush);
-            painter.setPen(QPen(QColor(255, 70, 74, 190), 1.6));
+            painter.setPen(QPen(tint(QColor(255, 70, 74, 190)), 1.6));
             painter.drawEllipse(area.adjusted(-0.8, -0.8, 0.8, 0.8));
         }
         painter.setOpacity(cardOpacity);
@@ -638,7 +662,7 @@ private:
         // Soft glow behind the line
         for (int i = 3; i > 0; --i)
         {
-            auto glow = QColor(255, 40, 48);
+            auto glow = tint(QColor(255, 40, 48));
             glow.setAlpha(16);
             painter.setBrush(glow);
             const auto r = line.adjusted(-i * 1.4, -i * 1.4, i * 1.4, i * 1.4);
@@ -646,15 +670,15 @@ private:
         }
 
         QLinearGradient color(track.topLeft(), track.topRight());
-        color.setColorAt(0, QColor(142, 8, 18));
-        color.setColorAt(0.6, RED);
-        color.setColorAt(1, QColor(255, 84, 84));
+        color.setColorAt(0, tint(QColor(142, 8, 18)));
+        color.setColorAt(0.6, tint(RED));
+        color.setColorAt(1, tint(QColor(255, 84, 84)));
         painter.setBrush(color);
         painter.drawRoundedRect(line, height / 2, height / 2);
 
         // Bright tip that the line drains toward
         const QPointF tip(line.right() - height / 2, line.center().y());
-        painter.setBrush(QColor(255, 220, 215));
+        painter.setBrush(tint(QColor(255, 220, 215)));
         painter.drawEllipse(tip, height * 0.62, height * 0.62);
     }
 
@@ -695,8 +719,8 @@ private:
         p.save();
         p.setClipPath(path);
         QRadialGradient glow(card.left() + 36, card.top() + 34, 130);
-        glow.setColorAt(0, QColor(214, 20, 32, 110));
-        glow.setColorAt(1, QColor(214, 20, 32, 0));
+        glow.setColorAt(0, tint(QColor(214, 20, 32, 110)));
+        glow.setColorAt(1, tint(QColor(214, 20, 32, 0)));
         p.fillRect(card, glow);
         p.restore();
 
@@ -718,11 +742,11 @@ private:
         const auto tag = tagMetrics.elidedText(tagText, Qt::ElideRight, maxTag);
         const double tagWidth = tagMetrics.horizontalAdvance(tag) + 15;
         const QRectF tagRect(tagRight - tagWidth, card.top() + 13, tagWidth, 19);
-        p.setPen(QPen(QColor(255, 80, 84, 90), 1));
-        p.setBrush(QColor(150, 12, 22, 110));
+        p.setPen(QPen(tint(QColor(255, 80, 84, 90)), 1));
+        p.setBrush(tint(QColor(150, 12, 22, 110)));
         p.drawRoundedRect(tagRect, 9.5, 9.5);
         p.setFont(tagFont);
-        p.setPen(QColor(255, 196, 194));
+        p.setPen(tint(QColor(255, 196, 194)));
         p.drawText(tagRect, Qt::AlignCenter, tag);
 
         // @sender pinged you
@@ -742,7 +766,7 @@ private:
             std::max(40.0, room - actionMetrics.horizontalAdvance(action)));
         const double base = card.top() + 28;
         p.setFont(nameFont);
-        p.setPen(ACCENT);
+        p.setPen(tint(ACCENT));
         p.drawText(QPointF(textLeft, base), name);
         p.setFont(actionFont);
         p.setPen(WHITE);
@@ -771,6 +795,8 @@ private:
     QPixmap circle_;
     qint64 pictureStart_ = -1;
     bool smooth_;
+    bool slide_ = true;
+    qint64 drainMs_ = 6000;
     double scale_;
     QPointer<PingCloseButton> close_;
     QPixmap cache_;

@@ -19,7 +19,7 @@ namespace chatterino {
 
 namespace {
 
-constexpr int CARD_WIDTH = 460;
+constexpr int CARD_WIDTH = 520;
 constexpr int SHADOW = 24;
 constexpr double RADIUS = 16;
 constexpr int PAD = 24;
@@ -141,6 +141,9 @@ SolrinoUpdatePrompt::SolrinoUpdatePrompt(const QString &version,
         QRectF(right - 120 - 8 - 110, buttonsTop, 110, BUTTON_HEIGHT);
     this->controls_[RemindLater] =
         QRectF(right - 120 - 8 - 110 - 8 - 130, buttonsTop, 130, BUTTON_HEIGHT);
+    // Skip sits apart on the left: it's the one you'd rarely want
+    this->controls_[Skip] = QRectF(this->card_.left() + PAD, buttonsTop, 80,
+                                   BUTTON_HEIGHT);
     this->controls_[Close] =
         QRectF(this->card_.right() - 38, this->card_.top() + 10, 28, 28);
 
@@ -422,6 +425,11 @@ int SolrinoUpdatePrompt::controlAt(const QPointF &position) const
 {
     for (int i = 0; i < ControlCount; ++i)
     {
+        // Skip is hidden while downloading, so it can't be clicked then
+        if (i == Skip && this->waiting_)
+        {
+            continue;
+        }
         if (this->controls_[i].contains(position))
         {
             return i;
@@ -563,6 +571,11 @@ void SolrinoUpdatePrompt::paintEvent(QPaintEvent * /*event*/)
                    : QStringLiteral(
                          "Update later installs it when you fully quit Solrino."));
 
+    if (!this->waiting_)
+    {
+        this->drawButton(p, this->controls_[Skip], QStringLiteral("Skip"),
+                         false, this->hover_[Skip]);
+    }
     this->drawButton(p, this->controls_[RemindLater],
                      QStringLiteral("Remind me later"), false,
                      this->hover_[RemindLater]);
@@ -708,6 +721,7 @@ void SolrinoUpdatePrompt::mouseReleaseEvent(QMouseEvent *event)
     solrino::fadeOutWindow(this);
     this->close();
     onChoice(released == UpdateLater ? Choice::UpdateLater
+             : released == Skip      ? Choice::Skip
                                      : Choice::RemindLater);
 }
 

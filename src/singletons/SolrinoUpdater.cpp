@@ -101,7 +101,38 @@ void SolrinoUpdater::check(bool byUser)
         {
             this->answered_ = false;
             this->offerRestart();
+            return;
         }
+        // Still waiting to install on quit: a release made since then
+        // replaces the one waiting. Until one is found, the waiting one
+        // stays ready, so quitting still installs it.
+        if (!getSettings()->solrinoAutoUpdate || this->lookingForNewer_)
+        {
+            return;
+        }
+        this->lookingForNewer_ = true;
+        NetworkRequest(this->baseUrl() +
+                       QStringLiteral("/latest/download/solrino-update.json"))
+            .timeout(20000)
+            .followRedirects(true)
+            .maximumResponseSize(MAX_MANIFEST_BYTES)
+            .onSuccess([this](const NetworkResult &result) {
+                this->lookingForNewer_ = false;
+                const auto data = result.getData();
+                const auto version = QJsonDocument::fromJson(data)
+                                         .object()["version"]
+                                         .toString();
+                if (this->state_ == State::Ready &&
+                    QVersionNumber::fromString(version) >
+                        QVersionNumber::fromString(this->onlineVersion_))
+                {
+                    this->readManifest(data, false);
+                }
+            })
+            .onError([this](const NetworkResult &) {
+                this->lookingForNewer_ = false;
+            })
+            .execute();
         return;
     }
     if (!byUser && !getSettings()->solrinoAutoUpdate)
@@ -125,7 +156,7 @@ void SolrinoUpdater::check(bool byUser)
         .execute();
 }
 
-void SolrinoUpdater::readManifest(const QByteArray &data, bool /*byUser*/)
+void SolrinoUpdater::readManifest(const QByteArray &data, bool byUser)
 {
     const auto manifest = QJsonDocument::fromJson(data).object();
     const auto version = manifest["version"].toString();
@@ -151,6 +182,13 @@ void SolrinoUpdater::readManifest(const QByteArray &data, bool /*byUser*/)
         return;
     }
 
+    // A skipped version isn't offered again, unless you check yourself
+    if (!byUser && version == getSettings()->solrinoSkippedVersion.getValue())
+    {
+        this->setState(State::UpToDate);
+        return;
+    }
+
     this->onlineVersion_ = version;
     this->onlineHash_ = hash;
     this->notes_ = manifest["notes"].toString().simplified().left(300);
@@ -171,6 +209,13 @@ void SolrinoUpdater::readManifest(const QByteArray &data, bool /*byUser*/)
     }
     this->answered_ = false;
     this->download();
+    if (!byUser && !getSettings()->solrinoUpdatePopups)
+    {
+        // No popup: it installs quietly when Solrino is quit
+        this->answered_ = true;
+        this->installWhenQuitting_ = true;
+        return;
+    }
     // Doesn't wait for the download, which can take a while
     this->offerRestart();
 }
@@ -356,6 +401,11 @@ void SolrinoUpdater::showPromptOnceWindowIsUp(int triesLeft)
                     break;
                 case SolrinoUpdatePrompt::Choice::RemindLater:
                     this->installWhenQuitting_ = false;
+                    break;
+                case SolrinoUpdatePrompt::Choice::Skip:
+                    this->installWhenQuitting_ = false;
+                    getSettings()->solrinoSkippedVersion = this->onlineVersion_;
+                    getSettings()->requestSave();
                     break;
             }
             Q_EMIT this->changed();

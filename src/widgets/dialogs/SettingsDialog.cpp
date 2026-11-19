@@ -20,6 +20,7 @@
 #include "widgets/settingspages/CommandPage.hpp"
 #include "widgets/settingspages/CustomizationPage.hpp"
 #include "widgets/settingspages/LayoutPage.hpp"
+#include "widgets/settingspages/NowPlayingPage.hpp"
 #include "widgets/settingspages/ExternalToolsPage.hpp"
 #include "widgets/settingspages/FiltersPage.hpp"
 #include "widgets/settingspages/GeneralPage.hpp"
@@ -244,6 +245,7 @@ void SettingsDialog::addTabs()
     this->addTab([]{return new GeneralPage;},          "General",        ":/settings/about.svg", SettingsTabId::General, 0.88F);
     this->addTab([]{return new CustomizationPage;},    "Customization",  ":/settings/customization.svg", SettingsTabId::Customization, 1.09F);
     this->addTab([]{return new LayoutPage;},           "Layout",         ":/settings/customization.svg", {}, 1.09F);
+    this->addTab([]{return new NowPlayingPage;},       "Now Playing",    ":/settings/customization.svg", {}, 1.09F);
     this->addTab([]{return new MoltorinoPage;},        "Solrino",      ":/settings/moltorino.svg", SettingsTabId::Moltorino, 0.90F);
     this->ui_.tabContainer->addSpacing(16);
     this->addTab([]{return new AccountsPage;},         "Accounts",       ":/settings/accounts.svg", SettingsTabId::Accounts, 1.06F);

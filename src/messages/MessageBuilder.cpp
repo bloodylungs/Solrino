@@ -26,6 +26,7 @@
 #include "providers/badgehq/BadgeHQBadges.hpp"
 #include "providers/bluzyrino/BluzyrinoBadges.hpp"
 #include "providers/moltorino/MoltorinoOriginalBadges.hpp"
+#include "providers/moltorino/StreamNookBadges.hpp"
 #include "providers/bttv/BttvBadges.hpp"
 #include "providers/bttv/BttvEmotes.hpp"
 #include "providers/chatterino/ChatterinoBadges.hpp"
@@ -1471,6 +1472,7 @@ void MessageBuilder::triggerHighlights(const Channel *channel,
     // Popups have their own streamer mode setting, because streamer mode turns
     // on by itself whenever OBS is open. Muted channels stay fully silent.
     if (alert.isPing && message && !getSettings()->isMutedChannel(channelName) &&
+        !getApp()->getWindows()->shouldSuppressTabGroupAlerts(channel) &&
         !message->flags.has(MessageFlag::RecentMessage))
     {
         showSolrinoPing(message->displayName.isEmpty() ? message->loginName
@@ -2008,6 +2010,26 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
 
     if (hasContent)
     {
+        // Twitch marks someone's first ever message in a channel. Shown as a
+        // line above it, like Twitch does.
+        if (builder->flags.has(MessageFlag::FirstMessage))
+        {
+            builder
+                .emplace<TextElement>(QStringLiteral("First time chatter"),
+                                      MessageElementFlags{
+                                          MessageElementFlag::Text,
+                                          MessageElementFlag::FirstMessageHeader,
+                                      },
+                                      MessageColor::System,
+                                      FontStyle::ChatMediumBold)
+                ->exhaustiveFlags = true;
+            builder
+                .emplace<LinebreakElement>(MessageElementFlags{
+                    MessageElementFlag::FirstMessageHeader,
+                })
+                ->exhaustiveFlags = true;
+        }
+
         // add timestamp
         builder.emplace<TimestampElement>(builder->serverReceivedTime.time());
 
@@ -2058,10 +2080,12 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
         builder.appendJilChatBadges(userID);
         builder.appendWydiosBadges(userID);
         builder.appendBadgeHQBadges(userID);
+        builder.appendStreamNookBadges(userID);
         builder.appendMoltorinoBadges(userID);
         builder.appendSeventvBadges(userID);
         builder.appendHomiesBadges(userID, senderIsCurrentUser);
         builder.applyVanityBadgeLayout(userID, firstVanityBadge);
+        builder.collapseBadges(firstVanityBadge);
 
         if (getSettings()->showPronounsInChat)
         {
@@ -3749,6 +3773,10 @@ void MessageBuilder::applyVanityBadgeLayout(const QString &userID,
         {
             return QStringLiteral("wy");
         }
+        if (flags.has(MessageElementFlag::BadgeStreamNook))
+        {
+            return QStringLiteral("sn");
+        }
         if (flags.has(MessageElementFlag::BadgeBadgeHQ))
         {
             return QStringLiteral("bh");
@@ -3802,9 +3830,9 @@ void MessageBuilder::applyVanityBadgeLayout(const QString &userID,
     }
     const auto customRankCount = requestedRanks.size();
     const auto defaultRank = [](const QString &slot) {
-        static constexpr std::array<QStringView, 17> order{
+        static constexpr std::array<QStringView, 18> order{
             u"ta", u"ts", u"tv", u"tp", u"c",  u"ff", u"fa", u"bt", u"bl",
-            u"jc", u"wy", u"bh", u"mo", u"m",  u"7",  u"hc", u"hs",
+            u"jc", u"wy", u"bh", u"sn", u"mo", u"m",  u"7",  u"hc", u"hs",
         };
         return static_cast<int>(std::ranges::find(order, slot) - order.begin());
     };
@@ -3824,6 +3852,50 @@ void MessageBuilder::applyVanityBadgeLayout(const QString &userID,
                              customRankCount + defaultRank(rightSlot));
                          return leftRank < rightRank;
                      });
+}
+
+void MessageBuilder::collapseBadges(size_t firstBadge)
+{
+    const int limit = getSettings()->solrinoBadgeLimit.getValue().toInt();
+    auto &elements = this->message().elements;
+    if (limit <= 0 || firstBadge >= elements.size())
+    {
+        return;
+    }
+
+    // Only badges that are actually shown count
+    const auto shown = getApp()->getWindows()->getWordFlags();
+    std::vector<size_t> visible;
+    for (size_t i = firstBadge; i < elements.size(); ++i)
+    {
+        if (elements[i]->getFlags().hasAny(shown))
+        {
+            visible.push_back(i);
+        }
+    }
+    if (visible.size() <= size_t(limit))
+    {
+        return;
+    }
+
+    QStringList names;
+    const auto hiddenCount = visible.size() - size_t(limit);
+    for (size_t k = visible.size(); k-- > size_t(limit);)
+    {
+        const auto index = visible[k];
+        const auto name = elements[index]->getTooltip();
+        names.prepend(name.isEmpty() ? QStringLiteral("Badge") : name);
+        elements.erase(elements.begin() + static_cast<ptrdiff_t>(index));
+    }
+
+    auto more = std::make_unique<TextElement>(
+        QStringLiteral("+%1").arg(hiddenCount),
+        MessageElementFlags{MessageElementFlag::BadgeChannelAuthority},
+        MessageColor::System, FontStyle::ChatMediumSmall);
+    more->setTooltip(names.join(QStringLiteral("<br>")));
+    elements.insert(
+        elements.begin() + static_cast<ptrdiff_t>(visible[size_t(limit) - 1] + 1),
+        std::move(more));
 }
 
 void MessageBuilder::appendFfzBadges(TwitchChannel *twitchChannel,
@@ -3948,6 +4020,19 @@ void MessageBuilder::appendBadgeHQBadges(const QString &userID)
     for (const auto &badge : provider->getBadges({userID}))
     {
         this->emplace<BadgeElement>(badge, MessageElementFlag::BadgeBadgeHQ);
+        this->message().externalBadges.emplace_back(badge->name.string);
+    }
+}
+
+void MessageBuilder::appendStreamNookBadges(const QString &userID)
+{
+    if (!getSettings()->showBadgesStreamNook)
+    {
+        return;
+    }
+    if (auto badge = StreamNookBadges::instance().getBadge(userID))
+    {
+        this->emplace<BadgeElement>(badge, MessageElementFlag::BadgeStreamNook);
         this->message().externalBadges.emplace_back(badge->name.string);
     }
 }

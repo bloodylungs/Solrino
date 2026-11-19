@@ -3,6 +3,10 @@
 // SPDX-License-Identifier: MIT
 
 #include "controllers/commands/CommandController.hpp"
+#include <QUrl>
+#include <QDesktopServices>
+#include "util/Clipboard.hpp"
+#include "singletons/SolrinoNowPlaying.hpp"
 
 #include "widgets/dialogs/SolrinoWrappedDialog.hpp"
 #include "widgets/splits/Split.hpp"
@@ -774,7 +778,68 @@ CommandController::CommandController(const Paths &paths)
         split->showHiddenPin();
         return "";
     });
-    this->registerCommand("/sharestreak", [](const QStringList &words, ChannelPtr channel) -> QString {
+    this->registerCommand("/cheer", [](const QStringList &words, ChannelPtr channel) -> QString {
+        // "/cheer 100 nice play": Twitch only lets cheers be sent from its own
+        // site, so this gets it ready there
+        bool ok = false;
+        const auto amount = words.value(1).toInt(&ok);
+        if (!ok || amount < 1 || amount > 1000000 || channel == nullptr ||
+            channel->getType() != Channel::Type::Twitch)
+        {
+            if (channel != nullptr)
+            {
+                channel->addSystemMessage(
+                    "Usage: /cheer <amount> [message]. Use it in a Twitch chat.");
+            }
+            return "";
+        }
+        const auto message = words.mid(2).join(' ').trimmed();
+        const auto text = QStringLiteral("Cheer%1%2").arg(
+            QString::number(amount),
+            message.isEmpty() ? QString() : u' ' + message);
+        crossPlatformCopy(text);
+        QDesktopServices::openUrl(QUrl(
+            QStringLiteral("https://www.twitch.tv/popout/%1/chat")
+                .arg(channel->getName())));
+        channel->addSystemMessage(
+            QStringLiteral("Your cheer is copied. Paste it into the Twitch chat "
+                           "that just opened and press Enter to send %1 bits.")
+                .arg(amount));
+        return "";
+    });
+    this->registerCommand("/song", [](const QStringList &words, ChannelPtr channel) -> QString {
+        // "/song" sends what's playing, "/song vibing" adds to it
+        if (channel == nullptr)
+        {
+            return "";
+        }
+        const auto &track = SolrinoNowPlaying::instance().track();
+        if (!getSettings()->solrinoNowPlaying)
+        {
+            channel->addSystemMessage(
+                "Turn on the now playing overlay in Settings > Now Playing to "
+                "use /song.");
+            return "";
+        }
+        if (!track.present)
+        {
+            channel->addSystemMessage("Nothing is playing right now.");
+            return "";
+        }
+        auto text = QStringLiteral("Now playing: %1").arg(track.title);
+        if (!track.artist.isEmpty())
+        {
+            text += QStringLiteral(" by ") + track.artist;
+        }
+        const auto extra = words.mid(1).join(' ').trimmed();
+        if (!extra.isEmpty())
+        {
+            text += QStringLiteral(" - ") + extra;
+        }
+        channel->sendMessage(text);
+        return "";
+    });
+    this->registerCommand("/sharestreak",[](const QStringList &words, ChannelPtr channel) -> QString {
         // "/sharestreak 10 in a row!" shares it with that message
         solrino::shareWatchStreakIn(channel, words.mid(1).join(' '));
         return "";

@@ -23,7 +23,7 @@ namespace chatterino {
 class SolrinoUpdatePrompt : public QWidget
 {
 public:
-    enum class Choice { UpdateNow, UpdateLater, RemindLater };
+    enum class Choice { UpdateNow, UpdateLater, RemindLater, Skip };
 
     /// One line of the update log: kind is "new", "fixed", "removed" or
     /// anything else (shown as "Changed")
@@ -53,7 +53,7 @@ protected:
     void wheelEvent(QWheelEvent *event) override;
 
 private:
-    enum Control { UpdateNow, UpdateLater, RemindLater, Close, ControlCount };
+    enum Control { UpdateNow, UpdateLater, RemindLater, Skip, Close, ControlCount };
 
     int controlAt(const QPointF &position) const;
     void drawButton(QPainter &painter, const QRectF &area, const QString &text,
