@@ -14,6 +14,7 @@ namespace chatterino {
 class Channel;
 struct Message;
 class Split;
+class TwitchChannel;
 
 namespace solrino {
 
@@ -40,6 +41,14 @@ void shareWatchStreakIn(const ChannelPtr &channel, const QString &message);
 /// setting on, sends the shoutout command after a short wait, unless someone
 /// else shouts them out first.
 void shoutoutRaider(const ChannelPtr &channel, const QString &raiderLogin);
+
+/// Owner only, with the Ctrl+3 panel's box ticked: a chat you have open just
+/// went live, so redeem its "First" reward right away.
+void autoRedeemFirst(const std::shared_ptr<TwitchChannel> &channel,
+                     bool initialUpdate);
+/// Checks open offline chats every few seconds while auto-redeem is on, so
+/// going live is noticed quickly.
+void startFirstWatcher();
 
 /// Messages per minute, unique chatters and top emotes for a channel.
 void showChatStats(Split *split);

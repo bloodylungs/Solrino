@@ -15,6 +15,10 @@ int badgeAddedRank(const QString &badge);
 /// belongs on the Other Badges tab instead, as anything added later does.
 int mainBadgeRank(const QString &badge);
 
+/// A badge's place at the top of the Other Badges tab, in the order Solrino
+/// shows them. -1 for the other badges there, which follow A to Z.
+int otherBadgeRank(const QString &badge);
+
 /// Whether the logged in account is Solrino's owner.
 bool canGiveBadges();
 

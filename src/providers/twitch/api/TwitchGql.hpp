@@ -519,6 +519,11 @@ public:
         const QString &login, const QString &oauthToken,
         std::function<void(std::optional<GqlUser>)> successCallback,
         std::function<void(const QString &)> failureCallback);
+    /// The user's profile banner, or an empty string when they have none
+    static void getUserBannerUrl(
+        const QString &userId,
+        std::function<void(const QString &)> successCallback,
+        std::function<void(const QString &)> failureCallback);
     static void followUser(
         const QString &targetId, const QString &oauthToken,
         std::function<void()> successCallback,

@@ -1922,6 +1922,69 @@ void UserInfoPopup::addShortcuts()
         HotkeyCategory::PopupWindow, actions, this);
 }
 
+/// A strip across the top of the usercard with the user's profile banner,
+/// cropped to fill it like Twitch does. Plain black when there isn't one.
+class UsercardBanner : public QWidget
+{
+public:
+    explicit UsercardBanner(QWidget *parent)
+        : QWidget(parent)
+    {
+        this->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+        this->setFixedHeight(100);
+    }
+
+    void setPixmap(QPixmap pixmap)
+    {
+        this->pixmap_ = std::move(pixmap);
+        this->update();
+    }
+
+    // Never makes the card wider than its other content
+    QSize sizeHint() const override
+    {
+        return {1, this->height()};
+    }
+    QSize minimumSizeHint() const override
+    {
+        return {1, this->height()};
+    }
+
+protected:
+    void resizeEvent(QResizeEvent *event) override
+    {
+        QWidget::resizeEvent(event);
+        // About the shape of Twitch's banner strip
+        const auto height = std::clamp(this->width() / 4, 60, 140);
+        if (height != this->height())
+        {
+            this->setFixedHeight(height);
+        }
+    }
+
+    void paintEvent(QPaintEvent * /*event*/) override
+    {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setRenderHint(QPainter::SmoothPixmapTransform);
+        QPainterPath clip;
+        clip.addRoundedRect(QRectF(this->rect()), 8, 8);
+        painter.setClipPath(clip);
+        painter.fillRect(this->rect(), Qt::black);
+        if (!this->pixmap_.isNull())
+        {
+            const auto size = this->pixmap_.size().scaled(
+                this->size(), Qt::KeepAspectRatioByExpanding);
+            QRect target(QPoint(0, 0), size);
+            target.moveCenter(this->rect().center());
+            painter.drawPixmap(target, this->pixmap_);
+        }
+    }
+
+private:
+    QPixmap pixmap_;
+};
+
 UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
     : DraggablePopup(closeAutomatically, split)
     , split_(split)
@@ -1946,6 +2009,10 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
                       .setLayoutType<QGridLayout>()
                       .withoutMargin();
     auto layout = layers.emplace<QVBoxLayout>();
+
+    // The user's banner, above everything else
+    this->banner_ = new UsercardBanner(this);
+    layout->addWidget(this->banner_);
 
     // first line
     auto head = layout.emplace<QHBoxLayout>().withoutMargin();
@@ -3367,6 +3434,8 @@ void UserInfoPopup::resetTargetState()
     this->helixAvatarUrl_.clear();
     this->avatarPixmap_ = {};
     this->ui_.avatarButton->setPixmap({});
+    ++this->bannerRequestGeneration_;
+    this->banner_->setPixmap({});
     this->ui_.liveIndicator->hide();
     this->ui_.localizedNameLabel->hide();
     this->ui_.localizedNameCopyButton->hide();
@@ -4753,6 +4822,7 @@ void UserInfoPopup::updateUserData()
         this->maybeStartUsercardMessageAutoLoad();
         this->helixAvatarUrl_ = user.profileImageUrl;
         this->updateAvatarUrl();
+        this->loadBanner(user.id);
         this->updateNotes();
 
         // copyable button for login name of users with a localized username
@@ -5126,6 +5196,51 @@ void UserInfoPopup::loadAvatar(const QString &userID, const QString &pictureURL,
     {
         this->loadSevenTVAvatar(userID, isKick);
     }
+}
+
+void UserInfoPopup::loadBanner(const QString &userId)
+{
+    const auto generation = ++this->bannerRequestGeneration_;
+    this->banner_->setPixmap({});
+    // Streamer mode hiding avatars hides banners too
+    if (userId.isEmpty() || (getApp()->getStreamerMode()->isEnabled() &&
+                             getSettings()->streamerModeHideUsercardAvatars))
+    {
+        return;
+    }
+
+    QPointer<UserInfoPopup> self = this;
+    TwitchGql::getUserBannerUrl(
+        userId,
+        [self, generation](const QString &bannerUrl) {
+            if (!self || generation != self->bannerRequestGeneration_)
+            {
+                return;
+            }
+            const QUrl url(bannerUrl);
+            if (bannerUrl.isEmpty() || !url.isValid() ||
+                url.scheme() != QStringLiteral("https") || url.host().isEmpty())
+            {
+                return;  // no banner: the strip stays black
+            }
+            NetworkRequest(bannerUrl)
+                .caller(self.data())
+                .timeout(10000)
+                .maximumResponseSize(8 * 1024 * 1024)
+                .onSuccess([self, generation](const NetworkResult &result) {
+                    if (!self || generation != self->bannerRequestGeneration_)
+                    {
+                        return;
+                    }
+                    QPixmap banner;
+                    if (banner.loadFromData(result.getData()))
+                    {
+                        self->banner_->setPixmap(std::move(banner));
+                    }
+                })
+                .execute();
+        },
+        [](const QString & /*error*/) {});
 }
 
 void UserInfoPopup::loadSevenTVAvatar(const QString &userID, bool isKick,

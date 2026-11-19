@@ -1203,8 +1203,11 @@ public:
     /// The command sent for it. {user} becomes the raider's name.
     QStringSetting solrinoRaidShoutoutCommand{"/solrino/raids/shoutoutCommand",
                                               "!so @{user}"};
+    /// Owner only: redeem "First" in open chats the moment they go live
+    BoolSetting solrinoAutoRedeemFirst{"/solrino/owner/autoRedeemFirst", false};
     /// How the Other Badges tab in /vanity is sorted
-    QStringSetting solrinoOtherBadgeSort{"/solrino/vanity/otherBadgeSort", "az"};
+    QStringSetting solrinoOtherBadgeSort{"/solrino/vanity/otherBadgeSort",
+                                         "solrino"};
     /// Predictions started from this PC, with how often, for each channel
     ChatterinoSetting<QStringList> solrinoPredictionUsage = {
         "/solrino/predictions/used", {}};

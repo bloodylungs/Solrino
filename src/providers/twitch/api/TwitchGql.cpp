@@ -2727,6 +2727,50 @@ void TwitchGql::getUserByLogin(
         .execute();
 }
 
+void TwitchGql::getUserBannerUrl(
+    const QString &userId,
+    std::function<void(const QString &)> successCallback,
+    std::function<void(const QString &)> failureCallback)
+{
+    static constexpr char QUERY[] = R"(
+        query SolrinoUserBanner($id: ID!) {
+            user(id: $id) {
+                bannerImageURL
+            }
+        }
+    )";
+
+    QJsonObject variables;
+    variables.insert("id", userId);
+
+    // A public field, so no login is sent with it
+    makeGqlRequest(QUERY, variables, {})
+        .onSuccess([successCallback, failureCallback](
+                       const NetworkResult &result) {
+            const auto root = result.parseJsonValue();
+            if (root.isUndefined() || root.isNull())
+            {
+                failureCallback("Failed to parse GQL response");
+                return;
+            }
+            const auto gqlError = extractFirstGqlErrorMessage(root);
+            if (!gqlError.isEmpty())
+            {
+                failureCallback("Twitch API Error: " + gqlError);
+                return;
+            }
+            successCallback(payloadDataObject(root)
+                                .value("user")
+                                .toObject()
+                                .value("bannerImageURL")
+                                .toString());
+        })
+        .onError([failureCallback](const NetworkResult &result) {
+            failureCallback("Network Error: " + result.formatError());
+        })
+        .execute();
+}
+
 void TwitchGql::followUser(
     const QString &targetId, const QString &oauthToken,
     std::function<void()> successCallback,

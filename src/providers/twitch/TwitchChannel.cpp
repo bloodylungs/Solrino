@@ -55,6 +55,7 @@
 #include "util/QStringHash.hpp"
 #include "util/VectorMessageSink.hpp"
 #include "widgets/dialogs/SettingsDialog.hpp"
+#include "widgets/dialogs/SolrinoTools.hpp"
 #include "widgets/Window.hpp"
 
 #include <IrcConnection>
@@ -1689,6 +1690,8 @@ void TwitchChannel::onLiveStatusChanged(bool isLive, bool isInitialUpdate)
                 channel, title,
                 {MessageFlag::System, MessageFlag::DoNotTriggerNotification}),
             MessageContext::Original);
+
+        solrino::autoRedeemFirst(this->sharedFromThis(), isInitialUpdate);
     }
     else
     {
