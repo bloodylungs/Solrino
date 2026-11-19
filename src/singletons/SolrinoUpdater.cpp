@@ -200,9 +200,10 @@ void SolrinoUpdater::readManifest(const QByteArray &data, bool byUser)
         SolrinoUpdatePrompt::Change change{
             .kind = item["kind"].toString().trimmed().toLower(),
             .title = item["title"].toString().simplified().left(140),
-            .detail = item["detail"].toString().simplified().left(240),
+            .detail = item["detail"].toString().simplified().left(1000),
         };
-        if (!change.title.isEmpty() && this->changes_.size() < 40)
+        // Every change is shown; the list scrolls
+        if (!change.title.isEmpty())
         {
             this->changes_.push_back(change);
         }

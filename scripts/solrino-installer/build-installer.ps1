@@ -92,7 +92,7 @@ $manifest = [ordered]@{ version = $version; sha256 = (Get-FileHash $output -Algo
 
 # Each change for the card's sections: its kind, a short title from the first
 # sentence (without the "New"/"Fixed" word, which the section already says), and
-# the next sentence as detail. Older copies ignore this and show the notes.
+# the rest as detail. Older copies ignore this and show the notes.
 if ($NotesFile) {
     $changes = @()
     foreach ($line in Get-Content $NotesFile -Encoding UTF8) {
@@ -105,7 +105,8 @@ if ($NotesFile) {
         $sentences = [regex]::Split($text, '(?<=[.!?])\s+')
         $title = $sentences[0] -replace '^(New|Added|Add|Fixed|Fix|Removed|Remove)\s+', '' -replace '[.!]$', ''
         if ($title.Length -gt 0) { $title = $title.Substring(0, 1).ToUpper() + $title.Substring(1) }
-        $detail = if ($sentences.Count -gt 1) { $sentences[1] } else { '' }
+        # Everything after the title, not only the next sentence
+        $detail = if ($sentences.Count -gt 1) { ($sentences[1..($sentences.Count - 1)] -join ' ') } else { '' }
         $changes += [ordered]@{ kind = $kind; title = $title; detail = $detail }
     }
     $manifest.changes = $changes
