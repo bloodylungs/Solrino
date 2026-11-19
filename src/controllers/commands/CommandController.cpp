@@ -5,6 +5,7 @@
 #include "controllers/commands/CommandController.hpp"
 
 #include "widgets/dialogs/SolrinoWrappedDialog.hpp"
+#include "widgets/splits/Split.hpp"
 
 #include "Application.hpp"
 #include "common/Channel.hpp"
@@ -757,6 +758,20 @@ CommandController::CommandController(const Paths &paths)
     });
     this->registerCommand("/palette", [](const QStringList &, ChannelPtr) -> QString {
         solrino::showCommandPalette(nullptr);
+        return "";
+    });
+    this->registerCommand("/showpin", [](const QStringList &, ChannelPtr channel) -> QString {
+        // Brings back a pin that was hidden in the chat you're typing in
+        auto *split = solrino::currentSplit();
+        if (split == nullptr || !split->hasHiddenPin())
+        {
+            if (channel != nullptr)
+            {
+                channel->addSystemMessage("There's no hidden pin in this chat.");
+            }
+            return "";
+        }
+        split->showHiddenPin();
         return "";
     });
     this->registerCommand("/sharestreak", [](const QStringList &words, ChannelPtr channel) -> QString {

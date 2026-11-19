@@ -36,6 +36,11 @@ void shareWatchStreak(Split *split, const QString &message = {},
                       bool askForMessage = true);
 void shareWatchStreakIn(const ChannelPtr &channel, const QString &message);
 
+/// Someone raided this channel. For mods and the broadcaster, with the
+/// setting on, sends the shoutout command after a short wait, unless someone
+/// else shouts them out first.
+void shoutoutRaider(const ChannelPtr &channel, const QString &raiderLogin);
+
 /// Messages per minute, unique chatters and top emotes for a channel.
 void showChatStats(Split *split);
 
