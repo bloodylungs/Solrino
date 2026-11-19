@@ -1291,9 +1291,9 @@ void shoutoutRaider(const ChannelPtr &channel, const QString &raiderLogin)
     });
     recent.insert(key, now);
 
-    // Several mods may use Solrino in the same chat. Each waits a different
-    // moment, and whoever goes first is the only one who sends it.
-    const int waitMs = 2000 + int(QRandomGenerator::global()->bounded(3000));
+    // Sent straight away. A shoutout someone already sent in chat still
+    // stops a second one.
+    const int waitMs = 0;
     std::weak_ptr<Channel> weak = channel;
     QTimer::singleShot(waitMs, qApp, [weak, login] {
         auto channel = weak.lock();
@@ -1331,6 +1331,20 @@ void shoutoutRaider(const ChannelPtr &channel, const QString &raiderLogin)
         if (!text.isEmpty())
         {
             channel->sendMessage(text);
+        }
+
+        // Twitch's own shoutout too, in case the channel has no bot for
+        // the command above. Skipped when that command already is one.
+        if (!command.startsWith(QStringLiteral("/shoutout"),
+                                Qt::CaseInsensitive) &&
+            !command.startsWith(QStringLiteral("/so "), Qt::CaseInsensitive))
+        {
+            const auto twitch = getApp()->getCommands()->execCommand(
+                QStringLiteral("/shoutout ") + login, channel, false);
+            if (!twitch.isEmpty())
+            {
+                channel->sendMessage(twitch);
+            }
         }
     });
 }

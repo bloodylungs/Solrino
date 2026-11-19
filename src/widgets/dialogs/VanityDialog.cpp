@@ -33,6 +33,7 @@
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
 #include "widgets/dialogs/SolrinoBadgePanel.hpp"
+#include "widgets/dialogs/SolrinoEmoteBrowser.hpp"
 #include "widgets/dialogs/SolrinoPaintGallery.hpp"
 #include "widgets/buttons/Button.hpp"
 #include "widgets/buttons/SvgButton.hpp"
@@ -2157,6 +2158,25 @@ void VanityDialog::buildUi()
     this->tabs_->setTabToolTip(5, QStringLiteral("Solrino badge"));
     this->tabs_->setTabToolTip(6, QStringLiteral("Solrino username paints"));
     this->tabs_->setTabToolTip(7, QStringLiteral("Badge order and visibility"));
+    // Trending, top and new 7TV emotes to add to your channel
+    this->emoteBrowserPage_ = new SolrinoEmoteBrowser(this->tabs_);
+    this->emoteBrowserPage_->setObjectName(QStringLiteral("VanityTabPage"));
+    this->emoteBrowserPage_->token = [this] {
+        return this->sevenTVToken_.isEmpty()
+                   ? this->storedSevenTVTokenForCurrentAccount()
+                   : this->sevenTVToken_;
+    };
+    this->emoteBrowserPage_->sendToChat = [this](const QString &message) {
+        if (!this->channel_)
+        {
+            return false;
+        }
+        this->channel_->sendMessage(message);
+        return true;
+    };
+    this->tabs_->addTab(this->emoteBrowserPage_, QStringLiteral("7TV Emotes"));
+    this->tabs_->setTabToolTip(
+        8, QStringLiteral("Find trending, popular and new 7TV emotes"));
     this->mainLayout_->addWidget(this->tabs_, 1);
     QObject::connect(this->tabs_, &QTabWidget::currentChanged, this,
                      [this](int) {

@@ -13,6 +13,8 @@
 #include "widgets/buttons/SvgButton.hpp"
 #include "common/Channel.hpp"
 
+#include <QPushButton>
+
 namespace chatterino {
 
 class Split;
@@ -49,6 +51,12 @@ private:
     void updateLayout();
     void updateLabelStyles();
     void openPredictionDialog();
+    /// Shows Pay out and Refund buttons to mods while the prediction is open
+    void updateModButtons();
+    /// First click arms the button, a second click within a few seconds runs
+    /// the command, since paying out or refunding can't be undone
+    void armOrRun(QPushButton *button, const QString &label,
+                  const QString &command);
     QString dismissalKey(
         const TwitchChannel::PredictionEvent &prediction) const;
 
@@ -65,6 +73,11 @@ private:
     QHBoxLayout *topLayout_{};
     QVBoxLayout *contentLayout_{};
     QHBoxLayout *outcomeRowLayout_{};
+    QWidget *modButtons_{};
+    QHBoxLayout *modButtonsLayout_{};
+    /// Which prediction and state the buttons were made for
+    QString modButtonsKey_;
+    QPushButton *armedButton_{};
     Split *split_{};
 
     int headerFontSize_{11};

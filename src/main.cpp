@@ -26,6 +26,9 @@
 #    include "util/MacOsHelpers.h"
 #endif
 
+#include "providers/moltorino/SolrinoPaints.hpp"
+
+#include <QFile>
 #include <QApplication>
 #include <QDir>
 #include <QFileInfo>
@@ -68,6 +71,23 @@ int main(int argc, char **argv)
         std::cerr << "Velopack startup failed: " << error.what() << '\n';
     }
 #endif
+
+    // Writes every Solrino paint to a file for the website's paint try-on:
+    // Solrino.exe --export-solrino-paints paints.json
+    for (int i = 1; i + 1 < argc; ++i)
+    {
+        if (QString::fromLocal8Bit(argv[i]) ==
+            QStringLiteral("--export-solrino-paints"))
+        {
+            QFile file(QString::fromLocal8Bit(argv[i + 1]));
+            if (!file.open(QIODevice::WriteOnly))
+            {
+                return 1;
+            }
+            file.write(exportSolrinoPaintsJson());
+            return 0;
+        }
+    }
 
     bool releaseIdentityRequested = false;
     for (int i = 1; i < argc; ++i)

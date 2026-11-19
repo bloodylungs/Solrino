@@ -1297,6 +1297,8 @@ public:
     /// Twitch channels to open a tab for when they go live
     ChatterinoSetting<QStringList> solrinoAutoOpenChannels = {"/solrino/autoOpen/channels", {}};
     BoolSetting solrinoAutoOpenSwitch{"/solrino/autoOpen/switch", false};
+    /// Also open the stream in the default browser (Chrome, Brave, ...)
+    BoolSetting solrinoAutoOpenBrowser{"/solrino/autoOpen/browser", true};
     BoolSetting solrinoNowPlayingVolumeScroll{"/solrino/nowPlaying/volumeScroll", true};
     /// How many seconds a ping card stays before fading
     QStringSetting solrinoPingSeconds{"/solrino/ping/seconds", "6"};

@@ -1,6 +1,7 @@
 #include "widgets/helper/SolrinoNowPlayingOverlay.hpp"
 
 #include "singletons/Settings.hpp"
+#include "singletons/SolrinoOverlayServer.hpp"
 
 #include <pajlada/signals/signalholder.hpp>
 #include <QDateTime>
@@ -762,9 +763,12 @@ public:
         const auto &track = SolrinoNowPlaying::instance().track();
         const bool popupOnly = getSettings()->solrinoNowPlayingShow.getValue() ==
                                QStringLiteral("change");
+        // While an OBS browser source shows the song, this card steps aside
+        // so it doesn't show twice on stream
         const bool wanted =
             this->moving_ ||
             (getSettings()->solrinoNowPlaying && track.present &&
+             !SolrinoOverlayServer::instance().browserShowing() &&
              !(getSettings()->solrinoNowPlayingHideWhenPaused && !track.playing) &&
              (!popupOnly || this->popupEnd_.isActive()));
         if (!wanted)
@@ -1116,12 +1120,21 @@ void startSolrinoNowPlayingOverlay()
 
     const auto refresh = [] {
         SolrinoNowPlaying::instance().setActive(
-            getSettings()->solrinoNowPlaying.getValue());
+            getSettings()->solrinoNowPlaying.getValue() ||
+            SolrinoOverlayServer::instance().browserShowing());
         if (auto current = overlayInstance())
         {
             current->refresh();
         }
     };
+    // The song for OBS browser sources, on this PC only
+    SolrinoOverlayServer::instance().start();
+    holder.managedConnect(SolrinoOverlayServer::instance().browserChanged, [] {
+        if (auto current = overlayInstance())
+        {
+            current->refresh();
+        }
+    });
     holder.managedConnect(SolrinoNowPlaying::instance().changed, [] {
         if (auto current = overlayInstance())
         {

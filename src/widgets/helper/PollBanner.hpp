@@ -6,6 +6,7 @@
 #include <QHBoxLayout>
 #include <QDateTime>
 #include <QLabel>
+#include <QPushButton>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QVariantAnimation>
@@ -46,6 +47,7 @@ private:
     void updateLabelStyles();
     qint64 remainingPollSeconds() const;
     void openPollDialog();
+    void updateEndButton();
     QString dismissalKey(const TwitchChannel::PollEvent &poll) const;
 
     SvgButton *icon_{};
@@ -53,6 +55,8 @@ private:
     QLabel *titleLabel_{};
     QLabel *summaryLabel_{};
     QWidget *distributionBar_{};
+    /// Lets mods end a running poll with one click
+    QPushButton *endButton_{};
     QLabel *timerLabel_{};
     SvgButton *closeButton_{};
     SvgButton *toggleButton_{};

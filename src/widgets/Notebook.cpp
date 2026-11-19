@@ -3761,3 +3761,19 @@ void SplitNotebook::setLockNotebookLayout(bool value)
 }
 
 }  // namespace chatterino
+
+namespace chatterino {
+
+void Notebook::setAllTabGroupsOpenMenuOnClick(bool openMenu)
+{
+    for (auto &group : this->tabGroups_)
+    {
+        if (group->openMenuOnClick != openMenu)
+        {
+            group->openMenuOnClick = openMenu;
+            this->updateTabGroupHeader(*group);
+        }
+    }
+}
+
+}  // namespace chatterino

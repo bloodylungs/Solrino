@@ -26,6 +26,7 @@
 #    include "singletons/Toasts.hpp"
 #endif
 #include "Application.hpp"
+#include "singletons/WindowManager.hpp"
 #include "controllers/accounts/AccountController.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
 
@@ -1932,14 +1933,14 @@ MoltorinoPage::MoltorinoPage()
         "automatically. If another mod already did, it isn't sent twice.");
     SettingWidget::checkbox("Shout out raiders automatically",
                             s.solrinoAutoShoutoutRaids)
-        ->setTooltip("Sends the command below a few seconds after a raid, in "
+        ->setTooltip("Sends the command below as soon as a raid comes in, in "
                      "channels where you're a mod or the broadcaster.")
         ->addTo(*this->moderationView_);
     SettingWidget::lineEdit("Shoutout command", s.solrinoRaidShoutoutCommand,
                             "!so @{user}")
         ->setTooltip("{user} becomes the raider's name. Use the command your "
-                     "channel's bot listens to, or /shoutout {user} for "
-                     "Twitch's own shoutout.")
+                     "channel's bot listens to. Twitch's own /shoutout is "
+                     "sent as well, in case there's no bot.")
         ->conditionallyEnabledBy(s.solrinoAutoShoutoutRaids)
         ->addTo(*this->moderationView_);
 
@@ -2703,6 +2704,33 @@ MoltorinoPage::MoltorinoPage()
         {{"Expand tabs", "expand"}, {"Open tab list", "menu"}})
         ->setTooltip("You can change this later from the group menu.")
         ->addTo(*view);
+
+    // Switches the groups you already have too, so everything can go back to
+    // one style in one click
+    {
+        auto *row = new QWidget(this);
+        auto *rowLayout = new QHBoxLayout(row);
+        rowLayout->setContentsMargins(0, 0, 0, 0);
+        auto *allExpand = new QPushButton("Make all groups expand tabs", row);
+        auto *allList = new QPushButton("Make all groups open a tab list", row);
+        allExpand->setToolTip(
+            "Every group you have now expands its tabs in the tab bar when "
+            "clicked.");
+        allList->setToolTip("Every group you have now opens a list of its "
+                            "tabs when clicked, like the older style.");
+        QObject::connect(allExpand, &QPushButton::clicked, this, [] {
+            getSettings()->newTabGroupClickAction = QString("expand");
+            getApp()->getWindows()->setAllTabGroupsOpenMenuOnClick(false);
+        });
+        QObject::connect(allList, &QPushButton::clicked, this, [] {
+            getSettings()->newTabGroupClickAction = QString("menu");
+            getApp()->getWindows()->setAllTabGroupsOpenMenuOnClick(true);
+        });
+        rowLayout->addWidget(allExpand);
+        rowLayout->addWidget(allList);
+        rowLayout->addStretch(1);
+        view->addWidget(row);
+    }
 
     view->addTitle("Miscellaneous");
     auto *miscDesc = new SignalLabel(this);

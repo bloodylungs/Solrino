@@ -139,6 +139,7 @@
 
 #include <tuple>
 #include <algorithm>
+#include <cmath>
 #include <array>
 #include <functional>
 #include <memory>
@@ -1940,8 +1941,9 @@ void UserInfoPopup::addShortcuts()
         HotkeyCategory::PopupWindow, actions, this);
 }
 
-/// A strip across the top of the usercard with the user's profile banner,
-/// cropped to fill it like Twitch does. Plain black when there isn't one.
+/// The user's profile banner across the top of the usercard, shown whole:
+/// the strip takes the banner's own shape instead of cropping it. Plain black
+/// at a slim height when there isn't one.
 class UsercardBanner : public QWidget
 {
 public:
@@ -1949,12 +1951,13 @@ public:
         : QWidget(parent)
     {
         this->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-        this->setFixedHeight(100);
+        this->setFixedHeight(80);
     }
 
     void setPixmap(QPixmap pixmap)
     {
         this->pixmap_ = std::move(pixmap);
+        this->fitHeight();
         this->update();
     }
 
@@ -1972,12 +1975,7 @@ protected:
     void resizeEvent(QResizeEvent *event) override
     {
         QWidget::resizeEvent(event);
-        // About the shape of Twitch's banner strip
-        const auto height = std::clamp(this->width() / 4, 60, 140);
-        if (height != this->height())
-        {
-            this->setFixedHeight(height);
-        }
+        this->fitHeight();
     }
 
     void paintEvent(QPaintEvent * /*event*/) override
@@ -1991,8 +1989,9 @@ protected:
         painter.fillRect(this->rect(), Qt::black);
         if (!this->pixmap_.isNull())
         {
-            const auto size = this->pixmap_.size().scaled(
-                this->size(), Qt::KeepAspectRatioByExpanding);
+            // The whole banner, fitted inside; any spare room stays black
+            const auto size = this->pixmap_.size().scaled(this->size(),
+                                                          Qt::KeepAspectRatio);
             QRect target(QPoint(0, 0), size);
             target.moveCenter(this->rect().center());
             painter.drawPixmap(target, this->pixmap_);
@@ -2000,6 +1999,23 @@ protected:
     }
 
 private:
+    void fitHeight()
+    {
+        int height = 80;
+        if (!this->pixmap_.isNull() && this->pixmap_.width() > 0)
+        {
+            // Twitch banners are about 5 wide for every 2 tall
+            height = int(std::lround(qreal(this->width()) *
+                                     this->pixmap_.height() /
+                                     this->pixmap_.width()));
+            height = std::clamp(height, 60, 320);
+        }
+        if (height != this->height())
+        {
+            this->setFixedHeight(height);
+        }
+    }
+
     QPixmap pixmap_;
 };
 

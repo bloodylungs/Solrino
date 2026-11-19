@@ -62,6 +62,10 @@ private:
     Style style_;
 };
 
+/// Every paint's settings and sampled colors as JSON, for the website's
+/// paint try-on. Animated paints are sampled over a few seconds.
+QByteArray exportSolrinoPaintsJson();
+
 class SolrinoPaints
 {
 public:

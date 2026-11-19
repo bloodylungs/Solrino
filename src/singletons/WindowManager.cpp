@@ -478,6 +478,15 @@ void WindowManager::repaintTwitchGifs()
     }
 }
 
+void WindowManager::setAllTabGroupsOpenMenuOnClick(bool openMenu)
+{
+    for (auto *window : this->windows_)
+    {
+        window->getNotebook().setAllTabGroupsOpenMenuOnClick(openMenu);
+    }
+    this->queueSave();
+}
+
 bool WindowManager::isTwitchChannelOpen(const QString &login) const
 {
     bool open = false;

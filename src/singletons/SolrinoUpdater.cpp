@@ -77,6 +77,16 @@ void SolrinoUpdater::start()
         return;
     }
 
+#ifndef Q_OS_WIN
+    // The updater runs the Windows installer. Elsewhere, like on a Mac,
+    // people get new versions from the website instead.
+    this->setState(State::Unavailable,
+                   QStringLiteral("Updates install by themselves on Windows "
+                                  "only. Get the newest version from the "
+                                  "Solrino website."));
+    return;
+#endif
+
     this->setState(State::Idle);
     this->removeOldSetups();
     // Straight away, as soon as the app is running

@@ -6,6 +6,7 @@
 #include "singletons/Settings.hpp"
 
 #include <QDateTime>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QLinearGradient>
 #include <QRadialGradient>
@@ -2155,6 +2156,331 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
             },
     });
 
+    // ---- Snack bar, sky, critters and keepsakes. Ideas picked up from
+    // browsing other paint collections, each drawn fresh for Solrino.
+
+    // Food
+    styles.push_back({
+        .id = u"sunny_side_up"_s,
+        .name = u"Sunny Side Up"_s,
+        .description = u"A golden yolk in the middle of crisp egg white."_s,
+        .color = gradient(colors({"#fffaf0", "#ffd23f", "#ffb000", "#ffd23f",
+                                  "#fffaf0"})),
+        .shadows = {shade(90, 60, 0, 150)},
+        .radial = true,
+    });
+    styles.push_back({
+        .id = u"crispy_bacon"_s,
+        .name = u"Crispy Bacon"_s,
+        .description = u"Wavy strips of red meat and creamy fat."_s,
+        .angle = 90,
+        .stripes = bands({"#b8322a", "#f2c9a8", "#8f1f1a", "#f7dcc4"}),
+        .stripeWidth = 0.55,
+        .shadows = {shade(60, 10, 5)},
+    });
+    styles.push_back({
+        .id = u"kiwi_cut"_s,
+        .name = u"Kiwi Cut"_s,
+        .description = u"Bright green flesh around a pale heart with seeds."_s,
+        .color = twinkle(gradient(colors({"#fff6c8", "#c8f06a", "#6fc23a",
+                                          "#4a7a1f"})),
+                         QColor("#1a1408"), 16),
+        .shadows = {shade(30, 50, 0)},
+        .radial = true,
+    });
+    styles.push_back({
+        .id = u"triple_scoop"_s,
+        .name = u"Triple Scoop"_s,
+        .description = u"Strawberry, vanilla and chocolate ice cream."_s,
+        .angle = 0,
+        .stripes = bands({"#ff9ab5", "#fff1d6", "#7a4a2e"}),
+        .stripeWidth = 1.2,
+        .shadows = {shade(70, 30, 20)},
+    });
+    styles.push_back({
+        .id = u"butter_popcorn"_s,
+        .name = u"Butter Popcorn"_s,
+        .description = u"Fluffy white kernels with buttery gold bits."_s,
+        .animated = true,
+        .color = twinkle(gradient(colors({"#fffdf4", "#fff0c2", "#ffd76a"})),
+                         QColor("#ffb300"), 12),
+        .shadows = {shade(90, 60, 10, 150)},
+    });
+    styles.push_back({
+        .id = u"sour_worm"_s,
+        .name = u"Sour Worm"_s,
+        .description = u"A sugar-dusted gummy wriggling green, orange and pink."_s,
+        .animated = true,
+        .color = twinkle(flow(colors({"#6dff4a", "#ffb03a", "#ff4fa0"}), 0.25,
+                              0.9),
+                         QColor(Qt::white), 20),
+        .shadows = {glow("#80ff4fa0", 3)},
+    });
+    styles.push_back({
+        .id = u"choco_peanut"_s,
+        .name = u"Choco Peanut"_s,
+        .description = u"Milk chocolate around a peanut butter middle."_s,
+        .angle = 90,
+        .color = gradient(colors({"#5a3320", "#c98a4a", "#e8b46a", "#c98a4a",
+                                  "#5a3320"})),
+        .shadows = {shade(30, 15, 5)},
+    });
+    styles.push_back({
+        .id = u"coconut_split"_s,
+        .name = u"Coconut Split"_s,
+        .description = u"Hairy brown shell around snow-white coconut."_s,
+        .color = gradient(colors({"#ffffff", "#f6f2ea", "#e8dccb", "#7a5236",
+                                  "#4a2f1d"})),
+        .shadows = {shade(40, 25, 10)},
+        .radial = true,
+    });
+
+    // Sky and space
+    styles.push_back({
+        .id = u"gas_giant"_s,
+        .name = u"Gas Giant"_s,
+        .description = u"Swirling cream, rust and amber cloud bands."_s,
+        .animated = true,
+        .angle = 90,
+        .color =
+            [palette = colors({"#f3dfc1", "#c9875a", "#e8b77a", "#9a5a3a",
+                               "#f3dfc1"})](qreal x, qreal t) {
+                return blend(palette,
+                             std::clamp(x + (0.06 * std::sin((t * 0.8) + (x * 9))),
+                                        0.0, 1.0));
+            },
+        .shadows = {shade(50, 25, 10)},
+    });
+    styles.push_back({
+        .id = u"ice_giant"_s,
+        .name = u"Ice Giant"_s,
+        .description = u"A cold blue planet with a faint pale ring."_s,
+        .animated = true,
+        .color = glint(colors({"#3a6bff", "#4fb6ff", "#9fe6ff", "#4fb6ff"}),
+                       QColor("#eaf8ff"), 4.5),
+        .shadows = {glow("#703a6bff", 3)},
+    });
+    styles.push_back({
+        .id = u"fallout"_s,
+        .name = u"Fallout"_s,
+        .description = u"A mushroom cloud of orange, ash and hot yellow."_s,
+        .animated = true,
+        .color = flow(colors({"#ffe14a", "#ff7a1f", "#6a5a52", "#ff7a1f"}), 0.2),
+        .shadows = {glow("#90ff7a1f", 4)},
+    });
+    styles.push_back({
+        .id = u"cloud_nine"_s,
+        .name = u"Cloud Nine"_s,
+        .description = u"Fluffy white clouds drifting over a soft blue sky."_s,
+        .animated = true,
+        .color =
+            [](qreal x, qreal t) {
+                const auto sky = mix(QColor("#7ec8ff"), QColor("#b8e2ff"), x);
+                const qreal puff =
+                    std::clamp((swirl(x, t * 0.4) - 0.45) / 0.3, 0.0, 1.0);
+                return mix(sky, QColor(Qt::white), puff * puff * (3 - (2 * puff)));
+            },
+        .shadows = {shade(30, 70, 120, 150)},
+    });
+    styles.push_back({
+        .id = u"storm_front"_s,
+        .name = u"Storm Front"_s,
+        .description = u"Heavy grey clouds lit by a far-off flash."_s,
+        .animated = true,
+        .color =
+            [](qreal x, qreal t) {
+                const auto clouds = mix(QColor("#5a6474"), QColor("#9aa6b8"),
+                                        swirl(x, t * 0.5));
+                return mix(clouds, QColor("#eef4ff"), flash(t, 3) * 0.55);
+            },
+        .shadows = {shade(10, 15, 30)},
+    });
+
+    // Critters
+    styles.push_back({
+        .id = u"tiger_stripe"_s,
+        .name = u"Tiger Stripe"_s,
+        .description = u"Bold black stripes on burning orange."_s,
+        .angle = 70,
+        .stripes = {{0.0, QColor("#ff8a1f")},
+                    {0.68, QColor("#ffa64a")},
+                    {0.68, QColor("#1a120c")},
+                    {1.0, QColor("#1a120c")}},
+        .stripeWidth = 0.5,
+        .shadows = {shade(60, 25, 0)},
+    });
+    styles.push_back({
+        .id = u"dalmatian"_s,
+        .name = u"Dalmatian"_s,
+        .description = u"White fur with scattered black spots."_s,
+        .color = twinkle(gradient(colors({"#ffffff", "#f2f2f2"})),
+                         QColor("#111111"), 9),
+        .shadows = {shade(0, 0, 0, 200)},
+    });
+    styles.push_back({
+        .id = u"koi_pond"_s,
+        .name = u"Koi Pond"_s,
+        .description = u"Orange and white koi gliding through dark water."_s,
+        .animated = true,
+        .color = flow(colors({"#ff6a2e", "#fff4ea", "#ff6a2e", "#1f3a4a"}), 0.15,
+                      0.8),
+        .shadows = {glow("#702e9aff", 3)},
+    });
+    styles.push_back({
+        .id = u"firefly_meadow"_s,
+        .name = u"Firefly Meadow"_s,
+        .description = u"Deep green grass with little lights blinking awake."_s,
+        .animated = true,
+        .color = twinkle(gradient(colors({"#1f5a2e", "#2f7a3a", "#1f5a2e"})),
+                         QColor("#f4ff7a"), 11),
+        .shadows = {glow("#80c8ff3a", 4)},
+    });
+    styles.push_back({
+        .id = u"lobster_red"_s,
+        .name = u"Lobster"_s,
+        .description = u"Shiny cooked-shell red with a warm sheen."_s,
+        .animated = true,
+        .color = glint(colors({"#ff5a3a", "#e0281a", "#b81a12"}),
+                       QColor("#ffd2c4"), 3.4),
+        .shadows = {shade(60, 10, 0)},
+    });
+
+    // Minerals and metal
+    styles.push_back({
+        .id = u"malachite"_s,
+        .name = u"Malachite"_s,
+        .description = u"Swirled rings of deep and bright green stone."_s,
+        .angle = 15,
+        .stripes = bands({"#0b5a3a", "#1f9a5a", "#063d27", "#3fd68a"}),
+        .stripeWidth = 0.3,
+        .shadows = {shade(0, 30, 15)},
+    });
+    styles.push_back({
+        .id = u"bismuth"_s,
+        .name = u"Bismuth"_s,
+        .description = u"Stepped crystal in pink, gold, teal and blue."_s,
+        .animated = true,
+        .color =
+            [palette = colors({"#ff7ad6", "#ffd23f", "#3fe0c8", "#5c7aff"})](
+                qreal x, qreal t) {
+                // Steps instead of a smooth blend, like crystal terraces
+                const qreal stepped = std::floor(((x * 0.9) - (t * 0.1)) * 8) / 8;
+                return blendLoop(palette, stepped);
+            },
+        .shadows = {shade(20, 10, 40)},
+    });
+    styles.push_back({
+        .id = u"brushed_steel"_s,
+        .name = u"Brushed Steel"_s,
+        .description = u"Cool grey metal with fine lines and a dull shine."_s,
+        .animated = true,
+        .color = glint(colors({"#9aa3ad", "#c8cfd6", "#7f8892", "#b8c0c8"}),
+                       QColor("#f2f5f8"), 5),
+        .shadows = {shade(0, 0, 0, 190)},
+    });
+    styles.push_back({
+        .id = u"verdigris"_s,
+        .name = u"Verdigris"_s,
+        .description = u"Old bronze turning sea green at the edges."_s,
+        .color = gradient(colors({"#5fd6b0", "#3a9a7a", "#a8743a", "#3a9a7a",
+                                  "#5fd6b0"})),
+        .shadows = {shade(20, 30, 20)},
+    });
+
+    // Cozy and crafty
+    styles.push_back({
+        .id = u"argyle_knit"_s,
+        .name = u"Argyle Knit"_s,
+        .description = u"A cozy sweater pattern in burgundy and cream."_s,
+        .angle = 45,
+        .stripes = bands({"#8a1f3a", "#f2e2c8", "#2a3a5a", "#f2e2c8"}),
+        .stripeWidth = 0.35,
+        .shadows = {shade(40, 10, 20)},
+    });
+    styles.push_back({
+        .id = u"patchwork"_s,
+        .name = u"Patchwork"_s,
+        .description = u"Quilt squares of mustard, teal, rose and denim."_s,
+        .angle = 0,
+        .stripes = bands({"#e8b13a", "#3aa8a0", "#e86a8a", "#4a6aa8"}),
+        .stripeWidth = 0.6,
+        .shadows = {shade(30, 20, 20)},
+    });
+    styles.push_back({
+        .id = u"beehive"_s,
+        .name = u"Beehive"_s,
+        .description = u"Golden honeycomb glowing in the sun."_s,
+        .animated = true,
+        .color =
+            [](qreal x, qreal t) {
+                // Cells: darker edges, bright middles
+                const qreal cell = std::abs(fract(x * 7) - 0.5) * 2;
+                const auto honey = mix(QColor("#ffd23f"), QColor("#c97a00"), cell);
+                return mix(honey, QColor("#fff2b0"), sheen(x, t, 3.6) * 0.8);
+            },
+        .shadows = {shade(70, 40, 0)},
+    });
+    styles.push_back({
+        .id = u"darkroom"_s,
+        .name = u"Darkroom"_s,
+        .description = u"Safelight red fading into an old photo's sepia."_s,
+        .animated = true,
+        .color =
+            [](qreal x, qreal t) {
+                const auto sepia = mix(QColor("#f2d6a8"), QColor("#8a5a3a"), x);
+                return mix(QColor("#ff2a2a"), sepia, pingpong(t, 7));
+            },
+        .shadows = {shade(40, 0, 0)},
+    });
+    styles.push_back({
+        .id = u"pressed_flowers"_s,
+        .name = u"Pressed Flowers"_s,
+        .description = u"Faded petals of rose, lilac and buttercup."_s,
+        .color = gradient(colors({"#e8a0b0", "#c0a8e0", "#f2e08a", "#e8a0b0"})),
+        .shadows = {shade(60, 30, 50, 140)},
+    });
+    styles.push_back({
+        .id = u"lucky_clover"_s,
+        .name = u"Lucky Clover"_s,
+        .description = u"Four-leaf green with a glint of gold."_s,
+        .animated = true,
+        .color = twinkle(gradient(colors({"#2fbf5a", "#5cdf6a", "#1f9a45"})),
+                         QColor("#ffd23f"), 10),
+        .shadows = {glow("#702fbf5a", 3)},
+    });
+
+    // Little extras
+    styles.push_back({
+        .id = u"birthday_cake"_s,
+        .name = u"Birthday Cake"_s,
+        .description = u"Pink frosting covered in rainbow sprinkles."_s,
+        .animated = true,
+        .color =
+            [](qreal x, qreal t) {
+                const auto frosting = mix(QColor("#ffc4dc"), QColor("#ffe6f0"), x);
+                const qreal cell = std::floor(x * 18);
+                const qreal hit = sparkle(x, t * 0.6, 18);
+                return mix(frosting,
+                           QColor::fromHsvF(float(hash01(cell)), 0.75F, 1.0F),
+                           std::min(1.0, hit * 2.5));
+            },
+        .shadows = {shade(90, 30, 60, 150)},
+    });
+    styles.push_back({
+        .id = u"glass_marble"_s,
+        .name = u"Glass Marble"_s,
+        .description = u"A clear marble with a twist of color glowing inside."_s,
+        .animated = true,
+        .color =
+            [](qreal x, qreal t) {
+                const auto twist = QColor::fromHsvF(float(fract((x * 0.5) + (t * 0.05))),
+                                                    0.65F, 1.0F);
+                return mix(QColor("#dff4ff"), twist, bump(x, 0.5, 0.45) * 0.85);
+            },
+        .shadows = {shade(20, 30, 60)},
+        .radial = true,
+    });
+
     std::vector<std::shared_ptr<SolrinoPaint>> catalog;
     for (auto &style : styles)
     {
@@ -2434,6 +2760,76 @@ void SolrinoPaints::saveOwnPaints() const
     }
     getSettings()->solrinoOwnPaints.setValue(
         QString::fromUtf8(QJsonDocument(saved).toJson(QJsonDocument::Compact)));
+}
+
+}  // namespace chatterino
+
+namespace chatterino {
+
+QByteArray exportSolrinoPaintsJson()
+{
+    // Animated paints: 15 frames a second for 8 seconds, 24 colors a frame.
+    // Still paints: one frame of 32 colors, like the app draws them.
+    constexpr int FPS = 15;
+    constexpr int SECONDS = 8;
+    const auto hex = [](const QColor &color) {
+        return color.alpha() == 255 ? color.name(QColor::HexRgb)
+                                    : color.name(QColor::HexArgb);
+    };
+
+    QJsonArray paints;
+    for (const auto &paint : buildCatalog())
+    {
+        const auto &style = paint->style();
+        QJsonObject out{
+            {"id", style.id},
+            {"name", style.name},
+            {"description", style.description},
+            {"animated", style.animated},
+            {"angle", style.angle},
+            {"spin", style.spin},
+            {"radial", style.radial},
+        };
+        if (!style.stripes.isEmpty())
+        {
+            QJsonArray stops;
+            for (const auto &stop : style.stripes)
+            {
+                stops.append(QJsonArray{stop.first, hex(stop.second)});
+            }
+            out.insert("stripes", stops);
+            out.insert("stripeWidth", style.stripeWidth);
+            out.insert("stripeSpeed", style.stripeSpeed);
+        }
+        else if (style.color)
+        {
+            QJsonArray frames;
+            const int frameCount = style.animated ? FPS * SECONDS : 1;
+            const int samples = style.animated ? 24 : 32;
+            for (int frame = 0; frame < frameCount; ++frame)
+            {
+                const qreal seconds = qreal(frame) / FPS;
+                QJsonArray colors;
+                for (int i = 0; i < samples; ++i)
+                {
+                    colors.append(hex(style.color(qreal(i) / (samples - 1),
+                                                  style.animated ? seconds : 0)));
+                }
+                frames.append(colors);
+            }
+            out.insert("frames", frames);
+            out.insert("fps", FPS);
+        }
+        QJsonArray shadows;
+        for (const auto &shadow : style.shadows)
+        {
+            shadows.append(QJsonArray{shadow.xOffset(), shadow.yOffset(),
+                                      shadow.radius(), hex(shadow.color())});
+        }
+        out.insert("shadows", shadows);
+        paints.append(out);
+    }
+    return QJsonDocument(paints).toJson(QJsonDocument::Compact);
 }
 
 }  // namespace chatterino

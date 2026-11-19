@@ -534,6 +534,8 @@ set(SOURCE_FILES
         singletons/SolrinoAutoOpen.cpp
         singletons/SolrinoAutoOpen.hpp
         singletons/SolrinoNowPlaying.cpp
+        singletons/SolrinoOverlayServer.cpp
+        singletons/SolrinoOverlayServer.hpp
         singletons/SolrinoNowPlaying.hpp
         widgets/helper/SolrinoNowPlayingOverlay.cpp
         widgets/helper/SolrinoNowPlayingOverlay.hpp
@@ -1100,6 +1102,8 @@ set(SOURCE_FILES
         widgets/dialogs/SolrinoBadgePanel.hpp
         widgets/dialogs/SolrinoAnnouncement.cpp
         widgets/dialogs/SolrinoAnnouncement.hpp
+        widgets/dialogs/SolrinoEmoteBrowser.cpp
+        widgets/dialogs/SolrinoEmoteBrowser.hpp
         widgets/dialogs/SolrinoPaintGallery.cpp
         widgets/dialogs/SolrinoPaintGallery.hpp
         widgets/dialogs/SolrinoWrappedDialog.cpp
@@ -1254,7 +1258,7 @@ set(SOURCE_FILES
         )
 
 if (APPLE)
-    set(MACOS_BUNDLE_ICON_FILE "${CMAKE_SOURCE_DIR}/resources/moltorino.icns")
+    set(MACOS_BUNDLE_ICON_FILE "${CMAKE_SOURCE_DIR}/resources/solrino.icns")
     list(APPEND SOURCE_FILES "${MACOS_BUNDLE_ICON_FILE}")
     set_source_files_properties(${MACOS_BUNDLE_ICON_FILE} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 
@@ -1835,12 +1839,12 @@ if (APPLE AND BUILD_APP)
     set_target_properties(${EXECUTABLE_PROJECT} PROPERTIES MACOSX_BUNDLE TRUE)
     set_target_properties(${EXECUTABLE_PROJECT}
         PROPERTIES
-        MACOSX_BUNDLE_BUNDLE_NAME "Moltorino"
-        MACOSX_BUNDLE_GUI_IDENTIFIER "app.moltobenne.moltorino7"
+        MACOSX_BUNDLE_BUNDLE_NAME "Solrino"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "app.solrino.solrino"
         MACOSX_BUNDLE_LONG_VERSION_STRING "${PROJECT_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
-        MACOSX_BUNDLE_ICON_FILE moltorino.icns
+        MACOSX_BUNDLE_ICON_FILE solrino.icns
         )
 endif ()
 

@@ -90,6 +90,8 @@ void run(std::shared_ptr<SolrinoNowPlaying::Worker> worker)
     GlobalSystemMediaTransportControlsSessionManager manager{nullptr};
     QString lastKey;
     QImage lastCover;
+    int coverRefreshes = 0;
+    int coverRetries = 0;
 
     while (worker->running)
     {
@@ -209,13 +211,35 @@ void run(std::shared_ptr<SolrinoNowPlaying::Worker> worker)
                 if (key != lastKey)
                 {
                     lastKey = key;
+                    lastCover = {};
+                    // Spotify often names the new song before its cover is
+                    // ready, or still hands out the old cover for a moment,
+                    // so keep reading it for a few seconds after a change
+                    coverRefreshes = 8;
+                    coverRetries = 40;
+                }
+                if (coverRefreshes > 0 || (lastCover.isNull() && coverRetries > 0))
+                {
+                    if (coverRefreshes > 0)
+                    {
+                        --coverRefreshes;
+                    }
+                    else
+                    {
+                        --coverRetries;
+                    }
                     try
                     {
-                        lastCover = readCover(properties.Thumbnail());
+                        auto cover = readCover(properties.Thumbnail());
+                        // Only a different picture counts, so re-reading
+                        // the same cover doesn't look like a song change
+                        if (!cover.isNull() && cover != lastCover)
+                        {
+                            lastCover = std::move(cover);
+                        }
                     }
                     catch (...)
                     {
-                        lastCover = {};
                     }
                 }
                 track.cover = lastCover;

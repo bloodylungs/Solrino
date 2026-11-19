@@ -135,6 +135,10 @@ public:
     bool shouldSuppressTabGroupAlerts(const Channel *channel) const;
     /// Whether a split in any window shows this Twitch channel
     bool isTwitchChannelOpen(const QString &login) const;
+
+    /// Sets what clicking a tab group does for every group in every window,
+    /// then saves the layout
+    void setAllTabGroupsOpenMenuOnClick(bool openMenu);
     std::span<Window *const> windows() const;
 
     pajlada::Signals::NoArgSignal gifRepaintRequested;

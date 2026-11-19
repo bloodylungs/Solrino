@@ -19,6 +19,8 @@ FRAMES = 90
 FRAME_MS = 33
 # The sizes the app expects for each image of a badge
 SIZES = {"1x": 18, "2x": 36, "3x": 72, "4x": 144}
+# Website-only: full size and higher quality, for sharp screens
+HD = os.environ.get("SOLRINO_BADGES_HD") == "1"
 TAU = 2 * math.pi
 
 # The emblem around the S: shield, sun, diamond or star
@@ -324,25 +326,85 @@ def supporter_plus_plus_alt():
 
 
 def founder():
-    symbol = fill(mark(FREE_SCALE))
-    alpha = free_alpha()
-    grey = rgb("#a8646e")
-    white = rgb("#ffe7dc")
-    amber = rgb("#6b2a34")
+    """The first star: crimson chrome edged in gold, with a white-hot S,
+    a soft glow behind it and glints taking turns at its points."""
+    p = star_parts(FREE_SCALE * 0.94)
+    outer = p["outer"]
+    cover = p["cover"]
+    down, size, thickness = LETTER_FIT[SHAPE]
+    scale = FREE_SCALE * 0.94
+    letter_d = sd_letter(scale, down * scale, thickness * scale, size)
+    rim = np.exp(-((outer + 0.03) / 0.03) ** 2) * cover
+    crimson, deep, rose = rgb("#d4143c"), rgb("#3a0010"), rgb("#ffb0c0")
+    gold_dark, gold_light = rgb("#c27a00"), rgb("#fff1b0")
+    white = rgb("#ffffff")
+    tips = [(0.94 * scale * math.cos(-math.pi / 2 + TAU * i / 5),
+             0.94 * scale * math.sin(-math.pi / 2 + TAU * i / 5) + STAR_DOWN * scale)
+            for i in range(5)]
 
     def run(f):
         phase = TAU * f
-        out = np.ones((MASTER, MASTER, 3), np.float32) * 0.015
-        glowing = np.exp(-(X * X + Y * Y) * 1.3)[..., None]
-        out = out + amber * glowing * (0.45 + 0.2 * math.sin(phase))
-        out = over(out, two_tone(phase, grey, white, stretch=1.1), symbol)
+        breath = 0.75 + 0.25 * math.sin(phase)
+        halo = np.exp(-np.maximum(outer, 0) / 0.1) * (outer > -0.001)
+        light = np.clip(halo * 0.75 * breath, 0, 1)
+        out = empty_canvas() + mix(crimson, gold_light, 0.35) * light[..., None]
+        # Crimson metal body
+        body = chrome(outer, crimson, rose, deep, phase)
+        out = over(out, body, cover)
+        # Gold edge with light running around it
+        edge = two_tone(phase, gold_dark, gold_light, stretch=1.2)
+        out = over(out, edge, rim)
+        out = out + white * (moving_shine(f, 0.18) * cover * 0.28)[..., None]
+        # The S glows white-gold
+        s_cover = fill(letter_d)
+        s_glow = np.exp(-np.maximum(letter_d, 0) / 0.06) * (letter_d > -0.001)
+        out = out + gold_light * (s_glow * (1 - s_cover) * cover * 0.7 * breath)[..., None]
+        out = over(out, mix(gold_light, white, 0.6), s_cover)
+        shine = np.clip(glints(tips, f, 0.16, 0.2), 0, 1)
+        out = over(out, white, shine)
+        alpha = np.clip(np.maximum.reduce([cover, light, shine]), 0, 1)
         return out, alpha
 
     return run
 
 
 def top_donor():
-    return framed(rgb("#c4006b"), rgb("#ff7ac6"), rgb("#ff2e74"), rgb("#ffc46b"), rgb("#e0007a"))
+    """The pink framed star on flowing ribbons of liquid silk in magenta,
+    pink and gold, with a glossy shine rolling across them."""
+    ring = fill(frame_ring())
+    symbol = fill(mark(0.84))
+    frame_dark, frame_light = rgb("#c4006b"), rgb("#ff7ac6")
+    mark_dark, mark_light = rgb("#ff2e74"), rgb("#ffc46b")
+    palette = [rgb("#0e0007"), rgb("#3a0020"), rgb("#a3005a"), rgb("#ffcf6b"),
+               rgb("#a3005a"), rgb("#3a0020"), rgb("#0e0007")]
+    white = rgb("#ffffff")
+
+    def run(f):
+        phase = TAU * f
+        # Long smooth waves running diagonally, like folds of silk
+        field = (Y * 1.6 + X * 0.7 +
+                 0.35 * np.sin(X * 2.4 + phase) +
+                 0.22 * np.sin(Y * 3.1 - phase + 1.3) +
+                 0.12 * np.sin((X - Y) * 4.0 + phase * 2))
+        t = (field * 0.55 + f) % 1.0
+        n = len(palette) - 1
+        pos = t * n
+        i = np.floor(pos).astype(int)
+        frac = (pos - i)[..., None]
+        stack = np.stack(palette)
+        out = stack[i] + (stack[np.minimum(i + 1, n)] - stack[i]) * frac
+        # Glossy highlight on each fold, from how steep the silk is
+        gy, gx = np.gradient(field, PIXEL)
+        light = np.clip(gx * 0.12 - gy * 0.08, 0, 1)
+        out = out + white * (light ** 2 * 0.5)[..., None]
+        out = out * 0.8
+        out = over(out, two_tone(phase, frame_dark, frame_light, stretch=0.8), ring)
+        edge = fill(sd_emblem(0.84, 0.0) - 0.035) * (1 - symbol)
+        out = over(out, np.zeros(3, np.float32), edge * 0.85)
+        out = over(out, two_tone(phase, mark_dark, mark_light, 1.3), symbol)
+        return np.clip(out, 0, 1), PLATE_FILL
+
+    return run
 
 
 def top_donor_alt():
@@ -364,7 +426,40 @@ def top_donor_alt():
 
 
 def developer():
-    return framed(rgb("#5f9e00"), rgb("#d9ff70"), rgb("#7fc400"), rgb("#ecff9e"), rgb("#8fd400"))
+    """The lime framed star on a black backing with bright neon bands that
+    flow and wind like contour lines, in lime, green, teal and yellow."""
+    ring = fill(frame_ring())
+    symbol = fill(mark(0.84))
+    frame_dark, frame_light = rgb("#5f9e00"), rgb("#d9ff70")
+    mark_dark, mark_light = rgb("#7fc400"), rgb("#ecff9e")
+    palette = [rgb("#b6ff00"), rgb("#19e07a"), rgb("#14c8c0"), rgb("#ffe14a")]
+    # Keeps the bands off the star a little, so the S stays easy to read
+    star_clear = smooth(-0.02, 0.12, sd_emblem(0.84, 0.0))
+
+    def run(f):
+        phase = TAU * f
+        # A smooth winding field; its contour lines become the bands
+        field = (np.sin(X * 2.2 + 1.3 * np.sin(Y * 1.7 + phase) + phase) +
+                 np.sin(Y * 2.6 - 1.1 * np.sin(X * 2.0 - phase) - phase) * 0.8 +
+                 np.sin((X + Y) * 1.4 + phase) * 0.5)
+        t = field * 2.2
+        stripe = np.abs(((t % 1.0) - 0.5)) * 2           # 0 at the middle of a band
+        band = smooth(0.62, 0.3, stripe)
+        which = np.floor(t) % len(palette)
+        color = np.zeros((MASTER, MASTER, 3), np.float32)
+        for i, c in enumerate(palette):
+            color = color + c * (which == i)[..., None]
+        glow = smooth(0.95, 0.4, stripe) * 0.25
+        out = np.ones((MASTER, MASTER, 3), np.float32) * 0.01
+        out = out + color * (np.clip(band + glow, 0, 1) * (0.25 + 0.75 * star_clear))[..., None]
+        out = over(out, two_tone(phase, frame_dark, frame_light, stretch=0.8), ring)
+        # A dark outline around the star so it stands off the bright bands
+        outline = fill(sd_emblem(0.84, 0.0) - 0.035) * (1 - symbol)
+        out = over(out, np.zeros(3, np.float32), outline * 0.85)
+        out = over(out, two_tone(phase, mark_dark, mark_light, 1.3), symbol)
+        return out, PLATE_FILL
+
+    return run
 
 
 def contributor():
@@ -388,36 +483,40 @@ def contributor():
 
 
 def obsidian():
-    """A black star, lit around its edge, with a white S glowing at its center."""
-    outer = sd_emblem(FREE_SCALE, 0.0)
+    """Early Supporter: polished black volcanic glass. Deep reflections move
+    across the black, a faint rainbow sheen slides over it like light on
+    obsidian, with a bright silver edge and a glowing white S."""
+    scale = FREE_SCALE * 0.94
+    outer = sd_emblem(scale, 0.0)
     cover = fill(outer)
-    alpha = free_alpha()
     down, size, thickness = LETTER_FIT[SHAPE]
-    letter = sd_letter(FREE_SCALE, down * FREE_SCALE, thickness * FREE_SCALE, size)
-    letter_cover = fill(letter)
-    star_glow = np.exp(-np.maximum(outer, 0) / 0.13) * (outer > -0.001)
-    letter_glow = np.exp(-np.maximum(letter, 0) / 0.075) * (letter > -0.001)
-    rim = np.exp(-((outer + 0.022) / 0.024) ** 2)
-    body = mix(rgb("#17171c"), rgb("#050507"), np.clip((Y + 0.8) / 1.6, 0, 1)[..., None])
-    white = rgb("#ffffff")
-    silver = rgb("#7d8088")
+    letter = sd_letter(scale, down * scale, thickness * scale, size)
+    s_cover = fill(letter)
+    s_glow = np.exp(-np.maximum(letter, 0) / 0.07) * (letter > -0.001)
+    rim = np.exp(-((outer + 0.028) / 0.026) ** 2) * cover
+    halo = np.exp(-np.maximum(outer, 0) / 0.12) * (outer > -0.001)
+    black, deep, glint = rgb("#121218"), rgb("#020203"), rgb("#5a5f70")
+    silver, white = rgb("#8a8f9c"), rgb("#ffffff")
     haze = rgb("#c9d0e0")
 
     def run(f):
         phase = TAU * f
         breath = 0.72 + 0.28 * math.sin(phase)
         out = np.ones((MASTER, MASTER, 3), np.float32) * 0.008
-        out = out + haze * (star_glow * 0.62 * breath)[..., None]
+        out = out + haze * (halo * 0.5 * breath)[..., None]
+        # Glossy black: dark chrome reflections sliding over the surface
+        body = chrome(outer, black, glint, deep, phase)
+        # A thin rainbow sheen, like light catching volcanic glass
+        band = np.exp(-(((X - Y * 0.6) - (-2.0 + 4.0 * (f % 1.0))) / 0.22) ** 2)
+        hue = rainbow((X + Y) * 0.35 + f)
+        body = body + hue * (band * 0.28)[..., None]
         out = over(out, body, cover)
-        # A soft shine crossing the black, then light running around the edge
-        band = np.exp(-(((X + Y * 0.55) - (-2.3 + 4.6 * (f % 1.0))) / 0.3) ** 2)
-        out = out + white * (band * cover * 0.2)[..., None]
         edge = two_tone(phase, silver, white, stretch=1.1)
-        out = out + (edge - out) * (rim * cover * (0.75 + 0.25 * breath))[..., None]
-        # The S burns brightest
-        out = out + white * (letter_glow * (1 - letter_cover) * cover * 0.65 * breath)[..., None]
-        out = over(out, white, letter_cover)
-        return out, alpha
+        out = over(out, edge, rim * (0.8 + 0.2 * breath))
+        out = out + white * (s_glow * (1 - s_cover) * cover * 0.42 * breath)[..., None]
+        out = over(out, white, s_cover)
+        alpha = np.clip(np.maximum(cover, halo * 0.5 * breath), 0, 1)
+        return np.clip(out, 0, 1), alpha
 
     return run
 
@@ -1973,6 +2072,12 @@ def main(output, only=None):
                           duration=FRAME_MS, loop=0, quality=88, method=4,
                           alpha_quality=95, lossless=False)
             sizes.append(f"{label} {os.path.getsize(path) // 1024}KB")
+        if HD:
+            path = os.path.join(folder, "hd.webp")
+            frames[0].save(path, save_all=True, append_images=frames[1:],
+                           duration=FRAME_MS, loop=0, quality=94, method=6,
+                           alpha_quality=100, lossless=False)
+            sizes.append(f"hd {os.path.getsize(path) // 1024}KB")
         print(name, ", ".join(sizes), flush=True)
         rows.append((name, frames))
 

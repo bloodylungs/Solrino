@@ -12,6 +12,7 @@
 #include "widgets/Window.hpp"
 
 #include <QCheckBox>
+#include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QHBoxLayout>
@@ -22,6 +23,7 @@
 #include <QRegularExpression>
 #include <QSet>
 #include <QTimer>
+#include <QUrl>
 #include <QVBoxLayout>
 
 namespace chatterino {
@@ -39,6 +41,15 @@ QSet<QString> &wasLive()
 {
     static QSet<QString> live;
     return live;
+}
+
+/// False until the first check after Solrino starts has come back. Channels
+/// already live then get a tab, but not a browser tab: otherwise every start
+/// of Solrino would open the browser for every live channel.
+bool &checkedOnce()
+{
+    static bool checked = false;
+    return checked;
 }
 
 QStringList chosenChannels()
@@ -101,12 +112,23 @@ void check()
             for (const auto &login : live)
             {
                 // Just went live (or was live when Solrino opened)
-                if (!wasLive().contains(login) && !isOpen(login))
+                if (wasLive().contains(login))
+                {
+                    continue;
+                }
+                if (!isOpen(login))
                 {
                     openTab(login);
                 }
+                if (getSettings()->solrinoAutoOpenBrowser && checkedOnce())
+                {
+                    // The system's default browser, whatever it is
+                    QDesktopServices::openUrl(
+                        QUrl(QStringLiteral("https://www.twitch.tv/") + login));
+                }
             }
             wasLive() = live;
+            checkedOnce() = true;
         },
         [] {
             // Try again next time
@@ -166,6 +188,11 @@ void showSolrinoAutoOpenDialog(QWidget *parent)
     jump->setChecked(getSettings()->solrinoAutoOpenSwitch);
     layout->addWidget(jump);
 
+    auto *browser = new QCheckBox(
+        QStringLiteral("Also open the stream in my browser"));
+    browser->setChecked(getSettings()->solrinoAutoOpenBrowser);
+    layout->addWidget(browser);
+
     auto *buttons =
         new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
     layout->addWidget(buttons);
@@ -196,7 +223,7 @@ void showSolrinoAutoOpenDialog(QWidget *parent)
     QObject::connect(buttons, &QDialogButtonBox::rejected, dialog,
                      &QDialog::reject);
     QObject::connect(buttons, &QDialogButtonBox::accepted, dialog,
-                     [dialog, list, jump] {
+                     [dialog, list, jump, browser] {
                          QStringList channels;
                          for (int i = 0; i < list->count(); ++i)
                          {
@@ -205,6 +232,8 @@ void showSolrinoAutoOpenDialog(QWidget *parent)
                          getSettings()->solrinoAutoOpenChannels = channels;
                          getSettings()->solrinoAutoOpenSwitch =
                              jump->isChecked();
+                         getSettings()->solrinoAutoOpenBrowser =
+                             browser->isChecked();
                          getSettings()->requestSave();
                          dialog->accept();
                          // Check the new list soon, not in a minute

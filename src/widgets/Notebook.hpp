@@ -136,6 +136,10 @@ public:
                                           bool includeNewGroupAction = true);
 
     void refresh();
+
+    /// Sets what clicking every tab group in this notebook does: open a list
+    /// of its tabs (`true`) or expand them in the tab bar (`false`)
+    void setAllTabGroupsOpenMenuOnClick(bool openMenu);
     void scrollTabs(QWheelEvent *event);
 
 protected:

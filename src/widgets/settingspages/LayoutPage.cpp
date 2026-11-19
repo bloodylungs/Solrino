@@ -32,7 +32,7 @@ SolrinoLayoutChoice savedChoice()
 {
     auto *s = getSettings();
     return {
-        .tabs = s->tabDirection.getValue(),
+        .tabs = int(s->tabDirection.getValue()),
         .chatBox = s->solrinoLayoutChatBox.getValue(),
         .logo = s->solrinoLayoutLogo.getValue(),
         .gear = s->solrinoLayoutGear.getValue(),

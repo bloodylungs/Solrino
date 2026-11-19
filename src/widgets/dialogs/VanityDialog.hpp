@@ -46,6 +46,7 @@ std::vector<TwitchBadge> withSelectedTwitchVanityBadge(
 
 class Button;
 class SolrinoPaintGallery;
+class SolrinoEmoteBrowser;
 class SvgButton;
 class TwitchChannel;
 class VanityChoiceGrid;
@@ -206,6 +207,7 @@ private:
     QWidget *sevenTVBadgePage_{};
     QWidget *moltorinoBadgePage_{};
     SolrinoPaintGallery *solrinoPaintPage_{};
+    SolrinoEmoteBrowser *emoteBrowserPage_{};
     QTabWidget *moltorinoBadgeTabs_{};
     QWidget *layoutPage_{};
     QButtonGroup *colorButtons_{};
