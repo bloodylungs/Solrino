@@ -3507,6 +3507,57 @@ void TwitchGql::getModeratorCommentSharingSetting(
         .execute();
 }
 
+void TwitchGql::useChatNotificationToken(
+    const QString &channelLogin, const QString &message,
+    const QString &oauthToken, std::function<void(bool)> successCallback,
+    std::function<void(const QString &)> failureCallback)
+{
+    static const char *query = R"(
+        mutation SolrinoShareWatchStreak(
+            $input: UseChatNotificationTokenInput!
+        ) {
+            useChatNotificationToken(input: $input) {
+                isSuccess
+            }
+        }
+    )";
+
+    QJsonObject input;
+    input.insert(QStringLiteral("channelLogin"), channelLogin);
+    input.insert(QStringLiteral("includeStreak"), true);
+    if (!message.trimmed().isEmpty())
+    {
+        input.insert(QStringLiteral("message"), message.trimmed());
+    }
+    QJsonObject variables;
+    variables.insert(QStringLiteral("input"), input);
+
+    makeInlineGqlRequest(query, variables, oauthToken)
+        .onSuccess([successCallback,
+                    failureCallback](const NetworkResult &result) {
+            const auto root = result.parseJsonValue();
+            if (root.isUndefined() || root.isNull())
+            {
+                failureCallback("Failed to parse GQL response");
+                return;
+            }
+            const auto gqlError = extractFirstGqlErrorMessage(root);
+            if (!gqlError.isEmpty())
+            {
+                failureCallback("Twitch API Error: " + gqlError);
+                return;
+            }
+            const auto payload = payloadDataObject(root)
+                                     .value("useChatNotificationToken")
+                                     .toObject();
+            successCallback(payload.value("isSuccess").toBool(false));
+        })
+        .onError([failureCallback](const NetworkResult &result) {
+            failureCallback("Network Error: " + result.formatError());
+        })
+        .execute();
+}
+
 void TwitchGql::createModeratorComment(
     const QString &channelId, const QString &userId, const QString &text,
     bool shareable, const QString &oauthToken,

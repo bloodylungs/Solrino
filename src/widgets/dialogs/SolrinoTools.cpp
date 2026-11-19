@@ -10,6 +10,8 @@
 #include "messages/Message.hpp"
 #include "messages/MessageElement.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
+#include "providers/twitch/api/TwitchGql.hpp"
+#include "providers/moltorino/MoltorinoAuth.hpp"
 #include "singletons/Fonts.hpp"
 #include "singletons/Paths.hpp"
 #include "singletons/Settings.hpp"
@@ -29,6 +31,7 @@
 
 #include <pajlada/signals/signal.hpp>
 #include <pajlada/signals/signalholder.hpp>
+#include <QInputDialog>
 #include <QApplication>
 #include <QCursor>
 #include <QDateTime>
@@ -956,6 +959,9 @@ protected:
             showSavedMessages(s);
         });
         add("Chat stats", &showChatStats);
+        add("Share watch streak", [](Split *s) {
+            shareWatchStreak(s);
+        });
         add("Solrino Wrapped", [](Split *) {
             SolrinoWrappedDialog::showDialog();
         });
@@ -1222,6 +1228,84 @@ bool hasChannelSound(const QString &channelName)
     return !channelSoundFor(channelName).isEmpty();
 }
 
+void shareWatchStreakIn(const ChannelPtr &channel, const QString &message)
+{
+    auto twitch = std::dynamic_pointer_cast<TwitchChannel>(channel);
+    if (twitch == nullptr)
+    {
+        if (channel != nullptr)
+        {
+            channel->addSystemMessage(
+                "Watch streaks can only be shared in a Twitch channel.");
+        }
+        return;
+    }
+
+    QString authError;
+    const auto auth = MoltorinoAuth::resolveCurrentUserToken(&authError);
+    if (auth.token.isEmpty())
+    {
+        twitch->addSystemMessage(
+            MoltorinoAuth::authRequiredMessage("share your watch streak"));
+        return;
+    }
+
+    std::weak_ptr<Channel> weak = twitch;
+    TwitchGql::useChatNotificationToken(
+        twitch->getName(), message, auth.token,
+        [weak](bool shared) {
+            auto channel = weak.lock();
+            if (channel == nullptr)
+            {
+                return;
+            }
+            if (shared)
+            {
+                // Twitch posts the streak in chat itself, so it shows up there
+                channel->addSystemMessage("Shared your watch streak!");
+            }
+            else
+            {
+                channel->addSystemMessage(
+                    "There's no watch streak to share right now. Twitch "
+                    "gives you one after watching several streams in a row, "
+                    "and it can be shared once per stream.");
+            }
+        },
+        [weak](const QString &error) {
+            if (auto channel = weak.lock())
+            {
+                channel->addSystemMessage(
+                    MoltorinoAuth::normalizeAuthError("share your watch streak",
+                                                      error));
+            }
+        });
+}
+
+void shareWatchStreak(Split *split, const QString &message, bool askForMessage)
+{
+    split = focusedOrGiven(split);
+    if (split == nullptr)
+    {
+        return;
+    }
+    const auto channel = split->getSelectedChannel();
+    QString text = message;
+    if (askForMessage)
+    {
+        bool ok = false;
+        text = QInputDialog::getText(
+            split, "Share your watch streak",
+            "Add a message to go with it (optional):", QLineEdit::Normal,
+            message, &ok);
+        if (!ok)
+        {
+            return;
+        }
+    }
+    shareWatchStreakIn(channel, text);
+}
+
 void showCommandPalette(Split *split)
 {
     (new CommandPalettePopup(focusedOrGiven(split)))->present(split);
@@ -1241,6 +1325,9 @@ void addToolsMenu(QMenu *menu, Split *split)
     });
     tools->addAction("Chat stats", split, [split] {
         showChatStats(split);
+    });
+    tools->addAction("Share watch streak...", split, [split] {
+        shareWatchStreak(split);
     });
     tools->addAction("Solrino Wrapped", split, [] {
         SolrinoWrappedDialog::showDialog();

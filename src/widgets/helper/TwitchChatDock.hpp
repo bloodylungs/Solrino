@@ -15,6 +15,7 @@ class QWidget;
 
 namespace chatterino {
 
+class LabelButton;
 class Split;
 class SplitContainer;
 class Window;
@@ -56,6 +57,9 @@ private:
     void setHidden(bool hidden);
     void showChannelFromTitle();
     void selectChannel(const QString &login);
+    /// The tab bar is hidden while docked, so this lists every tab to switch to
+    void showTabsMenu();
+    void setTabsButtonVisible(bool visible);
 
     void findChat(quintptr browser);
     void onChatFound(const ChatLocation &location);
@@ -91,6 +95,7 @@ private:
     QString channel_;
     QPointer<SplitContainer> addedPage_;
     QPointer<Split> addedSplit_;
+    QPointer<LabelButton> tabsButton_;
     QWidget *previousPage_ = nullptr;
 };
 

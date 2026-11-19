@@ -30,6 +30,12 @@ void showSavedMessages(QWidget *parent);
 /// Quick phrases: saved text sent to the channel you are using.
 void showQuickPhrases(Split *split);
 
+/// Shares your Twitch watch streak in the channel, with an optional message.
+/// With askForMessage, a small box asks for the message first.
+void shareWatchStreak(Split *split, const QString &message = {},
+                      bool askForMessage = true);
+void shareWatchStreakIn(const ChannelPtr &channel, const QString &message);
+
 /// Messages per minute, unique chatters and top emotes for a channel.
 void showChatStats(Split *split);
 

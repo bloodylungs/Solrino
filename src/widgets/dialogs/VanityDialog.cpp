@@ -1935,6 +1935,9 @@ VanityDialog::VanityDialog(std::shared_ptr<TwitchChannel> channel,
     {
         this->managedConnections_.managedConnect(
             provider->badgesUpdated, [this] {
+                // A badge given or taken while this is open shows straight
+                // away, instead of waiting for Vanity to be opened again
+                this->syncAssignedMoltorinoBadges();
                 this->moltorinoBadgeChoicesBuilt_ = false;
                 this->refreshMoltorinoBadgeAvailability();
                 this->populateCurrentTab();
@@ -4938,6 +4941,49 @@ std::vector<MoltorinoSupporterBadge> VanityDialog::moltorinoBadgeCatalog()
     auto *provider = getApp()->getMoltorinoSupporterBadges();
     return provider == nullptr ? std::vector<MoltorinoSupporterBadge>{}
                                : provider->getBadgeCatalog();
+}
+
+void VanityDialog::syncAssignedMoltorinoBadges()
+{
+    auto *provider = getApp()->getMoltorinoSupporterBadges();
+    if (provider == nullptr || !this->moltorinoAssignmentsAuthoritative_ ||
+        this->accountUserId_.isEmpty())
+    {
+        return;
+    }
+
+    // What the server says you own: badges given to you, plus the ones that
+    // belong to everybody right now
+    std::vector<QString> owned;
+    QSet<QString> seen;
+    const auto add = [&](const QString &id) {
+        if (!id.isEmpty() && !seen.contains(id) && owned.size() < 64)
+        {
+            seen.insert(id);
+            owned.push_back(id);
+        }
+    };
+    const auto now = QDateTime::currentDateTimeUtc();
+    for (const auto &badge : provider->getAssignedBadges(this->accountUserId_))
+    {
+        if (!badge.everyoneFrom.isValid())
+        {
+            add(badge.categoryId);
+        }
+    }
+    for (const auto &badge : provider->getBadgeCatalog())
+    {
+        if (badge.everyoneFrom.isValid() && badge.everyoneFrom <= now)
+        {
+            add(badge.categoryId);
+        }
+    }
+    // The list hasn't loaded yet; keep what the server said when this opened
+    if (provider->getBadgeCatalog().empty())
+    {
+        return;
+    }
+    this->assignedMoltorinoBadgeIds_ = std::move(owned);
 }
 
 void VanityDialog::refreshMoltorinoBadgeAvailability()

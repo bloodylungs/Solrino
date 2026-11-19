@@ -24,6 +24,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPointer>
+#include <QSet>
 #include <QScreen>
 #include <QTimer>
 #include <QWidget>
@@ -50,6 +51,9 @@ constexpr int TEXT_LEFT = 84;
 constexpr int SLIDE = 12;
 constexpr int BELOW_WINDOW_TOP = 48;
 
+/// Only Solrino's owner can give badges, so the giver is always them
+const QString GIVER = QStringLiteral("scary");
+
 double easeOutBack(double t)
 {
     t = std::clamp(t, 0.0, 1.0);
@@ -69,7 +73,8 @@ double easeOutCubic(double t)
 class BadgeGiftWindow : public QWidget
 {
 public:
-    BadgeGiftWindow(const MoltorinoSupporterBadge &badge, QWidget *parent)
+    BadgeGiftWindow(const MoltorinoSupporterBadge &badge, QWidget *parent,
+                    bool givenByOwner = false)
         : QWidget(parent, Qt::Tool | Qt::FramelessWindowHint)
         , animate_(getSettings()->solrinoSmoothAnimations)
     {
@@ -79,7 +84,16 @@ public:
         {
             this->name_.remove(0, prefix.size());
         }
-        this->note_ = QStringLiteral("It's free for everyone on Solrino.");
+        if (givenByOwner)
+        {
+            this->heading_ = QStringLiteral("%1 has given you a badge").arg(GIVER);
+            this->note_ = QStringLiteral("Click to wear it.");
+        }
+        else
+        {
+            this->heading_ = QStringLiteral("You got a new badge");
+            this->note_ = QStringLiteral("It's free for everyone on Solrino.");
+        }
 
         this->setAttribute(Qt::WA_TranslucentBackground);
         this->setAttribute(Qt::WA_DeleteOnClose);
@@ -87,9 +101,9 @@ public:
         this->setAttribute(Qt::WA_ShowWithoutActivating);
         this->setMouseTracking(true);
         this->setCursor(Qt::PointingHandCursor);
-        this->setWindowTitle(QStringLiteral("You got a new badge"));
+        this->setWindowTitle(this->heading_);
         this->setAccessibleName(
-            QStringLiteral("You got a new badge: %1").arg(this->name_));
+            QStringLiteral("%1: %2").arg(this->heading_, this->name_));
         this->setToolTip(QStringLiteral("Click to wear it"));
         this->setFixedSize(CARD_WIDTH + SHADOW * 2, CARD_HEIGHT + SHADOW * 2);
 
@@ -216,7 +230,8 @@ protected:
         painter.setPen(QColor(255, 255, 255, 175));
         painter.drawText(QRectF(left, card.top() + 13, width - 18, 18),
                          Qt::AlignLeft | Qt::AlignVCenter,
-                         QStringLiteral("You got a new badge"));
+                         painter.fontMetrics().elidedText(
+                             this->heading_, Qt::ElideRight, int(width - 18)));
 
         auto title = this->font();
         title.setPixelSize(19);
@@ -325,6 +340,7 @@ private:
     }
 
     QString name_;
+    QString heading_;
     QString note_;
     bool animate_ = true;
     bool hovered_ = false;
@@ -341,6 +357,105 @@ QPointer<BadgeGiftWindow> openGift;
 
 void checkForGift();
 
+void openGiftWindow(BadgeGiftWindow *window)
+{
+    openGift = window;
+    QObject::connect(openGift, &QObject::destroyed, qApp, [] {
+        QTimer::singleShot(NEXT_GIFT_MS, qApp, [] {
+            checkForGift();
+        });
+    });
+    openGift->start();
+}
+
+/// A badge given by the owner that this account hasn't been told about yet.
+/// The first check for an account only remembers what it already has, so old
+/// badges don't all pop up at once.
+bool showGivenBadge(const QString &userId, MoltorinoSupporterBadges &provider,
+                    QWidget *parent)
+{
+    // Until the list has loaded, an account would look like it has no badges
+    if (provider.getBadgeCatalog().empty())
+    {
+        return false;
+    }
+
+    const auto now = QDateTime::currentDateTimeUtc();
+    std::vector<MoltorinoSupporterBadge> given;
+    QSet<QString> current;
+    for (const auto &badge : provider.getAssignedBadges(userId))
+    {
+        // Badges for everyone have their own popup
+        if (badge.everyoneFrom.isValid() && badge.everyoneFrom <= now)
+        {
+            continue;
+        }
+        if (!current.contains(badge.categoryId))
+        {
+            current.insert(badge.categoryId);
+            given.push_back(badge);
+        }
+    }
+
+    const auto prefix = userId + u':';
+    const auto checked = prefix + u'*';
+    QStringList others;
+    QSet<QString> known;
+    bool checkedBefore = false;
+    for (const auto &entry : getSettings()->solrinoGivenBadgesSeen.getValue())
+    {
+        if (!entry.startsWith(prefix))
+        {
+            others.append(entry);
+        }
+        else if (entry == checked)
+        {
+            checkedBefore = true;
+        }
+        else
+        {
+            known.insert(entry.mid(prefix.size()));
+        }
+    }
+
+    const MoltorinoSupporterBadge *fresh = nullptr;
+    if (checkedBefore)
+    {
+        for (const auto &badge : given)
+        {
+            if (!known.contains(badge.categoryId))
+            {
+                fresh = &badge;
+                break;
+            }
+        }
+    }
+
+    // Taken-away badges are forgotten, so giving one back pops up again
+    QStringList saved = others;
+    saved.append(checked);
+    for (const auto &id : current)
+    {
+        if (known.contains(id) || !checkedBefore ||
+            (fresh != nullptr && id == fresh->categoryId))
+        {
+            saved.append(prefix + id);
+        }
+    }
+    if (saved != getSettings()->solrinoGivenBadgesSeen.getValue())
+    {
+        getSettings()->solrinoGivenBadgesSeen = saved;
+        getSettings()->requestSave();
+    }
+
+    if (fresh == nullptr)
+    {
+        return false;
+    }
+    openGiftWindow(new BadgeGiftWindow(*fresh, parent, true));
+    return true;
+}
+
 void showGift(const MoltorinoSupporterBadge &badge, QWidget *parent)
 {
     // Counted as soon as it shows, so it can't appear twice even after a crash
@@ -349,13 +464,7 @@ void showGift(const MoltorinoSupporterBadge &badge, QWidget *parent)
     getSettings()->solrinoBadgeGiftsSeen = seen;
     getSettings()->requestSave();
 
-    openGift = new BadgeGiftWindow(badge, parent);
-    QObject::connect(openGift, &QObject::destroyed, qApp, [] {
-        QTimer::singleShot(NEXT_GIFT_MS, qApp, [] {
-            checkForGift();
-        });
-    });
-    openGift->start();
+    openGiftWindow(new BadgeGiftWindow(badge, parent));
 }
 
 void checkForGift()
@@ -369,7 +478,8 @@ void checkForGift()
     {
         return;
     }
-    if (getApp()->getAccounts()->twitch.getCurrent()->isAnon())
+    const auto account = getApp()->getAccounts()->twitch.getCurrent();
+    if (account->isAnon())
     {
         return;
     }
@@ -381,6 +491,12 @@ void checkForGift()
     }
     auto *provider = getApp()->getMoltorinoSupporterBadges();
     if (provider == nullptr)
+    {
+        return;
+    }
+
+    // Badges given personally come first
+    if (showGivenBadge(account->getUserId(), *provider, &window))
     {
         return;
     }

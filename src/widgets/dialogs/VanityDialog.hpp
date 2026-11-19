@@ -145,6 +145,7 @@ private:
     std::vector<MoltorinoSupporterBadge> availableMoltorinoBadges() const;
     std::vector<MoltorinoSupporterBadge> moltorinoBadgeCatalog() const;
     void refreshMoltorinoBadgeAvailability();
+    void syncAssignedMoltorinoBadges();
     void syncEffectiveMoltorinoSelection();
     void useLoadedLayout(const MoltorinoVanityLayout &layout);
     void syncWorkingLayoutFromRows();

@@ -759,6 +759,11 @@ CommandController::CommandController(const Paths &paths)
         solrino::showCommandPalette(nullptr);
         return "";
     });
+    this->registerCommand("/sharestreak", [](const QStringList &words, ChannelPtr channel) -> QString {
+        // "/sharestreak 10 in a row!" shares it with that message
+        solrino::shareWatchStreakIn(channel, words.mid(1).join(' '));
+        return "";
+    });
     this->registerCommand("/wrapped", [](const QStringList &words, ChannelPtr) -> QString {
         // "/wrapped last" or "/wrapped year" opens on that period
         const auto which = words.value(1).toLower();

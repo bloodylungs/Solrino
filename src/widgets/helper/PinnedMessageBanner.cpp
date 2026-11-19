@@ -700,32 +700,45 @@ void PinnedMessageBanner::setPinnedMessage(
         return shared;
     };
 
+    // Hides the banner on this computer only. The message stays pinned for
+    // everyone else, and the banner comes back for the next pin.
+    auto hideHere = [this, identity]() {
+        this->dismissedPinIdentity_ = identity;
+        this->hasPin_ = false;
+        this->countdownTimer_->stop();
+        this->hide();
+        this->dismissed.invoke();
+    };
+
     this->unpinButton_->disconnect();
     this->unpinButton_->setVisible(true);
-    this->connect(this->unpinButton_, &Button::leftClicked,
-                  [this, currentChannel, identity]() {
+    this->connect(this->unpinButton_, &Button::clicked,
+                  [currentChannel, hideHere](Qt::MouseButton button) {
                       const auto channel = currentChannel();
                       if (!channel)
                       {
                           return;
                       }
-                      int action = getSettings()->pinCloseButtonAction;
-                      if (action == 1 && channel->canManagePinnedMessages())
+                      // Right-click always just hides it, even for mods
+                      const bool unpin =
+                          button == Qt::LeftButton &&
+                          getSettings()->pinCloseButtonAction == 1 &&
+                          channel->canManagePinnedMessages();
+                      if (unpin)
                       {
                           channel->unpinMessage();
                       }
-                      else
+                      else if (button == Qt::LeftButton ||
+                               button == Qt::RightButton)
                       {
-                          this->dismissedPinIdentity_ = identity;
-                          this->hasPin_ = false;
-                          this->countdownTimer_->stop();
-                          this->hide();
-                          this->dismissed.invoke();
+                          hideHere();
                       }
                   });
     this->unpinButton_->setToolTip(
         (getSettings()->pinCloseButtonAction == 1 && hasModRights)
-            ? "Unpin message" : "Dismiss");
+            ? "Unpin message for everyone\nRight-click to just hide it for "
+              "you"
+            : "Hide this pin for you");
 
     this->icon_->disconnect();
     if (hasModRights)
@@ -733,7 +746,8 @@ void PinnedMessageBanner::setPinnedMessage(
         this->icon_->setCursor(Qt::PointingHandCursor);
         this->connect(
             this->icon_, &Button::leftClicked,
-            [this, currentChannel, timed = pin->endsAt.has_value()]() {
+            [this, currentChannel, hideHere,
+             timed = pin->endsAt.has_value()]() {
                 const auto channel = currentChannel();
                 if (!channel || !channel->canManagePinnedMessages())
                 {
@@ -742,6 +756,10 @@ void PinnedMessageBanner::setPinnedMessage(
                 auto *menu = new QMenu(this);
                 menu->setAttribute(Qt::WA_DeleteOnClose);
 
+                menu->addAction("Hide for me (keeps it pinned)", this,
+                                [hideHere]() {
+                                    hideHere();
+                                });
                 menu->addAction("Unpin Message", this, [currentChannel]() {
                     if (auto channel = currentChannel();
                         channel && channel->canManagePinnedMessages())

@@ -855,6 +855,9 @@ namespace SolrinoSetup
             double controls = EaseOut((t - 0.4) / 0.5);
             DrawCheckbox(g, controls);
             DrawButton(g, new RectangleF(CardW / 2f - 112, 262, 224, 46), "Install Solrino", controls, delegate { BeginInstall(); });
+
+            // A quiet credit under everything else
+            Centered(g, "Made by scary · a one-person dev team", fontSmall, Fade(Text2, controls * 0.6), 318);
         }
 
         void DrawCheckbox(Graphics g, double alpha)
