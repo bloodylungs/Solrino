@@ -202,7 +202,7 @@ void SolrinoUpdater::readManifest(const QByteArray &data, bool byUser)
             .title = item["title"].toString().simplified().left(140),
             .detail = item["detail"].toString().simplified().left(240),
         };
-        if (!change.title.isEmpty() && this->changes_.size() < 8)
+        if (!change.title.isEmpty() && this->changes_.size() < 40)
         {
             this->changes_.push_back(change);
         }
