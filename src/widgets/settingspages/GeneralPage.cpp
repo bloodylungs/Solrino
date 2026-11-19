@@ -23,6 +23,7 @@
 #include "util/IncognitoBrowser.hpp"
 #include "widgets/BaseWindow.hpp"
 #include "widgets/helper/FontSettingWidget.hpp"
+#include "widgets/helper/SolrinoPing.hpp"
 #include "widgets/settingspages/GeneralPageView.hpp"
 #include "widgets/settingspages/SettingWidget.hpp"
 
@@ -167,6 +168,9 @@ void GeneralPage::initLayout(GeneralPageView &layout)
                      "Use \"Test ping popup\" in the Solrino tools menu to see "
                      "the new size.")
         ->addTo(layout);
+    layout.addButton("Move ping popup", [] {
+        moveSolrinoPingPopup();
+    });
 
     SettingWidget::checkbox("Quick game bar", s.solrinoGameBar)
         ->setTooltip("Small boxes by the chat box with your most used games, "

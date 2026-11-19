@@ -18,6 +18,7 @@
 #include <QGuiApplication>
 #include <QHash>
 #include <QImageReader>
+#include <QKeyEvent>
 #include <QLinearGradient>
 #include <QMouseEvent>
 #include <QPainter>
@@ -782,6 +783,45 @@ private:
     QPointF position_;
 };
 
+/// Where the on-screen cards go. Without a chosen spot it's the corner.
+struct PingPlace {
+    QScreen *screen = nullptr;
+    double x = 1.0;
+    double y = 1.0;
+    bool chosen = false;
+};
+
+PingPlace savedPingPlace()
+{
+    PingPlace place;
+    place.screen = QGuiApplication::primaryScreen();
+    const auto parts = getSettings()->solrinoPingPlace.getValue().split(';');
+    if (parts.size() != 3)
+    {
+        return place;
+    }
+    bool okX = false;
+    bool okY = false;
+    const double x = parts.at(1).toDouble(&okX);
+    const double y = parts.at(2).toDouble(&okY);
+    if (!okX || !okY)
+    {
+        return place;
+    }
+    place.x = std::clamp(x, 0.0, 1.0);
+    place.y = std::clamp(y, 0.0, 1.0);
+    place.chosen = true;
+    // A monitor that's been unplugged gives way to the main one
+    for (auto *screen : QGuiApplication::screens())
+    {
+        if (screen->name() == parts.at(0))
+        {
+            place.screen = screen;
+        }
+    }
+    return place;
+}
+
 /// Keeps cards stacked, and moves chat cards when their chat is resized.
 class PingStack : public QObject
 {
@@ -903,13 +943,39 @@ private:
         std::erase_if(this->screenCards_, [](const auto &c) {
             return c.isNull();
         });
-        // Always your main monitor, whichever one you're using
-        auto *screen = QGuiApplication::primaryScreen();
-        if (screen == nullptr)
+        const auto place = savedPingPlace();
+        if (place.screen == nullptr)
         {
             return;
         }
-        const auto area = screen->availableGeometry();
+        const auto area = place.screen->availableGeometry();
+        if (place.chosen)
+        {
+            // The newest goes where it was put. Older ones move away from the
+            // nearest edge, so the stack stays on screen.
+            const bool upward = place.y >= 0.5;
+            bool first = true;
+            int y = 0;
+            for (auto it = this->screenCards_.rbegin();
+                 it != this->screenCards_.rend(); ++it)
+            {
+                auto *card = it->data();
+                const int shadow = card->scaled(SHADOW);
+                const int width = card->width() - shadow * 2;
+                const int height = card->scaled(CARD_HEIGHT);
+                const int x = area.left() +
+                              int(std::lround(place.x * (area.width() - width)));
+                if (first)
+                {
+                    y = area.top() +
+                        int(std::lround(place.y * (area.height() - height)));
+                    first = false;
+                }
+                card->setTarget({x - shadow, y - shadow});
+                y += upward ? -(height + GAP) : height + GAP;
+            }
+            return;
+        }
         int bottom = area.bottom() - EDGE;
         // Newest at the bottom, in the corner
         for (auto it = this->screenCards_.rbegin();
@@ -927,7 +993,271 @@ private:
     Cards screenCards_;
 };
 
+/// A sample card that can be dragged around, to choose where pings go.
+class PingPlacement : public QWidget
+{
+public:
+    PingPlacement()
+        : QWidget(nullptr, Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint |
+                               Qt::Tool | Qt::NoDropShadowWindowHint)
+        , logo_(QStringLiteral(":/icon.png"))
+        , scale_(chosenScale())
+    {
+        this->setFixedSize(this->scaled(CARD_WIDTH + SHADOW * 2),
+                           this->scaled(CARD_HEIGHT + SHADOW * 2));
+        this->setAttribute(Qt::WA_TranslucentBackground);
+        this->setAttribute(Qt::WA_DeleteOnClose);
+        this->setMouseTracking(true);
+        this->setWindowTitle(QStringLiteral("Move ping popup"));
+        this->setCursor(Qt::SizeAllCursor);
+    }
+
+    void start()
+    {
+        const auto place = savedPingPlace();
+        const auto area = place.screen != nullptr
+                              ? place.screen->availableGeometry()
+                              : QRect(0, 0, 1280, 720);
+        const int shadow = this->scaled(SHADOW);
+        const int width = this->width() - shadow * 2;
+        const int height = this->scaled(CARD_HEIGHT);
+        QPoint spot;
+        if (place.chosen)
+        {
+            spot = {area.left() + int(std::lround(place.x * (area.width() - width))),
+                    area.top() +
+                        int(std::lround(place.y * (area.height() - height)))};
+        }
+        else
+        {
+            spot = {area.right() - EDGE - width, area.bottom() - EDGE - height};
+        }
+        this->move(spot - QPoint(shadow, shadow));
+        this->show();
+        this->raise();
+        this->activateWindow();
+    }
+
+protected:
+    void paintEvent(QPaintEvent * /*event*/) override
+    {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setRenderHint(QPainter::SmoothPixmapTransform);
+        painter.scale(this->scale_, this->scale_);
+
+        const QRectF card(SHADOW, SHADOW, this->width() / this->scale_ - SHADOW * 2,
+                          CARD_HEIGHT);
+        for (int i = SHADOW; i > 0; i -= 2)
+        {
+            QPainterPath shadow;
+            shadow.addRoundedRect(card.adjusted(-i, -i + 3, i, i + 3),
+                                  RADIUS + i, RADIUS + i);
+            painter.fillPath(shadow, QColor(0, 0, 0, 8));
+        }
+        QPainterPath shape;
+        shape.addRoundedRect(card, RADIUS, RADIUS);
+        QLinearGradient background(card.topLeft(), card.bottomLeft());
+        background.setColorAt(0, QColor(46, 16, 19, 248));
+        background.setColorAt(1, QColor(20, 8, 10, 248));
+        painter.fillPath(shape, background);
+        // Dashed edge: this is a stand-in, not a real ping
+        QPen dashed(ACCENT, 1.4, Qt::DashLine);
+        painter.setPen(dashed);
+        painter.setBrush(Qt::NoBrush);
+        painter.drawPath(shape);
+
+        const QRectF logo(card.left() + 16, card.center().y() - PICTURE_SIZE / 2.0,
+                          PICTURE_SIZE, PICTURE_SIZE);
+        painter.drawPixmap(logo, this->logo_, QRectF(this->logo_.rect()));
+
+        const double textLeft = logo.right() + 12;
+        const double textRight = this->buttonRect(Done).left() - 10;
+        painter.setFont(uiFont(14, true));
+        painter.setPen(WHITE);
+        painter.drawText(QRectF(textLeft, card.top() + 16, textRight - textLeft, 22),
+                         Qt::AlignLeft | Qt::AlignVCenter,
+                         QStringLiteral("Pings show up here"));
+        painter.setFont(uiFont(12, false));
+        painter.setPen(MUTED);
+        painter.drawText(QRectF(textLeft, card.top() + 40, textRight - textLeft, 34),
+                         Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap,
+                         QStringLiteral("Drag this anywhere, on any screen."));
+
+        for (const auto which : {Done, Reset})
+        {
+            const auto box = this->buttonRect(which);
+            const bool primary = which == Done;
+            const bool hover = this->hovered_ == which;
+            QPainterPath button;
+            button.addRoundedRect(box, 8, 8);
+            painter.fillPath(button,
+                             primary ? (hover ? ACCENT : RED)
+                                     : QColor(255, 255, 255, hover ? 40 : 18));
+            if (!primary)
+            {
+                painter.setPen(QPen(QColor(255, 255, 255, 60), 1));
+                painter.drawPath(button);
+            }
+            painter.setFont(uiFont(12, true));
+            painter.setPen(Qt::white);
+            painter.drawText(box, Qt::AlignCenter,
+                             primary ? QStringLiteral("Done")
+                                     : QStringLiteral("Reset"));
+        }
+    }
+
+    void mousePressEvent(QMouseEvent *event) override
+    {
+        if (event->button() != Qt::LeftButton)
+        {
+            return;
+        }
+        this->pressed_ = this->buttonAt(event->position());
+        if (this->pressed_ == None)
+        {
+            this->dragging_ = true;
+            this->dragOffset_ = event->globalPosition().toPoint() - this->pos();
+        }
+    }
+
+    void mouseMoveEvent(QMouseEvent *event) override
+    {
+        if (this->dragging_)
+        {
+            this->move(event->globalPosition().toPoint() - this->dragOffset_);
+            return;
+        }
+        const auto over = this->buttonAt(event->position());
+        if (over != this->hovered_)
+        {
+            this->hovered_ = over;
+            this->setCursor(over == None ? Qt::SizeAllCursor
+                                         : Qt::PointingHandCursor);
+            this->update();
+        }
+    }
+
+    void mouseReleaseEvent(QMouseEvent *event) override
+    {
+        if (this->dragging_)
+        {
+            this->dragging_ = false;
+            return;
+        }
+        const auto released = this->buttonAt(event->position());
+        if (released != None && released == this->pressed_)
+        {
+            if (released == Done)
+            {
+                this->save();
+            }
+            else
+            {
+                getSettings()->solrinoPingPlace = QString();
+                getSettings()->requestSave();
+            }
+            this->close();
+        }
+        this->pressed_ = None;
+    }
+
+    void keyPressEvent(QKeyEvent *event) override
+    {
+        if (event->key() == Qt::Key_Escape)
+        {
+            this->close();
+        }
+        else if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
+        {
+            this->save();
+            this->close();
+        }
+    }
+
+private:
+    enum Button { None, Done, Reset };
+
+    int scaled(double value) const
+    {
+        return int(std::lround(value * this->scale_));
+    }
+
+    QRectF buttonRect(Button which) const
+    {
+        const double right = this->width() / this->scale_ - SHADOW - 12;
+        const double top = SHADOW + (which == Done ? 11 : 47);
+        return {right - 70, top, 70, 27};
+    }
+
+    Button buttonAt(const QPointF &position) const
+    {
+        const QPointF point = position / this->scale_;
+        for (const auto which : {Done, Reset})
+        {
+            if (this->buttonRect(which).contains(point))
+            {
+                return which;
+            }
+        }
+        return None;
+    }
+
+    /// Kept as a share of the free space, so it's the same spot after the
+    /// resolution or taskbar changes.
+    void save()
+    {
+        const int shadow = this->scaled(SHADOW);
+        const QRect card(this->pos() + QPoint(shadow, shadow),
+                         QSize(this->width() - shadow * 2,
+                               this->scaled(CARD_HEIGHT)));
+        auto *screen = QGuiApplication::screenAt(card.center());
+        if (screen == nullptr)
+        {
+            screen = this->screen();
+        }
+        if (screen == nullptr)
+        {
+            return;
+        }
+        const auto area = screen->availableGeometry();
+        const auto share = [](int offset, int space) {
+            return space > 0 ? std::clamp(double(offset) / space, 0.0, 1.0)
+                             : 0.0;
+        };
+        const double x = share(card.left() - area.left(),
+                               area.width() - card.width());
+        const double y = share(card.top() - area.top(),
+                               area.height() - card.height());
+        getSettings()->solrinoPingPlace =
+            QStringLiteral("%1;%2;%3")
+                .arg(screen->name(), QString::number(x, 'f', 4),
+                     QString::number(y, 'f', 4));
+        getSettings()->requestSave();
+    }
+
+    QPixmap logo_;
+    double scale_ = 1.0;
+    Button hovered_ = None;
+    Button pressed_ = None;
+    bool dragging_ = false;
+    QPoint dragOffset_;
+};
+
 }  // namespace
+
+void moveSolrinoPingPopup()
+{
+    static QPointer<PingPlacement> open;
+    if (open != nullptr)
+    {
+        open->raise();
+        open->activateWindow();
+        return;
+    }
+    open = new PingPlacement();
+    open->start();
+}
 
 void showSolrinoPing(const QString &sender, const QString &channel,
                      const QString &message, bool isWhisper,

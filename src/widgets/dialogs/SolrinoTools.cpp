@@ -967,6 +967,9 @@ protected:
                             "This is what a ping looks like.", false,
                             channel != nullptr ? channel->getName() : "");
         });
+        add("Move ping popup", [](Split *) {
+            moveSolrinoPingPopup();
+        });
         add("Set alert sound for this channel", &chooseChannelSound);
     }
 

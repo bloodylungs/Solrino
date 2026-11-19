@@ -68,6 +68,8 @@ private:
     void refreshStyle();
     void ensureCreateDraft();
     void startPrediction();
+    void applyTemplate(const PredictionTemplate &predictionTemplate);
+    QWidget *buildMostUsedRow(int controlHeight, const QFont &font);
     bool isBroadcasterView() const;
     bool populatePredictionTemplates(PredictionTemplatePicker *picker);
     void fetchPredictionTemplates(PredictionTemplatePicker *picker);
