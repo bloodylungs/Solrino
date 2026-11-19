@@ -159,6 +159,9 @@ public:
 
     QPalette palette;
     ThemeCustomizationProfile customization;
+    /// Season id ("season-halloween" or "season-winter") whose decorations
+    /// are painted in chats, or empty when the Seasonal theme is not in use
+    QString seasonalDecoration;
 
     void normalizeColor(QColor &color) const;
     void update();

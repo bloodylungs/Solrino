@@ -1926,24 +1926,14 @@ std::optional<ThemeCustomizationProfile> buildThemePalette(
 
 QString currentSeasonThemeId()
 {
-    // Months for the northern half of the world, where most viewers are
-    switch (QDate::currentDate().month())
+    // Only two seasons: spooky Halloween for the half of the year leading up
+    // to October 31, and Winter for the other half
+    const auto month = QDate::currentDate().month();
+    if (month >= 5 && month <= 10)
     {
-        case 12:
-        case 1:
-        case 2:
-            return u"season-winter"_s;
-        case 3:
-        case 4:
-        case 5:
-            return u"season-spring"_s;
-        case 6:
-        case 7:
-        case 8:
-            return u"season-summer"_s;
-        default:
-            return u"season-autumn"_s;
+        return u"season-halloween"_s;
     }
+    return u"season-winter"_s;
 }
 
 std::optional<ThemeCustomizationProfile> builtInCustomizationProfile(
@@ -2008,12 +1998,12 @@ std::optional<ThemeCustomizationProfile> builtInCustomizationProfile(
         profile.interfaceFontSize = 10;
     };
 
-    if (id == u"season-autumn")
+    if (id == u"season-halloween")
     {
-        // Brown leaves and pumpkin orange
-        profile.name = u"Autumn"_s;
-        seasonLook("#140d08", "#1a110a", "#2a1a0f", "#3a2414", "#f6eadc",
-                   "#b89a80", "#e8792b", "#a0522d");
+        // Midnight purple, pumpkin orange and witchy violet
+        profile.name = u"Halloween"_s;
+        seasonLook("#0e0912", "#120b17", "#21142d", "#2e1c3e", "#f4ebf8",
+                   "#ab97b8", "#ff7a1a", "#8a45b5");
     }
     else if (id == u"season-winter")
     {
@@ -2021,20 +2011,6 @@ std::optional<ThemeCustomizationProfile> builtInCustomizationProfile(
         profile.name = u"Winter"_s;
         seasonLook("#0a0f16", "#0d141d", "#16212e", "#213041", "#eaf3fb",
                    "#9fb2c4", "#8fd3ff", "#6f9cc0");
-    }
-    else if (id == u"season-spring")
-    {
-        // New leaves and blossom pink
-        profile.name = u"Spring"_s;
-        seasonLook("#0d120c", "#111810", "#1c2a1b", "#283b26", "#f1f7ec",
-                   "#a6b99f", "#f49ac1", "#8fbf7f");
-    }
-    else if (id == u"season-summer")
-    {
-        // Warm evening water and sunshine yellow
-        profile.name = u"Summer"_s;
-        seasonLook("#0b1213", "#0e1718", "#172628", "#213638", "#f2fbf8",
-                   "#a3c0bb", "#ffc94a", "#3fc1b0");
     }
     else if (id == u"solrino-ember")
     {

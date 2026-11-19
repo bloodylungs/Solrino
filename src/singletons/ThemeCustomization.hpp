@@ -191,7 +191,7 @@ std::optional<ThemeCustomizationProfile> buildThemePalette(
 std::optional<ThemeCustomizationProfile> builtInCustomizationProfile(
     QStringView id);
 
-/// The built-in theme id for today's season, such as "season-autumn"
+/// The built-in theme id for today's season, such as "season-halloween"
 QString currentSeasonThemeId();
 
 QImage loadThemeWallpaper(const QString &source, int maxDimension = 1536);

@@ -49,6 +49,7 @@
 #include "singletons/Resources.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/StreamerMode.hpp"
+#include "singletons/SeasonalDecorations.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/ThemeCustomization.hpp"
 #include "singletons/ThemeVideo.hpp"
@@ -406,6 +407,21 @@ float normalizedBadgeScale(float value)
         return 1.F;
     }
     return std::clamp(value, 0.5F, 2.F);
+}
+
+/// The Seasonal theme paints art behind the messages, so rows must let it show
+/// through instead of covering it with a solid color
+void letSeasonalArtShowThrough(MessageColors &colors, bool isOverlay,
+                               bool transparentBackground)
+{
+    if (isOverlay || transparentBackground ||
+        getTheme()->seasonalDecoration.isEmpty())
+    {
+        return;
+    }
+    colors.regularBg = Qt::transparent;
+    colors.alternateBg.setAlpha(colors.alternateBg.alpha() * 45 / 100);
+    colors.hasTransparency = true;
 }
 
 QString wallpaperKey(const ThemeCustomizationProfile &profile)
@@ -1648,6 +1664,8 @@ ChannelView::ChannelView(InternalCtor /*tag*/, QWidget *parent, Split *split,
 
     this->messageColors_.applyTheme(getTheme(), this->isOverlay_,
                                     getSettings()->overlayBackgroundOpacity);
+    letSeasonalArtShowThrough(this->messageColors_, this->isOverlay_,
+                              this->transparentBackground_);
     this->messagePreferences_.connectSettings(getSettings(),
                                               this->signalHolder_);
 
@@ -2283,6 +2301,8 @@ void ChannelView::themeChangedEvent()
     this->setupHighlightAnimationColors();
     this->messageColors_.applyTheme(getTheme(), this->isOverlay_,
                                     getSettings()->overlayBackgroundOpacity);
+    letSeasonalArtShowThrough(this->messageColors_, this->isOverlay_,
+                              this->transparentBackground_);
     this->wallpaperCacheKey_.clear();
     this->wallpaperPixmap_ = {};
     this->releaseVideoWallpaper();
@@ -5900,6 +5920,14 @@ void ChannelView::paintEvent(QPaintEvent *event)
         {
             painter.fillRect(this->rect(),
                              this->messageColors_.channelBackground);
+        }
+
+        const auto &season = getTheme()->seasonalDecoration;
+        if (!season.isEmpty() && !this->isOverlay_ &&
+            this->split_ != nullptr && this->context_ == Context::None)
+        {
+            paintSeasonalDecorations(painter, this->rect(), season,
+                                     this->scale());
         }
     }
 

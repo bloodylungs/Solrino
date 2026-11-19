@@ -417,6 +417,8 @@ public:
     BoolSetting useCustomBadgeLayouts = {"/appearance/badges/useCustomLayouts",
                                          true};
     QStringSetting sevenTVVanityToken = {"/moltorino/vanity/sevenTVToken", ""};
+    /// JSON object of Twitch login to the Solrino paint worn on this device
+    QStringSetting solrinoOwnPaints = {"/moltorino/vanity/solrinoPaints", ""};
     QStringSetting sevenTVVanityTwitchUserId = {
         "/moltorino/vanity/sevenTVTwitchUserId", ""};
     QStringSetting sevenTVVanityUserId = {"/moltorino/vanity/sevenTVUserId",

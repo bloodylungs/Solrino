@@ -752,6 +752,9 @@ void Theme::update()
 
     this->parseFrom(runtimeTheme, isCustomTheme);
     this->currentThemePath_ = themePath;
+    this->seasonalDecoration = themePath == u"builtin:seasonal"_s
+                                   ? currentSeasonThemeId()
+                                   : QString();
 
     this->currentThemeJson_ = loadedTheme;
 
