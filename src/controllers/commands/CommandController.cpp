@@ -4,6 +4,8 @@
 
 #include "controllers/commands/CommandController.hpp"
 
+#include "widgets/dialogs/SolrinoWrappedDialog.hpp"
+
 #include "Application.hpp"
 #include "common/Channel.hpp"
 #include "controllers/accounts/AccountController.hpp"
@@ -755,6 +757,15 @@ CommandController::CommandController(const Paths &paths)
     });
     this->registerCommand("/palette", [](const QStringList &, ChannelPtr) -> QString {
         solrino::showCommandPalette(nullptr);
+        return "";
+    });
+    this->registerCommand("/wrapped", [](const QStringList &words, ChannelPtr) -> QString {
+        // "/wrapped last" or "/wrapped year" opens on that period
+        const auto which = words.value(1).toLower();
+        SolrinoWrappedDialog::showDialog(
+            which == "last"   ? SolrinoWrappedDialog::Period::LastMonth
+            : which == "year" ? SolrinoWrappedDialog::Period::ThisYear
+                              : SolrinoWrappedDialog::Period::ThisMonth);
         return "";
     });
 

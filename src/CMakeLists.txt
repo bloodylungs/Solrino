@@ -533,6 +533,8 @@ set(SOURCE_FILES
         providers/moltorino/MoltorinoSupporterBadges.hpp
         providers/moltorino/SolrinoPaints.cpp
         providers/moltorino/SolrinoPaints.hpp
+        providers/moltorino/SolrinoWrapped.cpp
+        providers/moltorino/SolrinoWrapped.hpp
         providers/moltorino/MoltorinoUpdater.cpp
         providers/moltorino/MoltorinoUpdater.hpp
 
@@ -1086,6 +1088,8 @@ set(SOURCE_FILES
         widgets/dialogs/SolrinoBadgePanel.hpp
         widgets/dialogs/SolrinoPaintGallery.cpp
         widgets/dialogs/SolrinoPaintGallery.hpp
+        widgets/dialogs/SolrinoWrappedDialog.cpp
+        widgets/dialogs/SolrinoWrappedDialog.hpp
         widgets/dialogs/SolrinoUpdatePrompt.cpp
         widgets/dialogs/SolrinoUpdatePrompt.hpp
         singletons/SolrinoUpdater.cpp

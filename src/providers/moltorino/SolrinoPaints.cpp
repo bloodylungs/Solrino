@@ -8,6 +8,7 @@
 #include <QDateTime>
 #include <QJsonDocument>
 #include <QLinearGradient>
+#include <QRadialGradient>
 #include <QLineF>
 
 #include <algorithm>
@@ -111,15 +112,26 @@ qreal wave(qreal position, qreal seconds, qreal waves = 2, qreal speed = 3)
     return 0.5 + (0.5 * std::sin((position * waves * 6.2832) - (seconds * speed)));
 }
 
-/// Random bright flashes, like lightning
+/// Now and then a soft glow, like distant lightning. It rises and fades over
+/// most of a second rather than snapping on, so it never strobes.
 qreal flash(qreal seconds, qreal seed = 0)
 {
-    const qreal slot = std::floor(seconds * 6);
-    if (hash01(slot + seed) < 0.9)
+    const qreal slot = std::floor(seconds * 0.8);
+    if (hash01(slot + seed) < 0.6)
     {
         return 0;
     }
-    return 1 - fract(seconds * 6);
+    return std::sin(fract(seconds * 0.8) * 3.14159);
+}
+
+/// Eases between random values instead of jumping, so randomness drifts
+qreal smoothRandom(qreal seed, qreal time)
+{
+    const qreal step = std::floor(time);
+    const qreal blend = fract(time);
+    const qreal eased = blend * blend * (3 - (2 * blend));
+    return hash01(seed + step) + ((hash01(seed + step + 1) - hash01(seed + step)) *
+                                  eased);
 }
 
 /// Goes 0 to 1 and back again every `period` seconds, easing at each end
@@ -274,7 +286,7 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
             [palette = colors({"#ffe066", "#ff8a1f", "#ff3d1f", "#ff8a1f"})](
                 qreal x, qreal t) {
                 const auto base = blendLoop(palette, (x * 0.9) + (t * 0.45));
-                const qreal flicker = 0.5 + (0.5 * std::sin((t * 9) + (x * 7)));
+                const qreal flicker = 0.5 + (0.5 * std::sin((t * 4) + (x * 7)));
                 return mix(base, QColor("#fff3b0"), flicker * 0.22);
             },
         .shadows = {glow("#c0ff6a00", 5)},
@@ -609,7 +621,7 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .animated = true,
         .color = twinkle(
             [](qreal x, qreal t) {
-                return QColor::fromHsvF(float(fract((x * 1.4) + (t * 0.9))),
+                return QColor::fromHsvF(float(fract((x * 1.4) + (t * 0.4))),
                                         0.55F, 1.0F);
             },
             QColor(Qt::white), 12),
@@ -655,14 +667,14 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .animated = true,
         .color =
             [](qreal x, qreal t) {
-                const qreal frame = std::floor(t * 10);
+                const qreal frame = std::floor(t * 2.5);
                 const qreal shift = hash01(frame) > 0.7
                                         ? (hash01(frame + 3) - 0.5) * 0.6
                                         : 0.0;
                 const qreal pos = fract(x + shift);
-                if (hash01(std::floor(pos * 9) + frame) > 0.85)
+                if (hash01(std::floor(pos * 9) + frame) > 0.92)
                 {
-                    return QColor(Qt::white);
+                    return QColor("#d8f4ff");
                 }
                 return pos < 0.5 ? QColor("#00f0ff") : QColor("#ff2bd6");
             },
@@ -675,12 +687,11 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .animated = true,
         .color =
             [](qreal x, qreal t) {
-                const bool swap = fract(t * 1.6) < 0.5;
-                const bool left = x < 0.5;
-                const auto lit =
-                    left != swap ? QColor("#ff2e4d") : QColor("#2e7bff");
-                const qreal strobe = fract(t * 6.4) < 0.5 ? 0.35 : 0;
-                return mix(lit, QColor(Qt::white), strobe);
+                // Glides between the two sides instead of switching hard
+                const qreal sweep = pingpong(t, 1.6);
+                const qreal side = std::clamp(((x - sweep) / 0.25) + 0.5, 0.0,
+                                              1.0);
+                return mix(QColor("#ff2e4d"), QColor("#2e7bff"), side);
             },
     });
     styles.push_back({
@@ -690,13 +701,13 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .animated = true,
         .color =
             [](qreal x, qreal t) {
-                const qreal beat = fract(t * 1.1);
+                const qreal beat = fract(t * 0.9);
                 const qreal pulse =
                     std::max(std::exp(-beat * 22),
                              std::exp(-std::abs(beat - 0.22) * 22));
                 const auto base =
                     mix(QColor("#d6123c"), QColor("#ff5c86"), x * 0.6);
-                return mix(base, QColor("#ffd0dc"), pulse * 0.8);
+                return mix(base, QColor("#ffd0dc"), pulse * 0.55);
             },
         .shadows = {glow("#a0ff1e4d", 4)},
     });
@@ -709,7 +720,7 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
             [](qreal x, qreal t) {
                 const qreal cell = std::floor(x * 10);
                 const qreal on =
-                    hash01(cell + std::floor((t * 12) + (hash01(cell) * 5)));
+                    smoothRandom(cell * 7.1, (t * 2.5) + (hash01(cell) * 5));
                 return mix(QColor("#00b85c"), QColor("#b4ffc8"),
                            on * on * 0.9);
             },
@@ -768,7 +779,7 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .stripes = bands({"#ff4fa3", "#fff0f8"}),
         .stripeWidth = 0.3,
         .shadows = {shade(70, 0, 30)},
-        .stripeSpeed = 1.2,
+        .stripeSpeed = 0.7,
     });
     styles.push_back({
         .id = u"barber_pole"_s,
@@ -790,7 +801,7 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .stripes = bands({"#ffe600", "#ff8a00"}),
         .stripeWidth = 0.28,
         .shadows = {shade(40, 25, 0)},
-        .stripeSpeed = 1.5,
+        .stripeSpeed = 0.8,
     });
     styles.push_back({
         .id = u"sunset_drift"_s,
@@ -810,7 +821,7 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
             [palette = colors({"#7b8cff", "#9f7bff", "#5c7aff", "#9f7bff"})](
                 qreal x, qreal t) {
                 return mix(blendLoop(palette, (x * 0.5) - (t * 0.1)),
-                           QColor("#f4f0ff"), flash(t, 2) * 0.95);
+                           QColor("#f4f0ff"), flash(t, 2) * 0.7);
             },
         .shadows = {glow("#909f7bff", 4)},
     });
@@ -926,7 +937,7 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
             [palette = colors({"#fff7a1", "#ffb21f", "#ff4a1f", "#c4002b"})](
                 qreal x, qreal t) {
                 return blend(palette,
-                             x + (0.25 * std::sin((t * 7) + (x * 13))));
+                             x + (0.25 * std::sin((t * 3.5) + (x * 13))));
             },
         .shadows = {glow("#c0ff4a1f", 5)},
     });
@@ -954,7 +965,7 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
                 qreal x, qreal t) {
                 const int bulb = int(std::floor(x * 8));
                 const auto color = palette[size_t(bulb) % palette.size()];
-                const bool lit = (bulb + int(std::floor(t * 4))) % 3 != 0;
+                const bool lit = (bulb + int(std::floor(t * 1.4))) % 3 != 0;
                 return lit ? mix(color, QColor(Qt::white), 0.15)
                            : mix(color, QColor("#2a2a3a"), 0.55);
             },
@@ -986,7 +997,7 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
             [palette = colors({"#ff5c8a", "#ffd23f", "#3fe0d0", "#9b6bff",
                                "#7dff6b"})](qreal x, qreal t) {
                 const qreal cell = std::floor(x * 12);
-                const qreal step = std::floor(t * 5);
+                const qreal step = std::floor(t * 1.2);
                 return palette[size_t(hash01(cell + (step * 13.7)) *
                                       qreal(palette.size())) %
                                palette.size()];
@@ -1025,7 +1036,7 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .color =
             [palette = colors({"#ffe066", "#ffa94d", "#ff6b3d"})](qreal x,
                                                                   qreal t) {
-                const qreal wobble = 0.08 * std::sin((x * 30) + (t * 9));
+                const qreal wobble = 0.08 * std::sin((x * 30) + (t * 4.5));
                 return blend(palette, x + wobble);
             },
     });
@@ -1047,7 +1058,7 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .angle = 90,
         .color =
             [](qreal x, qreal t) {
-                const qreal streak = std::pow(fract((x * 2) - (t * 1.8)), 6);
+                const qreal streak = bump(fract((x * 2) - (t * 0.9)), 0.5, 0.3);
                 return mix(QColor("#6f9cff"), QColor("#e6f3ff"), streak * 0.85);
             },
     });
@@ -1094,12 +1105,12 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .animated = true,
         .color =
             [](qreal x, qreal t) {
-                const qreal slot = std::floor(t * 8);
-                const bool flicker =
-                    hash01(slot) > 0.93 && x > 0.35 && x < 0.75;
-                return flicker ? QColor("#5a2348")
-                               : mix(QColor("#ff4fd8"), QColor("#ffd1f4"),
-                                     0.15);
+                const qreal slot = std::floor(t * 1.5);
+                const qreal dip = hash01(slot) > 0.8 && x > 0.35 && x < 0.75
+                                      ? std::sin(fract(t * 1.5) * 3.14159)
+                                      : 0.0;
+                return mix(mix(QColor("#ff4fd8"), QColor("#ffd1f4"), 0.15),
+                           QColor("#8a3a72"), dip * 0.6);
             },
         .shadows = {glow("#d0ff2bd0", 6)},
     });
@@ -1168,7 +1179,7 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .color =
             [palette = colors({"#3dff7a", "#d4ff3d", "#ff5a3d"})](qreal y,
                                                                   qreal t) {
-                const qreal level = 0.3 + (0.7 * hash01(std::floor(t * 7)));
+                const qreal level = 0.3 + (0.7 * smoothRandom(3.3, t * 2.2));
                 return y > level ? QColor("#3a5a48") : blend(palette, y);
             },
         .shadows = {glow("#703dff7a", 3)},
@@ -1182,7 +1193,7 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .stripes = bands({"#b44cff", "#ff8fe6"}),
         .stripeWidth = 0.25,
         .shadows = {shade(30, 0, 40)},
-        .stripeSpeed = 2.6,
+        .stripeSpeed = 1.1,
     });
     styles.push_back({
         .id = u"zebra_run"_s,
@@ -1259,8 +1270,8 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .color =
             [](qreal x, qreal t) {
                 const qreal grain =
-                    hash01(std::floor(x * 40) + (std::floor(t * 20) * 17.3));
-                return mix(QColor("#7a7a86"), QColor("#ffffff"), grain);
+                    smoothRandom(std::floor(x * 40) * 17.3, t * 2.5);
+                return mix(QColor("#9a9aa6"), QColor("#f2f2f6"), grain);
             },
         .shadows = {shade(0, 0, 0, 200)},
     });
@@ -1273,7 +1284,7 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
             [palette = colors({"#ff3df2", "#3dfff2", "#fff23d", "#3d8bff"})](
                 qreal x, qreal t) {
                 const qreal block = std::floor(x * 5);
-                const int index = int(block + std::floor(t * 3)) %
+                const int index = int(block + std::floor(t * 1.2)) %
                                   int(palette.size());
                 return palette[size_t(index)];
             },
@@ -1298,11 +1309,11 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .animated = true,
         .color =
             [](qreal x, qreal t) {
-                const qreal jolt = hash01(std::floor(x * 14) +
-                                          (std::floor(t * 15) * 5.1));
-                return jolt > 0.8 ? QColor("#ffffff")
-                                  : mix(QColor("#3d7bff"), QColor("#7de8ff"),
-                                        jolt);
+                const qreal jolt =
+                    smoothRandom(std::floor(x * 14) * 5.1, t * 2.5);
+                return mix(mix(QColor("#3d7bff"), QColor("#7de8ff"), jolt),
+                           QColor("#e6f8ff"),
+                           std::max(0.0, (jolt - 0.75) * 3));
             },
         .shadows = {glow("#c03d9bff", 5)},
     });
@@ -1371,7 +1382,7 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .color =
             [](qreal x, qreal t) {
                 const qreal ring =
-                    0.5 + (0.5 * std::sin((std::abs(x - 0.5) * 22) - (t * 6)));
+                    0.5 + (0.5 * std::sin((std::abs(x - 0.5) * 22) - (t * 3.5)));
                 return mix(QColor("#2f8fff"), QColor("#c8f0ff"), ring * ring);
             },
     });
@@ -1382,8 +1393,8 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .animated = true,
         .color =
             [](qreal x, qreal t) {
-                const qreal warp = std::sin((x * 9) + (t * 4)) * 0.35;
-                return QColor::fromHsvF(float(fract((x * 1.3) + warp + t * 0.6)),
+                const qreal warp = std::sin((x * 9) + (t * 1.6)) * 0.35;
+                return QColor::fromHsvF(float(fract((x * 1.3) + warp + t * 0.3)),
                                         1.0F, 1.0F);
             },
     });
@@ -1415,8 +1426,8 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .animated = true,
         .color =
             [](qreal x, qreal t) {
-                const qreal flicker = 0.5 + (0.3 * std::sin(t * 13)) +
-                                      (0.2 * std::sin(t * 7.7 + 1));
+                const qreal flicker = 0.5 + (0.3 * std::sin(t * 5)) +
+                                      (0.2 * std::sin(t * 3.1 + 1));
                 const auto base =
                     mix(QColor("#ffb84d"), QColor("#ffdf8a"), x * 0.5);
                 return mix(base, QColor("#fff6d6"), flicker * 0.4);
@@ -1549,6 +1560,601 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .shadows = {shade(0, 0, 0, 200)},
     });
 
+    // ---- Gentle animated paints: turning gradients, center glows and more.
+    // Everything here moves slowly, with nothing that blinks or strobes.
+
+    // Turning gradients
+    styles.push_back({
+        .id = u"portal"_s,
+        .name = u"Portal"_s,
+        .description = u"Orange and blue swirling around each other."_s,
+        .animated = true,
+        .color = gradient(colors({"#ff9a2e", "#ffd08a", "#8fd0ff", "#2e8fff"})),
+        .shadows = {glow("#702e8fff", 3)},
+        .spin = 55,
+    });
+    styles.push_back({
+        .id = u"hex"_s,
+        .name = u"Hex"_s,
+        .description = u"A slowly turning curse of purple and green."_s,
+        .animated = true,
+        .color = twinkle(gradient(colors({"#b45cff", "#7a5cff", "#5cff9a"})),
+                         QColor("#eaffef"), 9),
+        .shadows = {glow("#80b45cff", 4)},
+        .spin = 35,
+    });
+    styles.push_back({
+        .id = u"lunar_lantern"_s,
+        .name = u"Lunar Lantern"_s,
+        .description = u"Red paper lantern light turning in the night."_s,
+        .animated = true,
+        .color = gradient(colors({"#ffcf5c", "#ff7a4d", "#ff3d5a", "#ffcf5c"})),
+        .shadows = {glow("#90ff5a3d", 4)},
+        .spin = 30,
+    });
+    styles.push_back({
+        .id = u"anodized"_s,
+        .name = u"Anodized"_s,
+        .description = u"Heat-tinted titanium in blue, violet and gold."_s,
+        .animated = true,
+        .color = gradient(colors({"#7fb2ff", "#b28cff", "#ffd27f", "#7fb2ff"})),
+        .shadows = {shade(10, 10, 40, 190)},
+        .spin = 25,
+    });
+    styles.push_back({
+        .id = u"peacock"_s,
+        .name = u"Peacock"_s,
+        .description = u"Teal, sapphire and gold feathers fanning around."_s,
+        .animated = true,
+        .color = gradient(colors({"#3fe0c8", "#2a7bff", "#5cd65c", "#ffd23f"})),
+        .shadows = {shade(0, 20, 30)},
+        .spin = 22,
+    });
+    styles.push_back({
+        .id = u"prismatic"_s,
+        .name = u"Prismatic"_s,
+        .description = u"A rainbow slowly turning like light through glass."_s,
+        .animated = true,
+        .color =
+            [](qreal x, qreal) {
+                return QColor::fromHsvF(float(x * 0.85), 0.6F, 1.0F);
+            },
+        .spin = 40,
+    });
+    styles.push_back({
+        .id = u"royale"_s,
+        .name = u"Royale"_s,
+        .description = u"Royal purple and gold, turning with a glint."_s,
+        .animated = true,
+        .color = glint(colors({"#b07bff", "#ffd36b", "#b07bff"}), QColor(Qt::white),
+                       4.0),
+        .shadows = {shade(40, 10, 60)},
+        .spin = 18,
+    });
+    styles.push_back({
+        .id = u"reflection"_s,
+        .name = u"Reflection"_s,
+        .description = u"A mirror finish catching the room as it turns."_s,
+        .animated = true,
+        .color = gradient(colors({"#ffffff", "#9aa8b4", "#e6edf2", "#7a8894",
+                                  "#ffffff"})),
+        .shadows = {shade(0, 0, 0, 200)},
+        .spin = 32,
+    });
+    styles.push_back({
+        .id = u"catseye"_s,
+        .name = u"Cat's Eye"_s,
+        .description = u"A gold band shifting across green, like a gemstone."_s,
+        .animated = true,
+        .angle = 90,
+        .color =
+            [](qreal x, qreal t) {
+                const qreal band = bump(x, 0.5 + (0.25 * std::sin(t * 0.9)), 0.3);
+                return mix(QColor("#3fbf6b"), QColor("#ffe58a"), band);
+            },
+        .shadows = {shade(0, 30, 10)},
+        .spin = 8,
+    });
+
+    // Center glows
+    styles.push_back({
+        .id = u"celestial"_s,
+        .name = u"Celestial"_s,
+        .description = u"Starlight glowing from the heart of your name."_s,
+        .animated = true,
+        .color =
+            [palette = colors({"#ffffff", "#bfe0ff", "#7f9cff", "#a87bff"})](
+                qreal r, qreal t) {
+                const qreal reach = 0.35 + (0.15 * pingpong(t, 3.5));
+                return blend(palette, r / (reach * 2));
+            },
+        .shadows = {glow("#807f9cff", 4)},
+        .radial = true,
+    });
+    styles.push_back({
+        .id = u"eclipse"_s,
+        .name = u"Eclipse"_s,
+        .description = u"A dark middle with a golden corona around it."_s,
+        .animated = true,
+        .color =
+            [](qreal r, qreal t) {
+                const qreal ring = 0.45 + (0.08 * std::sin(t * 1.2));
+                return mix(QColor("#8a7aa8"), QColor("#ffd27f"),
+                           bump(r, ring, 0.3));
+            },
+        .shadows = {glow("#90ffb43f", 4)},
+        .radial = true,
+    });
+    styles.push_back({
+        .id = u"ultraviolet"_s,
+        .name = u"Ultraviolet"_s,
+        .description = u"Black-light violet glowing out from the middle."_s,
+        .animated = true,
+        .color =
+            [](qreal r, qreal t) {
+                const qreal glowAmount = 0.75 + (0.25 * pingpong(t, 2.8));
+                return mix(QColor("#7a3dff"), QColor("#f0c8ff"),
+                           std::max(0.0, 1 - r * 1.6) * glowAmount);
+            },
+        .shadows = {glow("#b07a3dff", 6)},
+        .radial = true,
+    });
+    styles.push_back({
+        .id = u"sunflower"_s,
+        .name = u"Sunflower"_s,
+        .description = u"A golden bloom opening from the center."_s,
+        .animated = true,
+        .color =
+            [palette = colors({"#ffb84d", "#ffe14d", "#ffcf3f", "#ff9f3f"})](
+                qreal r, qreal t) {
+                return blendLoop(palette, (r * 0.8) - (t * 0.12));
+            },
+        .shadows = {shade(70, 40, 0)},
+        .radial = true,
+    });
+    styles.push_back({
+        .id = u"magma_pool"_s,
+        .name = u"Magma Pool"_s,
+        .description = u"Churning molten rock, hottest in the middle."_s,
+        .animated = true,
+        .color =
+            [palette = colors({"#fff36b", "#ff9a1f", "#ff3d1f", "#b3122c"})](
+                qreal r, qreal t) {
+                const qreal heat = std::clamp(r + (0.18 * (swirl(r, t) - 0.5)),
+                                              0.0, 1.0);
+                return blend(palette, heat);
+            },
+        .shadows = {glow("#a0ff3d1f", 4)},
+        .radial = true,
+    });
+    styles.push_back({
+        .id = u"abyss"_s,
+        .name = u"Abyss"_s,
+        .description = u"Something glowing deep in dark water."_s,
+        .animated = true,
+        .color =
+            [](qreal r, qreal t) {
+                const qreal light = std::max(0.0, 1 - (r * 2)) *
+                                    (0.6 + (0.4 * pingpong(t, 4)));
+                return mix(QColor("#3d5cbf"), QColor("#7dfff0"), light);
+            },
+        .shadows = {glow("#803d5cbf", 4)},
+        .radial = true,
+    });
+    styles.push_back({
+        .id = u"luminary"_s,
+        .name = u"Luminary"_s,
+        .description = u"Warm gold light breathing from the middle."_s,
+        .animated = true,
+        .color =
+            [](qreal r, qreal t) {
+                const qreal reach = 0.5 + (0.2 * pingpong(t, 3));
+                return mix(QColor("#fff6d6"), QColor("#e8a23f"),
+                           std::clamp(r / reach, 0.0, 1.0));
+            },
+        .shadows = {glow("#a0ffd27f", 5)},
+        .radial = true,
+    });
+    styles.push_back({
+        .id = u"nightbloom"_s,
+        .name = u"Nightbloom"_s,
+        .description = u"Magenta petals unfolding from the center."_s,
+        .animated = true,
+        .color =
+            [](qreal r, qreal t) {
+                return blendLoop(colors({"#ff5cc8", "#c25cff", "#ff8fd6",
+                                         "#8f5cff"}),
+                                 r - (t * 0.18));
+            },
+        .shadows = {glow("#80ff5cc8", 4)},
+        .radial = true,
+    });
+    styles.push_back({
+        .id = u"psychic"_s,
+        .name = u"Psychic"_s,
+        .description = u"Pink mind waves rippling out from the middle."_s,
+        .animated = true,
+        .color =
+            [](qreal r, qreal t) {
+                const qreal ring = 0.5 + (0.5 * std::sin((r * 12) - (t * 2.2)));
+                return mix(QColor("#d65cff"), QColor("#ffc8f4"), ring);
+            },
+        .shadows = {glow("#90d65cff", 4)},
+        .radial = true,
+    });
+
+    // Drifting and flowing
+    styles.push_back({
+        .id = u"tinsel"_s,
+        .name = u"Tinsel"_s,
+        .description = u"Silver and gold garland glinting softly."_s,
+        .animated = true,
+        .color = twinkle(flow(colors({"#e6ecf2", "#ffd27f", "#c8d2dc",
+                                      "#ffe9a8"}),
+                              0.15, 1.2),
+                         QColor(Qt::white), 18),
+        .shadows = {shade(40, 30, 0)},
+    });
+    styles.push_back({
+        .id = u"honey_drip"_s,
+        .name = u"Honey Drip"_s,
+        .description = u"Thick golden honey slowly running down."_s,
+        .animated = true,
+        .angle = 90,
+        .color = flow(colors({"#ffe08a", "#ffb72e", "#e8941f", "#ffc94d"}),
+                      -0.18, 1.0),
+        .shadows = {shade(70, 40, 0)},
+    });
+    styles.push_back({
+        .id = u"slushie"_s,
+        .name = u"Slushie"_s,
+        .description = u"Cherry and blue raspberry layers mixing together."_s,
+        .animated = true,
+        .angle = 90,
+        .color = flow(colors({"#ff5c7a", "#c25cff", "#5c9cff", "#c25cff"}),
+                      0.12, 0.9),
+    });
+    styles.push_back({
+        .id = u"jellybean"_s,
+        .name = u"Jellybean"_s,
+        .description = u"Bouncy candy colors rolling back and forth."_s,
+        .animated = true,
+        .color =
+            [palette = colors({"#ff8fab", "#ffd36b", "#8fe88a", "#8fc8ff",
+                               "#d08fff"})](qreal x, qreal t) {
+                return blend(palette, std::clamp(x + ((pingpong(t, 3.2) - 0.5) *
+                                                      0.6),
+                                                 0.0, 1.0));
+            },
+    });
+    styles.push_back({
+        .id = u"frutiger_aero"_s,
+        .name = u"Frutiger Aero"_s,
+        .description = u"Glossy sky blue and fresh green, like 2008."_s,
+        .animated = true,
+        .color =
+            [palette = colors({"#5cc8ff", "#3fd6c8", "#8ae86b"})](qreal x,
+                                                                   qreal t) {
+                return mix(blend(palette, x), QColor(Qt::white),
+                           sheen(x, t, 4.5) * 0.9);
+            },
+        .shadows = {shade(0, 30, 60)},
+    });
+    styles.push_back({
+        .id = u"mana_potion"_s,
+        .name = u"Mana Potion"_s,
+        .description = u"Swirling blue magic with floating sparks."_s,
+        .animated = true,
+        .color = twinkle(
+            [](qreal x, qreal t) {
+                return mix(QColor("#3d6bff"), QColor("#5cd6ff"), swirl(x, t * 0.7));
+            },
+            QColor("#e6f6ff"), 11),
+        .shadows = {glow("#903d6bff", 4)},
+    });
+    styles.push_back({
+        .id = u"sixties"_s,
+        .name = u"Sixties"_s,
+        .description = u"Groovy orange, mustard and teal stripes rolling by."_s,
+        .animated = true,
+        .angle = 0,
+        .stripes = bands({"#ff8a3d", "#ffd23f", "#3fc8b4"}),
+        .stripeWidth = 0.7,
+        .shadows = {shade(40, 20, 0)},
+        .stripeSpeed = 0.35,
+    });
+    styles.push_back({
+        .id = u"wavy"_s,
+        .name = u"Wavy"_s,
+        .description = u"Soft waves of pink rolling through purple."_s,
+        .animated = true,
+        .color =
+            [](qreal x, qreal t) {
+                return mix(QColor("#9b6bff"), QColor("#ff9fe0"),
+                           wave(x, t, 1.5, 1.6));
+            },
+    });
+    styles.push_back({
+        .id = u"whisper"_s,
+        .name = u"Whisper"_s,
+        .description = u"The faintest pastels drifting by."_s,
+        .animated = true,
+        .color = flow(colors({"#f4ecff", "#e6f4ff", "#fff0f6", "#eefff6"}), 0.08,
+                      0.6),
+        .shadows = {shade(40, 30, 60, 190)},
+    });
+    styles.push_back({
+        .id = u"blizzard"_s,
+        .name = u"Blizzard"_s,
+        .description = u"White-out snow drifting across ice."_s,
+        .animated = true,
+        .color = twinkle(flow(colors({"#ffffff", "#d6efff", "#b8e0ff"}), 0.2,
+                              0.8),
+                         QColor(Qt::white), 26),
+        .shadows = {shade(20, 50, 90, 190)},
+    });
+    styles.push_back({
+        .id = u"nightclub"_s,
+        .name = u"Nightclub"_s,
+        .description = u"Club lights washing over the dance floor."_s,
+        .animated = true,
+        .color = flow(colors({"#ff3df2", "#3d8bff", "#8f3dff", "#3dfff2"}), 0.25,
+                      0.8),
+        .shadows = {glow("#90ff3df2", 4)},
+    });
+    styles.push_back({
+        .id = u"clownfish"_s,
+        .name = u"Clownfish"_s,
+        .description = u"Orange and white stripes swimming along."_s,
+        .animated = true,
+        .angle = 0,
+        .stripes = bands({"#ff8a1f", "#ff8a1f", "#ffffff"}),
+        .stripeWidth = 0.6,
+        .shadows = {shade(60, 20, 0)},
+        .stripeSpeed = 0.4,
+    });
+    styles.push_back({
+        .id = u"camouflage"_s,
+        .name = u"Camouflage"_s,
+        .description = u"Olive and khaki blotches slowly shifting."_s,
+        .animated = true,
+        .color =
+            [](qreal x, qreal t) {
+                const qreal patch = swirl(x * 1.8, t * 0.4);
+                if (patch < 0.38)
+                {
+                    return QColor("#7a9a4d");
+                }
+                return patch < 0.62 ? QColor("#b8b07a") : QColor("#8fae6b");
+            },
+        .shadows = {shade(20, 30, 10)},
+    });
+    styles.push_back({
+        .id = u"film_reel"_s,
+        .name = u"Film Reel"_s,
+        .description = u"Warm sepia rolling like an old movie."_s,
+        .animated = true,
+        .color =
+            [](qreal x, qreal t) {
+                const auto base = mix(QColor("#e8c89a"), QColor("#c89a6b"),
+                                      wave(x, t, 1, 1.2));
+                return mix(base, QColor("#fff2dc"), sheen(x, t, 5) * 0.5);
+            },
+        .shadows = {shade(40, 25, 10)},
+    });
+    styles.push_back({
+        .id = u"copper_patina"_s,
+        .name = u"Copper Patina"_s,
+        .description = u"Copper slowly turning sea green with age."_s,
+        .animated = true,
+        .color =
+            [](qreal x, qreal t) {
+                return mix(QColor("#e0955a"), QColor("#5cc8a8"),
+                           swirl(x, t * 0.35));
+            },
+        .shadows = {shade(30, 20, 10)},
+    });
+    styles.push_back({
+        .id = u"spellcaster"_s,
+        .name = u"Spellcaster"_s,
+        .description = u"Violet magic with a spell sweeping through."_s,
+        .animated = true,
+        .color = twinkle(glint(colors({"#8f5cff", "#5c8fff", "#c25cff"}),
+                               QColor("#d6fbff"), 3.4),
+                         QColor(Qt::white), 12),
+        .shadows = {glow("#908f5cff", 4)},
+    });
+    styles.push_back({
+        .id = u"retrovision"_s,
+        .name = u"Retrovision"_s,
+        .description = u"A synthwave sun sinking in pink and orange bands."_s,
+        .animated = true,
+        .angle = 90,
+        .stripes = bands({"#ffd23f", "#ff8a3d", "#ff3d8f", "#b43dff"}),
+        .stripeWidth = 0.5,
+        .shadows = {shade(40, 0, 50)},
+        .stripeSpeed = 0.3,
+    });
+    styles.push_back({
+        .id = u"crystalline"_s,
+        .name = u"Crystalline"_s,
+        .description = u"Ice crystal facets slowly catching the light."_s,
+        .animated = true,
+        .color =
+            [](qreal x, qreal t) {
+                const qreal facet = std::floor(x * 7);
+                const qreal light = smoothRandom(facet * 9.7, t * 0.8);
+                return mix(QColor("#8fcfff"), QColor("#f0faff"), light);
+            },
+        .shadows = {shade(10, 40, 80, 190)},
+    });
+    styles.push_back({
+        .id = u"thermal"_s,
+        .name = u"Thermal"_s,
+        .description = u"Heat-camera colors moving with your warmth."_s,
+        .animated = true,
+        .color =
+            [palette = colors({"#5c6bff", "#3fd6c8", "#d6ff3f", "#ffb43f",
+                               "#ff4d3f"})](qreal x, qreal t) {
+                return blend(palette, swirl(x, t * 0.5));
+            },
+    });
+    styles.push_back({
+        .id = u"biohazard"_s,
+        .name = u"Biohazard"_s,
+        .description = u"Warning yellow and toxic green stripes creeping."_s,
+        .animated = true,
+        .angle = 135,
+        .stripes = bands({"#ffe63d", "#8aff3d"}),
+        .stripeWidth = 0.3,
+        .shadows = {shade(30, 40, 0)},
+        .stripeSpeed = 0.45,
+    });
+    styles.push_back({
+        .id = u"outer_space"_s,
+        .name = u"Outer Space"_s,
+        .description = u"Deep space blue with faraway stars."_s,
+        .animated = true,
+        .color = twinkle(flow(colors({"#7a8fff", "#9b7aff", "#6b9cff"}), 0.05,
+                              0.6),
+                         QColor("#fffbe6"), 10),
+        .shadows = {glow("#707a8fff", 4)},
+    });
+    styles.push_back({
+        .id = u"warp_speed"_s,
+        .name = u"Warp Speed"_s,
+        .description = u"Stars stretching into streaks as you fly past."_s,
+        .animated = true,
+        .color =
+            [](qreal x, qreal t) {
+                qreal streak = 0;
+                for (int i = 0; i < 3; ++i)
+                {
+                    // Soft at both ends, so a streak glides past
+                    const qreal lane = fract((x * 1.2) - (t * (0.14 + i * 0.04)) +
+                                             (i * 0.37));
+                    streak = std::max(streak, bump(lane, 0.5, 0.14));
+                }
+                return mix(QColor("#5c7aff"), QColor("#f0f4ff"), streak);
+            },
+        .shadows = {glow("#805c7aff", 3)},
+    });
+    styles.push_back({
+        .id = u"maple_syrup"_s,
+        .name = u"Maple Syrup"_s,
+        .description = u"Rich amber pouring slowly back and forth."_s,
+        .animated = true,
+        .color =
+            [palette = colors({"#ffcf7a", "#e89a3f", "#c8741f"})](qreal x,
+                                                                   qreal t) {
+                return blend(palette,
+                             std::clamp(x + ((pingpong(t, 5) - 0.5) * 0.5), 0.0,
+                                        1.0));
+            },
+        .shadows = {shade(60, 30, 0)},
+    });
+    styles.push_back({
+        .id = u"warm_nights"_s,
+        .name = u"Warm Nights"_s,
+        .description = u"Summer evening red fading into violet."_s,
+        .animated = true,
+        .color = flow(colors({"#ff7a5c", "#ff5c8f", "#b45cff", "#ff5c8f"}), 0.07,
+                      0.7),
+    });
+    styles.push_back({
+        .id = u"dragon_scale"_s,
+        .name = u"Dragon Scale"_s,
+        .description = u"Red and gold scales shimmering as it breathes."_s,
+        .animated = true,
+        .color =
+            [](qreal x, qreal t) {
+                const qreal scale = 0.5 + (0.5 * std::sin(x * 40));
+                const auto base = mix(QColor("#e8341c"), QColor("#ffb43f"),
+                                      scale * 0.5);
+                return mix(base, QColor("#ffe9a8"), sheen(x, t, 3.6) * 0.8);
+            },
+        .shadows = {glow("#90e8341c", 4)},
+    });
+    styles.push_back({
+        .id = u"fairy_glow"_s,
+        .name = u"Fairy Glow"_s,
+        .description = u"Soft pink and lilac with fairy dust floating by."_s,
+        .animated = true,
+        .color = twinkle(flow(colors({"#ffb3e6", "#d6b3ff", "#ffd6f0"}), 0.1,
+                              0.7),
+                         QColor("#fffbe0"), 15),
+        .shadows = {glow("#90ffb3e6", 5)},
+    });
+    styles.push_back({
+        .id = u"puddle"_s,
+        .name = u"Puddle"_s,
+        .description = u"Rainwater rippling with the sky in it."_s,
+        .animated = true,
+        .color =
+            [](qreal x, qreal t) {
+                const qreal ripple = 0.5 + (0.25 * std::sin((x * 18) - (t * 2))) +
+                                     (0.25 * std::sin((x * 7) + (t * 1.1)));
+                return mix(QColor("#6b8fbf"), QColor("#d6ecff"), ripple);
+            },
+    });
+    styles.push_back({
+        .id = u"eruption"_s,
+        .name = u"Eruption"_s,
+        .description = u"Lava and sparks blasting upward."_s,
+        .animated = true,
+        .angle = 270,
+        .color = twinkle(flow(colors({"#ff3d1f", "#ff9a1f", "#ffe14d",
+                                      "#ff9a1f"}),
+                              0.35, 1.0),
+                         QColor("#fff6c8"), 12),
+        .shadows = {glow("#b0ff5a1f", 5)},
+    });
+    styles.push_back({
+        .id = u"moonlight"_s,
+        .name = u"Moonlight"_s,
+        .description = u"Pale silver-blue with moonlight passing over."_s,
+        .animated = true,
+        .color = glint(colors({"#c8d6f0", "#a8bce0", "#d6e2f6"}),
+                       QColor(Qt::white), 5.0),
+        .shadows = {glow("#70a8bce0", 4)},
+    });
+    styles.push_back({
+        .id = u"twilight"_s,
+        .name = u"Twilight"_s,
+        .description = u"The sky between sunset and night, slowly changing."_s,
+        .animated = true,
+        .color =
+            [](qreal x, qreal t) {
+                const auto dusk = mix(QColor("#ff8fa8"), QColor("#8f7aff"), x);
+                return mix(dusk, QColor("#5c7aff"), pingpong(t, 6) * 0.6);
+            },
+    });
+    styles.push_back({
+        .id = u"glow_stick"_s,
+        .name = u"Glow Stick"_s,
+        .description = u"Bright neon green that slowly breathes."_s,
+        .animated = true,
+        .color =
+            [](qreal x, qreal t) {
+                const auto base = mix(QColor("#5cff3d"), QColor("#b4ff3d"), x);
+                return mix(base, QColor("#eaffd6"), pingpong(t, 3) * 0.35);
+            },
+        .shadows = {glow("#c05cff3d", 6)},
+    });
+    styles.push_back({
+        .id = u"coral_reef"_s,
+        .name = u"Coral Reef"_s,
+        .description = u"Coral pinks and sea blues swaying in the current."_s,
+        .animated = true,
+        .color =
+            [palette = colors({"#ff7a8a", "#ffb08a", "#5cd6e0", "#7a9cff"})](
+                qreal x, qreal t) {
+                return blend(palette, std::clamp(x + (0.12 * std::sin((t * 0.9) +
+                                                                       (x * 4))),
+                                                 0.0, 1.0));
+            },
+    });
+
     std::vector<std::shared_ptr<SolrinoPaint>> catalog;
     for (auto &style : styles)
     {
@@ -1605,8 +2211,24 @@ QBrush SolrinoPaint::asBrush(QColor userColor, QRectF rect) const
         return {userColor};
     }
 
-    const qreal radians = this->style_.angle * std::numbers::pi / 180;
+    const qreal seconds = this->style_.animated ? animationSeconds() : 0;
+    const qreal angle = this->style_.angle + (this->style_.spin * seconds);
+    const qreal radians = angle * std::numbers::pi / 180;
     const QPointF direction(std::cos(radians), std::sin(radians));
+
+    if (this->style_.radial)
+    {
+        // Wide enough to reach the ends of a long name
+        QRadialGradient glow(rect.center(),
+                             std::max(rect.width(), rect.height()) * 0.55);
+        const int samples = this->style_.animated ? ANIMATED_SAMPLES : 32;
+        for (int i = 0; i < samples; ++i)
+        {
+            const qreal position = qreal(i) / (samples - 1);
+            glow.setColorAt(position, this->style_.color(position, seconds));
+        }
+        return {glow};
+    }
 
     if (!this->style_.stripes.isEmpty())
     {
@@ -1615,7 +2237,6 @@ QBrush SolrinoPaint::asBrush(QColor userColor, QRectF rect) const
         QPointF start = rect.topLeft();
         if (this->style_.animated && this->style_.stripeSpeed != 0)
         {
-            const qreal seconds = animationSeconds();
             start += direction * (fract(seconds * this->style_.stripeSpeed) *
                                   period);
         }
@@ -1632,7 +2253,6 @@ QBrush SolrinoPaint::asBrush(QColor userColor, QRectF rect) const
     QLinearGradient gradient(center - (direction * half),
                              center + (direction * half));
 
-    const qreal seconds = this->style_.animated ? animationSeconds() : 0;
     const int samples = this->style_.animated ? ANIMATED_SAMPLES : 32;
     for (int i = 0; i < samples; ++i)
     {

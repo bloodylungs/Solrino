@@ -40,6 +40,11 @@ public:
         std::vector<PaintDropShadow> shadows;
         /// For animated striped paints, how many stripes slide past a second
         qreal stripeSpeed = 0;
+        /// For animated paints, how many degrees the pattern turns a second
+        qreal spin = 0;
+        /// Colors spread out from the middle of the name instead of across it.
+        /// `color` gets 0 at the center and 1 at the edges.
+        bool radial = false;
     };
 
     explicit SolrinoPaint(Style style);
