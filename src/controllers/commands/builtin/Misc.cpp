@@ -2094,7 +2094,7 @@ QString changeSolrinoBadge(const CommandContext &ctx, bool giving)
             "supporter_plus_plus_plus, staff, supporter_plus_plus_plus_alt, "
             "donor_of_the_month, donor_of_the_year, first_donor, "
             "one_year_on_solrino, veteran, "
-            "alpha_tester, top_bug_hunter, katana, halo, demon, matrix_rain, "
+            "alpha_tester, top_bug_hunter, katana, halo, matrix_rain, "
             "plasma_ball, clockwork, kaleidoscope, lava_lamp, oil_slick, "
             "nebula");
         return "";

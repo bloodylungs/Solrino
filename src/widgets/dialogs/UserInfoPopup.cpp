@@ -658,11 +658,29 @@ public:
     void setPaint(std::shared_ptr<Paint> paint)
     {
         this->paint_ = std::move(paint);
+        // Solrino's own paints aren't on 7Database, so they don't link anywhere
+        this->setCursor(this->isSolrinoPaint() ? Qt::ArrowCursor
+                                               : Qt::PointingHandCursor);
         this->setToolTip(
-            this->paint_ ? this->paint_->getTooltip() +
-                               QStringLiteral("<br>Open on 7Database")
-                         : QString{});
+            !this->paint_ ? QString{}
+            : this->isSolrinoPaint()
+                ? this->paint_->getTooltip()
+                : this->paint_->getTooltip() +
+                      QStringLiteral("<br>Open on 7Database"));
         this->refreshAppearance();
+    }
+
+    bool isSolrinoPaint() const
+    {
+        return this->paint_ &&
+               this->paint_->id.startsWith(QStringLiteral("solrino:"),
+                                           Qt::CaseInsensitive);
+    }
+
+    QString prefix() const
+    {
+        return this->isSolrinoPaint() ? QStringLiteral("Solrino Paint: ")
+                                      : QStringLiteral("7TV Paint: ");
     }
 
     const std::shared_ptr<Paint> &paint() const
@@ -734,7 +752,7 @@ public:
         const auto metrics = this->fontMetrics();
         const auto width = qCeil(this->leftPadding() +
                                  metrics.horizontalAdvance(
-                                     QStringLiteral("7TV Paint: ")) +
+                                     this->prefix()) +
                                  metrics.horizontalAdvance(
                                      this->paint_->getName()) +
                                  margins.right());
@@ -751,7 +769,7 @@ protected:
 
         const auto margins = this->contentMargins();
         const auto metrics = this->fontMetrics();
-        const auto prefix = QStringLiteral("7TV Paint: ");
+        const auto prefix = this->prefix();
         const auto prefixX = this->leftPadding();
         const auto prefixWidth = metrics.horizontalAdvance(prefix);
         const auto nameX = prefixX + prefixWidth;
@@ -2334,7 +2352,8 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
             QObject::connect(
                 paintButton, &Button::leftClicked, this, [paintButton] {
                     const auto &paint = paintButton->paint();
-                    if (!paint || paint->id.isEmpty())
+                    if (!paint || paint->id.isEmpty() ||
+                        paintButton->isSolrinoPaint())
                     {
                         return;
                     }

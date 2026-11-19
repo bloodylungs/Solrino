@@ -79,7 +79,7 @@ bool isValidVanitySlotKey(const QString &value)
         QStringLiteral("fa"), QStringLiteral("bt"), QStringLiteral("m"),
         QStringLiteral("7"),  QStringLiteral("hs"), QStringLiteral("hc"),
         QStringLiteral("bl"), QStringLiteral("jc"), QStringLiteral("wy"),
-        QStringLiteral("bh"),
+        QStringLiteral("bh"), QStringLiteral("mo"),
     };
     return slots.contains(value);
 }
@@ -203,7 +203,6 @@ bool hasSolrinoArtwork(const QString &id)
         u"top_bug_hunter"_s,
         u"katana"_s,
         u"halo"_s,
-        u"demon"_s,
         u"matrix_rain"_s,
         u"plasma_ball"_s,
         u"clockwork"_s,
@@ -693,6 +692,12 @@ MoltorinoVanityLayout normalizeLayout(MoltorinoVanityLayout layout)
     {
         const auto jilChat = std::ranges::find(order, QStringLiteral("jc"));
         order.insert(std::next(jilChat), QStringLiteral("bh"));
+    }
+    // The Moltorino badge has always sat just before the Solrino one
+    if (present.insert(QStringLiteral("mo")).second)
+    {
+        order.insert(std::ranges::find(order, QStringLiteral("m")),
+                     QStringLiteral("mo"));
     }
     layout.order = std::move(order);
 

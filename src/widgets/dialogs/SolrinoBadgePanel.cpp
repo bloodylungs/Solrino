@@ -49,7 +49,7 @@ struct BadgeChoice {
 };
 
 /// Oldest first: new badges go on the end, which is what "Newest added" reads.
-constexpr std::array<BadgeChoice, 41> BADGES{{
+constexpr std::array<BadgeChoice, 40> BADGES{{
     {"supporter", "Supporter"},
     {"supporter_plus", "Supporter+"},
     {"supporter_plus_alt", "Supporter+ Alt"},
@@ -83,7 +83,6 @@ constexpr std::array<BadgeChoice, 41> BADGES{{
     {"top_bug_hunter", "Top Bug Hunter"},
     {"katana", "Katana"},
     {"halo", "Halo"},
-    {"demon", "Demon"},
     {"matrix_rain", "Matrix Rain"},
     {"plasma_ball", "Plasma Ball"},
     {"clockwork", "Clockwork"},

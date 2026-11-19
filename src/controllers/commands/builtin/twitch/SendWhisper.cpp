@@ -202,7 +202,7 @@ QString sendWhisper(const CommandContext &ctx)
 
     if (ctx.words.size() < 3)
     {
-        ctx.channel->addSystemMessage("Usage: /w <username> <message>");
+        ctx.channel->addSystemMessage("Usage: /w <@username> <message> (or /whisper)");
         return "";
     }
 
@@ -216,12 +216,15 @@ QString sendWhisper(const CommandContext &ctx)
     auto target = ctx.words.at(1);
     stripChannelName(target);
     auto message = ctx.words.mid(2).join(' ');
+    // Show "user:" rather than "@user:" in the local echo
+    auto cleanWords = ctx.words;
+    cleanWords[1] = target;
     if (ctx.channel->isTwitchChannel())
     {
         getHelix()->getUserByName(
             target,
             [channel{ctx.channel}, currentUser, target, message,
-             words{ctx.words}](const auto &targetUser) {
+             words{cleanWords}](const auto &targetUser) {
                 getHelix()->sendWhisper(
                     currentUser->getUserId(), targetUser.id, message,
                     [words] {

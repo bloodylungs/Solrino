@@ -108,6 +108,8 @@ private:
     QWidget *buildSevenTVBadgeTab();
     QWidget *buildMoltorinoBadgeTab();
     QWidget *buildOtherBadgeTab();
+    QWidget *buildMoltorinoOriginalTab();
+    void populateMoltorinoOriginalChoices();
     void chooseMoltorinoBadge(const QString &key, const QString &name,
                               bool owned);
     void selectMoltorinoTiles(const QString &key);
@@ -222,11 +224,13 @@ private:
     VanityChoiceGrid *sevenTVBadgeGrid_{};
     VanityChoiceGrid *moltorinoBadgeGrid_{};
     VanityChoiceGrid *otherBadgeGrid_{};
+    VanityChoiceGrid *moltorinoOriginalGrid_{};
     QLabel *globalBadgeHint_{};
     QLabel *channelBadgeHint_{};
     QLabel *sevenTVBadgeHint_{};
     QLabel *moltorinoBadgeHint_{};
     QLabel *otherBadgeHint_{};
+    QLabel *moltorinoOriginalHint_{};
     QLabel *paintHint_{};
     QLabel *layoutHintLabel_{};
     QPushButton *layoutResetButton_{};
