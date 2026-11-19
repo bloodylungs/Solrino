@@ -1,0 +1,29 @@
+#pragma once
+
+#include "messages/Image.hpp"
+#include "providers/seventv/paints/Paint.hpp"
+
+namespace chatterino {
+
+class UrlPaint : public Paint
+{
+public:
+    UrlPaint(QString name, QString id, ImagePtr image,
+             std::vector<PaintDropShadow> dropShadows);
+
+    QBrush asBrush(QColor userColor, QRectF drawingRect) const override;
+    const std::vector<PaintDropShadow> &getDropShadows() const override;
+    bool animated() const override;
+    bool loaded() const override;
+    bool failed() const override;
+    void ensureLoaded(bool retry = false) const override;
+
+private:
+    qint64 sourcePixmapCacheKey() const override;
+
+    const ImagePtr image_;
+
+    const std::vector<PaintDropShadow> dropShadows_;
+};
+
+}

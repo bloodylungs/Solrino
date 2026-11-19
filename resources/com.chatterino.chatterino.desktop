@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Moltorino
+GenericName=Moltorino
+Comment=Chat client for Twitch
+Exec=Moltorino7
+Icon=com.moltobenne.moltorino
+Terminal=false
+Categories=Network;InstantMessaging;
+StartupWMClass=Moltorino7

@@ -1,0 +1,579 @@
+// SPDX-FileCopyrightText: 2017 Contributors to Chatterino <https://chatterino.com>
+//
+// SPDX-License-Identifier: MIT
+
+#include "widgets/helper/ResizingTextEdit.hpp"
+
+#include "common/Common.hpp"
+#include "common/QLogging.hpp"
+#include "controllers/completion/TabCompletionModel.hpp"
+#include "singletons/Settings.hpp"
+
+#include <QAbstractTextDocumentLayout>
+#include <QEvent>
+#include <QLayout>
+#include <QMenu>
+#include <QMimeData>
+#include <QMimeDatabase>
+#include <QObject>
+#include <QPainter>
+#include <QRegularExpression>
+#include <QTextDocument>
+#include <QtMath>
+
+namespace chatterino {
+
+ResizingTextEdit::ResizingTextEdit()
+{
+    auto sizePolicy = this->sizePolicy();
+    sizePolicy.setHeightForWidth(true);
+    sizePolicy.setVerticalPolicy(QSizePolicy::Preferred);
+    this->setSizePolicy(sizePolicy);
+    this->setAcceptRichText(false);
+
+    QObject::connect(this, &QTextEdit::textChanged, this,
+                     &QWidget::updateGeometry);
+    QObject::connect(this->document()->documentLayout(),
+                     &QAbstractTextDocumentLayout::documentSizeChanged, this,
+                     [this] {
+                         this->invalidateAncestorLayouts();
+                     });
+
+    QObject::connect(this, &QTextEdit::cursorPositionChanged, [this]() {
+        // If tab was pressed and we're completing/replacing the current word,
+        // this code will not even be called, see ResizingTextEdit::keyPressEvent
+
+        if (!this->completionInProgress_)
+        {
+            return;
+        }
+        qCDebug(chatterinoCommon)
+            << "Finishing completion because cursor moved";
+        this->finishCompletion();
+    });
+
+    // Whenever the setting for emote completion changes, force a
+    // refresh on the completion model the next time "Tab" is pressed
+    getSettings()->prefixOnlyEmoteCompletion.connect(
+        [this] {
+            this->finishCompletion();
+        },
+        this->connections_);
+
+    this->setFocusPolicy(Qt::ClickFocus);
+    this->installEventFilter(this);
+}
+
+ResizingTextEdit::~ResizingTextEdit()
+{
+    this->connections_.clear();
+    this->setCompleter(nullptr);
+}
+
+void ResizingTextEdit::paintEvent(QPaintEvent *event)
+{
+    QTextEdit::paintEvent(event);
+    const auto cursor = this->textCursor();
+    if (this->ghostText_.isEmpty() || !this->hasFocus() ||
+        cursor.hasSelection() ||
+        cursor.position() != this->document()->characterCount() - 1)
+    {
+        return;
+    }
+
+    const auto caret = this->cursorRect();
+    const auto available = this->viewport()->width() - caret.right() - 3;
+    if (available <= 0)
+    {
+        return;
+    }
+
+    QPainter painter(this->viewport());
+    painter.setFont(this->font());
+    auto color = this->palette().color(QPalette::Text);
+    color.setAlphaF(0.42F);
+    painter.setPen(color);
+    const QFontMetrics metrics(this->font());
+    const auto text =
+        metrics.elidedText(this->ghostText_, Qt::ElideRight, available);
+    const auto baseline = caret.top() +
+                          (caret.height() - metrics.height()) / 2 +
+                          metrics.ascent();
+    painter.drawText(QPointF(caret.right() + 1, baseline), text);
+}
+
+void ResizingTextEdit::changeEvent(QEvent *event)
+{
+    QTextEdit::changeEvent(event);
+    if (event->type() == QEvent::FontChange)
+    {
+        // QTextEdit::setFont() updates the widget font but not the backing
+        // document's default font. Keep them in sync so the live document
+        // relayout tracks scale changes correctly.
+        this->document()->setDefaultFont(this->font());
+        this->invalidateAncestorLayouts();
+    }
+}
+
+void ResizingTextEdit::invalidateAncestorLayouts()
+{
+    this->updateGeometry();
+
+    // Walk up only 3 levels (inputWrapper -> SplitInput -> Split) to avoid
+    // invalidating unrelated ancestor layouts during scale propagation.
+    QWidget *w = this->parentWidget();
+    for (int i = 0; w != nullptr && i < 3; ++i, w = w->parentWidget())
+    {
+        if (auto *lay = w->layout())
+        {
+            lay->invalidate();
+        }
+        w->updateGeometry();
+    }
+}
+
+QSize ResizingTextEdit::sizeHint() const
+{
+    auto hint = QTextEdit::sizeHint();
+    hint.setHeight(this->heightForWidth(hint.width()));
+    return hint;
+}
+
+QSize ResizingTextEdit::minimumSizeHint() const
+{
+    auto hint = QTextEdit::minimumSizeHint();
+    hint.setHeight(this->heightForWidth(hint.width()));
+    return hint;
+}
+
+bool ResizingTextEdit::hasHeightForWidth() const
+{
+    return true;
+}
+
+bool ResizingTextEdit::isFirstWord() const
+{
+    QString plainText = this->toPlainText();
+    QString portionBeforeCursor = plainText.left(this->textCursor().position());
+    const auto prefixLength = this->ignoredCompletionPrefix_.size();
+
+    // An empty reply still completes the username in the prefix.
+    if (portionBeforeCursor.size() > prefixLength &&
+        portionBeforeCursor.startsWith(this->ignoredCompletionPrefix_))
+    {
+        portionBeforeCursor.remove(0, prefixLength);
+    }
+    return !portionBeforeCursor.contains(' ');
+};
+
+void ResizingTextEdit::setIgnoredCompletionPrefix(const QString &prefix)
+{
+    this->ignoredCompletionPrefix_ = prefix;
+    this->resetCompletion();
+}
+
+int ResizingTextEdit::heightForWidth(int width) const
+{
+    auto margins = this->contentsMargins();
+    auto documentWidth = qMax(width - margins.left() - margins.right(), 1);
+
+    return margins.top() + qCeil(this->documentHeightForWidth(documentWidth)) +
+           margins.bottom() + 5;
+}
+
+qreal ResizingTextEdit::documentHeightForWidth(int width) const
+{
+    QTextDocument document;
+    document.setDocumentMargin(this->document()->documentMargin());
+    document.setDefaultFont(this->font());
+    document.setDefaultTextOption(this->document()->defaultTextOption());
+
+    auto text = this->toPlainText();
+    if (text.isEmpty())
+    {
+        text = " ";
+    }
+
+    document.setPlainText(text);
+    document.setTextWidth(width);
+    return document.size().height();
+}
+
+QString ResizingTextEdit::textUnderCursor(bool *hadSpace) const
+{
+    auto currentText = this->toPlainText();
+
+    QTextCursor tc = this->textCursor();
+
+    auto textUpToCursor = currentText.left(tc.selectionStart());
+
+    auto words = QStringView{textUpToCursor}.split(' ');
+    if (words.size() == 0)
+    {
+        return QString();
+    }
+
+    bool first = true;
+    QString lastWord;
+    for (auto it = words.crbegin(); it != words.crend(); ++it)
+    {
+        auto word = *it;
+
+        if (first && word.isEmpty())
+        {
+            first = false;
+            if (hadSpace != nullptr)
+            {
+                *hadSpace = true;
+            }
+            continue;
+        }
+
+        lastWord = word.toString();
+        break;
+    }
+
+    if (lastWord.isEmpty())
+    {
+        return QString();
+    }
+
+    return lastWord;
+}
+
+bool ResizingTextEdit::eventFilter(QObject *obj, QEvent *event)
+{
+    (void)obj;  // unused
+
+    // makes QShortcuts work in the ResizingTextEdit
+    if (event->type() != QEvent::ShortcutOverride)
+    {
+        return false;
+    }
+    auto *ev = static_cast<QKeyEvent *>(event);
+    ev->ignore();
+    if ((ev->key() == Qt::Key_C || ev->key() == Qt::Key_Insert) &&
+        ev->modifiers() == Qt::ControlModifier)
+    {
+        return false;
+    }
+    return true;
+}
+void ResizingTextEdit::keyPressEvent(QKeyEvent *event)
+{
+    event->ignore();
+
+    this->keyPressed.invoke(event);
+
+    bool doComplete =
+        (event->key() == Qt::Key_Tab || event->key() == Qt::Key_Backtab) &&
+        (event->modifiers() & Qt::ControlModifier) == Qt::NoModifier &&
+        !event->isAccepted();
+
+    if (doComplete)
+    {
+        // check if there is a completer
+        if (!this->completer_)
+        {
+            this->finishCompletion();
+            return;
+        }
+
+        QString currentCompletion = this->textUnderCursor();
+
+        // check if there is something to complete
+        if (currentCompletion.size() <= 1)
+        {
+            this->finishCompletion();
+            return;
+        }
+
+        // always expected to be TabCompletionModel
+        auto *completionModel =
+            dynamic_cast<TabCompletionModel *>(this->completer_->model());
+        assert(completionModel != nullptr);
+
+        if (!this->completionInProgress_)
+        {
+            // First type pressing tab after modifying a message, we refresh our
+            // completion model
+            this->completer_->setModel(completionModel);
+            completionModel->updateResults(
+                currentCompletion, this->toPlainText(),
+                this->textCursor().position(), this->isFirstWord());
+            if (this->completer_->completionCount() <= 0)
+            {
+                completionModel->clearResults();
+                this->finishCompletion();
+                return;
+            }
+            this->completionInProgress_ = true;
+            {
+                // this blocks cursor movement events from resetting tab completion
+                QSignalBlocker dontTriggerCursorMovement(this);
+                this->completer_->complete();
+            }
+            this->textChanged();
+            this->tabCompletionChanged.invoke(completionModel,
+                                              this->completer_->currentRow());
+            return;
+        }
+
+        // scrolling through selections
+        if (event->key() == Qt::Key_Tab)
+        {
+            if (!this->completer_->setCurrentRow(
+                    this->completer_->currentRow() + 1))
+            {
+                // wrap over and start again
+                this->completer_->setCurrentRow(0);
+            }
+        }
+        else
+        {
+            if (!this->completer_->setCurrentRow(
+                    this->completer_->currentRow() - 1))
+            {
+                // wrap over and start again
+                this->completer_->setCurrentRow(
+                    this->completer_->completionCount() - 1);
+            }
+        }
+
+        {
+            // this blocks cursor movement events from updating tab completion
+            QSignalBlocker dontTriggerCursorMovement(this);
+            this->completer_->complete();
+        }
+        this->textChanged();
+        this->tabCompletionChanged.invoke(completionModel,
+                                          this->completer_->currentRow());
+        return;
+    }
+
+    if (!event->text().isEmpty())
+    {
+        this->finishCompletion();
+    }
+
+    if (!event->isAccepted())
+    {
+        QTextEdit::keyPressEvent(event);
+    }
+}
+
+void ResizingTextEdit::focusInEvent(QFocusEvent *event)
+{
+    QTextEdit::focusInEvent(event);
+
+    if (event->gotFocus())
+    {
+        this->focused.invoke();
+    }
+}
+
+void ResizingTextEdit::focusOutEvent(QFocusEvent *event)
+{
+    QTextEdit::focusOutEvent(event);
+
+    if (event->lostFocus())
+    {
+        this->finishCompletion();
+        this->focusLost.invoke();
+    }
+}
+
+void ResizingTextEdit::setCompleter(QCompleter *c)
+{
+    if (c == this->completer_)
+    {
+        return;
+    }
+    this->finishCompletion();
+    delete this->completer_;
+
+    this->completer_ = c;
+
+    if (!this->completer_)
+    {
+        return;
+    }
+
+    this->completer_->setParent(this);
+    this->completer_->setWidget(this);
+    this->completer_->setCompletionMode(QCompleter::InlineCompletion);
+    this->completer_->setCaseSensitivity(Qt::CaseInsensitive);
+
+    QObject::connect(this->completer_,
+                     static_cast<void (QCompleter::*)(const QString &)>(
+                         &QCompleter::highlighted),
+                     this, &ResizingTextEdit::insertCompletion);
+}
+
+void ResizingTextEdit::resetCompletion()
+{
+    this->finishCompletion();
+}
+
+bool ResizingTextEdit::selectCompletionRow(int row)
+{
+    if (!this->completionInProgress_ || this->completer_ == nullptr ||
+        row < 0 || row >= this->completer_->completionCount() ||
+        !this->completer_->setCurrentRow(row))
+    {
+        return false;
+    }
+
+    auto *completionModel =
+        dynamic_cast<TabCompletionModel *>(this->completer_->model());
+    if (completionModel == nullptr)
+    {
+        this->finishCompletion();
+        return false;
+    }
+
+    {
+        QSignalBlocker dontTriggerCursorMovement(this);
+        this->completer_->complete();
+    }
+    this->textChanged();
+    this->tabCompletionChanged.invoke(completionModel, row);
+    return true;
+}
+
+void ResizingTextEdit::finishCompletion()
+{
+    if (!this->completionInProgress_)
+    {
+        return;
+    }
+
+    this->completionInProgress_ = false;
+    this->tabCompletionHidden.invoke();
+
+    if (this->completer_ != nullptr)
+    {
+        if (auto *model =
+                dynamic_cast<TabCompletionModel *>(this->completer_->model()))
+        {
+            model->clearResults();
+        }
+    }
+}
+
+void ResizingTextEdit::setGhostText(QString text)
+{
+    if (this->ghostText_ == text)
+    {
+        return;
+    }
+    this->ghostText_ = std::move(text);
+    this->viewport()->update();
+}
+
+const QString &ResizingTextEdit::ghostText() const
+{
+    return this->ghostText_;
+}
+
+void ResizingTextEdit::insertCompletion(const QString &completion)
+{
+    if (this->completer_->widget() != this)
+    {
+        return;
+    }
+
+    bool hadSpace = false;
+    auto prefix = this->textUnderCursor(&hadSpace);
+
+    int prefixSize = prefix.size();
+
+    if (hadSpace)
+    {
+        ++prefixSize;
+    }
+
+    QTextCursor tc = this->textCursor();
+    int completionStart = tc.position() - prefixSize;
+    tc.setPosition(completionStart, QTextCursor::KeepAnchor);
+    tc.insertText(completion);
+    this->setTextCursor(tc);
+    this->updateGeometry();
+}
+
+bool ResizingTextEdit::canInsertFromMimeData(const QMimeData *source) const
+{
+    if (source->hasImage() || source->hasFormat("text/plain"))
+    {
+        return true;
+    }
+    return QTextEdit::canInsertFromMimeData(source);
+}
+
+void ResizingTextEdit::insertFromMimeData(const QMimeData *source)
+{
+    if (getSettings()->imageUploaderEnabled)
+    {
+        if (source->hasImage())
+        {
+            this->imagePasted.invoke(source);
+            return;
+        }
+
+        if (source->hasUrls())
+        {
+            bool hasUploadable = false;
+            auto mimeDb = QMimeDatabase();
+            for (const QUrl &url : source->urls())
+            {
+                QMimeType mime = mimeDb.mimeTypeForUrl(url);
+                if (mime.name().startsWith("image"))
+                {
+                    hasUploadable = true;
+                    break;
+                }
+            }
+
+            if (hasUploadable)
+            {
+                this->imagePasted.invoke(source);
+                return;
+            }
+        }
+    }
+
+    QString pastedText = source->text().trimmed();
+
+    static const QRegularExpression urlRegex(
+        R"(https?://[^\s]+)");
+
+    auto match = urlRegex.match(pastedText);
+
+    if (getSettings()->urlShortenerEnabled &&
+        match.hasMatch() &&
+        match.captured(0) == pastedText)
+    {
+        QTextCursor cursor = this->textCursor();
+        cursor.insertText(pastedText);
+
+        const int endPosition = cursor.position();
+        cursor.setPosition(endPosition - pastedText.size());
+        cursor.setPosition(endPosition, QTextCursor::KeepAnchor);
+
+        cursor.setKeepPositionOnInsert(true);
+
+        this->urlPasted.invoke(pastedText, cursor);
+        return;
+    }
+
+    insertPlainText(source->text());
+}
+
+void ResizingTextEdit::contextMenuEvent(QContextMenuEvent *event)
+{
+    QObjectPtr<QMenu> menu{this->createStandardContextMenu(event->pos())};
+    this->contextMenuRequested.invoke(menu.get(), event->pos());
+    menu->exec(event->globalPos());
+}
+
+}  // namespace chatterino
