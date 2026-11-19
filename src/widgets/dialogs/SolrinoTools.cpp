@@ -1447,6 +1447,17 @@ void tryRedeemFirst(std::weak_ptr<TwitchChannel> weak, int attempt)
                             QStringLiteral("Auto-redeemed %1.")
                                 .arg(reward.title));
                     }
+                    // Then say hi, once, in that same chat. Only reached after
+                    // First was redeemed, so only in chats that have it.
+                    QTimer::singleShot(1500, qApp, [weak] {
+                        auto channel = weak.lock();
+                        if (channel != nullptr && channel->isLive() &&
+                            getSettings()->solrinoAutoRedeemFirst &&
+                            canGiveBadges())
+                        {
+                            channel->sendMessage(QStringLiteral("hi"));
+                        }
+                    });
                 },
                 [weak](const QString &error) {
                     if (auto channel = weak.lock())

@@ -231,7 +231,7 @@ public:
         layout->addSpacing(4);
         layout->addWidget(firstRule);
         auto *firstBox = new QCheckBox(
-            QStringLiteral("Auto-redeem First when a chat goes live"));
+            QStringLiteral("Auto-redeem First and say hi when a chat goes live"));
         firstBox->setChecked(getSettings()->solrinoAutoRedeemFirst);
         layout->addWidget(firstBox);
         auto *firstNote = new QLabel(QStringLiteral(
