@@ -50,6 +50,7 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void leaveEvent(QEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
 
 private:
     enum Control { UpdateNow, UpdateLater, RemindLater, Close, ControlCount };
@@ -61,6 +62,13 @@ private:
     /// Places the sections and changes, returning the height they need
     int layoutChanges(int width);
     void drawChanges(QPainter &painter);
+    /// The notes or changes, faded at the edges while there's more to scroll
+    void drawNotes(QPainter &painter);
+    void drawScrollBar(QPainter &painter);
+    double maxScroll() const;
+    QRectF scrollTrack() const;
+    QRectF scrollThumb() const;
+    void scrollTo(double offset, bool instant = false);
 
     /// One thing to draw in the changes list, placed relative to notesArea_
     struct Piece {
@@ -88,6 +96,13 @@ private:
     int pressed_ = -1;
     bool dragging_ = false;
     QPoint dragOffset_;
+    /// How tall the whole list is, and how far down it's scrolled
+    int contentHeight_ = 0;
+    double scroll_ = 0;
+    double scrollTarget_ = 0;
+    bool draggingThumb_ = false;
+    double thumbGrab_ = 0;
+    bool thumbHovered_ = false;
     QTimer timer_;
     QElapsedTimer clock_;
 };

@@ -7,6 +7,10 @@ namespace chatterino::solrino {
 /// Whether the "Smooth animations" setting is on.
 bool smoothAnimationsEnabled();
 
+/// True while pages are gliding across. Chats hold off on redrawing animated
+/// emotes until it's over, so the animation gets the whole frame.
+bool pageTransitionRunning();
+
 enum class PageDirection {
     /// The new page comes from the right, or from below when vertical.
     Forward,

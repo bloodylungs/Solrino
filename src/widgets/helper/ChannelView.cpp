@@ -50,6 +50,7 @@
 #include "singletons/Settings.hpp"
 #include "singletons/StreamerMode.hpp"
 #include "singletons/SeasonalDecorations.hpp"
+#include "widgets/helper/SolrinoTransitions.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/ThemeCustomization.hpp"
 #include "singletons/ThemeVideo.hpp"
@@ -1932,7 +1933,9 @@ void ChannelView::initializeSignals()
         this->signalHolder_, false);
 
     const auto repaintAnimation = [this](const QRegion &region) {
-        if (!this->isVisible() || region.isEmpty())
+        // A tab switch is gliding over this. The next tick after it catches up.
+        if (!this->isVisible() || region.isEmpty() ||
+            solrino::pageTransitionRunning())
         {
             return;
         }

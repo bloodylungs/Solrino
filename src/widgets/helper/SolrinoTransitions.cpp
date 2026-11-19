@@ -4,11 +4,13 @@
 
 #include <pajlada/signals/signalholder.hpp>
 #include <QApplication>
+#include <QBackingStore>
 #include <QElapsedTimer>
 #include <QGraphicsOpacityEffect>
 #include <QPainter>
 #include <QPixmap>
 #include <QPointer>
+#include <QScreen>
 #include <QTimer>
 #include <QWidget>
 
@@ -21,13 +23,65 @@ namespace chatterino::solrino {
 
 namespace {
 
-constexpr int PAGE_MS = 280;
-constexpr int CHANGE_MS = 190;
-constexpr int WINDOW_IN_MS = 260;
-constexpr int WINDOW_OUT_MS = 170;
-constexpr int TAB_IN_MS = 220;
-/// Asks for frames often enough for high refresh rate monitors.
-constexpr int FRAME_MS = 7;
+constexpr int PAGE_MS = 230;
+constexpr int CHANGE_MS = 170;
+constexpr int WINDOW_IN_MS = 220;
+constexpr int WINDOW_OUT_MS = 150;
+constexpr int TAB_IN_MS = 200;
+
+int runningPageTransitions = 0;
+
+/// One frame per screen refresh: more is wasted work that the screen never
+/// shows, and it slows the frames that are shown
+int frameMs()
+{
+    double hz = 60;
+    if (const auto *screen = QGuiApplication::primaryScreen())
+    {
+        hz = std::clamp(screen->refreshRate(), 30.0, 240.0);
+    }
+    return std::max(4, int(1000.0 / hz));
+}
+
+/// What `area` of the widget looks like on screen right now. The window keeps
+/// the picture it last showed, so copying it is instant, while grab() has to
+/// draw the whole widget again. Falls back to grab() when there's no copy.
+QPixmap pictureOnScreen(QWidget *widget, QRect area = {})
+{
+    if (area.isNull())
+    {
+        area = widget->rect();
+    }
+    auto *window = widget->window();
+    auto *store = window != nullptr ? window->backingStore() : nullptr;
+    if (store != nullptr && widget->isVisible() && !widget->isMinimized())
+    {
+        if (const auto *image = dynamic_cast<QImage *>(store->paintDevice()))
+        {
+            const double dpr = image->devicePixelRatio();
+            const QRect inWindow(widget->mapTo(window, area.topLeft()),
+                                 area.size());
+            const QRect pixels(QPoint(int(std::lround(inWindow.x() * dpr)),
+                                      int(std::lround(inWindow.y() * dpr))),
+                               QSize(int(std::lround(inWindow.width() * dpr)),
+                                     int(std::lround(inWindow.height() * dpr))));
+            if (!pixels.isEmpty() && image->rect().contains(pixels))
+            {
+                auto picture = QPixmap::fromImage(image->copy(pixels));
+                picture.setDevicePixelRatio(dpr);
+                return picture;
+            }
+        }
+    }
+    return widget->grab(area);
+}
+
+/// Rounds to a whole screen pixel, so pictures are copied straight across
+/// instead of being resampled, which is much slower for a whole window
+QPointF onPixel(QPointF point, double dpr)
+{
+    return {std::round(point.x() * dpr) / dpr, std::round(point.y() * dpr) / dpr};
+}
 const auto PAGE_OVERLAY = QStringLiteral("SolrinoPageTransition");
 const auto CHANGE_OVERLAY = QStringLiteral("SolrinoChangeFade");
 
@@ -54,7 +108,7 @@ public:
         , duration_(duration)
     {
         this->timer_.setTimerType(Qt::PreciseTimer);
-        this->timer_.setInterval(FRAME_MS);
+        this->timer_.setInterval(frameMs());
         QObject::connect(&this->timer_, &QTimer::timeout, this,
                          [this, step = std::move(step),
                           done = std::move(done)] {
@@ -167,15 +221,15 @@ protected:
         const double blend = easeInOut(this->progress_ * 1.15);
         painter.fillRect(this->rect(), this->background_);
 
-        // Sub-pixel positions keep slow movement from looking steppy
-        painter.setRenderHint(QPainter::SmoothPixmapTransform);
+        // Whole screen pixels: a straight copy, which keeps up at any frame
+        // rate, where in-between positions would need slow resampling
+        const double dpr = this->devicePixelRatioF();
         painter.setOpacity(blend);
-        painter.drawPixmap(
-            QRectF(this->travel_ * (1.0 - moved), QSizeF(this->size())),
-            this->newPicture_, QRectF(this->newPicture_.rect()));
+        painter.drawPixmap(onPixel(this->travel_ * (1.0 - moved), dpr),
+                           this->newPicture_);
         painter.setOpacity(1.0 - blend);
-        painter.drawPixmap(QRectF(this->travel_ * -moved, QSizeF(this->size())),
-                           this->oldPicture_, QRectF(this->oldPicture_.rect()));
+        painter.drawPixmap(onPixel(this->travel_ * -moved, dpr),
+                           this->oldPicture_);
     }
 
 private:
@@ -202,6 +256,8 @@ private:
 
         // Anything the switch added above this goes back underneath
         this->raise();
+        this->counted_ = true;
+        ++runningPageTransitions;
         new Animator(
             this, PAGE_MS,
             [this](double t) {
@@ -214,12 +270,24 @@ private:
             });
     }
 
+public:
+    ~PageTransition() override
+    {
+        if (this->counted_)
+        {
+            --runningPageTransitions;
+        }
+    }
+
+private:
+
     QPixmap oldPicture_;
     QPixmap newPicture_;
     QPointer<QWidget> newPage_;
     QPointF travel_;
     QColor background_;
     double progress_ = 0;
+    bool counted_ = false;
 };
 
 /// A window's last look, left on screen for a moment after it has closed.
@@ -288,6 +356,11 @@ bool smoothAnimationsEnabled()
     return getSettings()->solrinoSmoothAnimations;
 }
 
+bool pageTransitionRunning()
+{
+    return runningPageTransitions > 0;
+}
+
 void slidePages(QWidget *oldPage, QWidget *newPage, PageDirection direction,
                 bool vertical)
 {
@@ -306,14 +379,14 @@ void slidePages(QWidget *oldPage, QWidget *newPage, PageDirection direction,
     {
         if (picture.isNull() && running->isVisible())
         {
-            picture = running->grab();
+            picture = pictureOnScreen(running);
         }
         running->hide();
         running->deleteLater();
     }
     if (picture.isNull())
     {
-        picture = oldPage->grab();
+        picture = pictureOnScreen(oldPage);
     }
 
     new PageTransition(host, std::move(picture), newPage, oldPage->geometry(),
@@ -328,15 +401,9 @@ void fadeChange(QWidget *widget, bool includeBehind)
         return;
     }
 
-    QPixmap picture;
-    if (includeBehind && widget->parentWidget() != nullptr)
-    {
-        picture = widget->parentWidget()->grab(widget->geometry());
-    }
-    else
-    {
-        picture = widget->grab();
-    }
+    // What's on screen already has whatever is behind the widget in it
+    QPixmap picture = includeBehind ? pictureOnScreen(widget)
+                                    : widget->grab();
 
     for (auto *running : widget->findChildren<QWidget *>(
              CHANGE_OVERLAY, Qt::FindDirectChildrenOnly))
@@ -438,7 +505,7 @@ void fadeOutWindow(QWidget *window)
     {
         return;
     }
-    new ClosingPicture(window->grab(), window->geometry());
+    new ClosingPicture(pictureOnScreen(window), window->geometry());
 }
 
 void initializeAnimationEffects()
