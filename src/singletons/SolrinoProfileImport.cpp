@@ -149,8 +149,11 @@ bool importOldProfileOnce(const QString &oldSettingsDir,
         }
     }
 
-    // Custom commands and per-user data. Nice to have, so a failure isn't fatal.
-    for (const auto *name : {"commands.json", "user-data.json"})
+    // Custom commands, per-user data and selfbot rules (Chat automations, with
+    // their counters). Nice to have, so a failure isn't fatal.
+    for (const auto *name : {"commands.json", "user-data.json",
+                             "chat-automations.json",
+                             "chat-automation-counts.json"})
     {
         const auto from = oldDir.filePath(QLatin1String(name));
         const auto to = newDir.filePath(QLatin1String(name));

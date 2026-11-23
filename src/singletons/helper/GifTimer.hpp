@@ -8,7 +8,9 @@
 
 namespace chatterino {
 
-constexpr long unsigned GIF_FRAME_LENGTH = 20;
+// 30 frames a second. Solrino's badges and paints are made at 30, and most
+// emotes look the same, for about 40% less redrawing than 50.
+constexpr long unsigned GIF_FRAME_LENGTH = 33;
 
 class GIFTimer
 {

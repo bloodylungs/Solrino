@@ -1,4 +1,6 @@
 #include "widgets/helper/SolrinoBranding.hpp"
+#include "providers/moltorino/SolrinoMessages.hpp"
+#include "widgets/dialogs/SolrinoMessagesWindow.hpp"
 #include "widgets/dialogs/SolrinoBadgePanel.hpp"
 #include "widgets/dialogs/SolrinoTools.hpp"
 #include "widgets/Window.hpp"
@@ -284,6 +286,26 @@ void Window::addCustomTitlebarButtons()
         },
         TitleBarButtonStyle::Settings);
 
+    // Solrino messages, with a red dot when something is unread
+    this->messagesButton_ = this->addTitleBarButton<PixmapButton>([] {
+        openSolrinoMessages();
+    });
+    this->messagesButton_->setToolTip(QStringLiteral("Solrino messages"));
+    {
+        auto drawIcon = [button = QPointer<PixmapButton>(this->messagesButton_)] {
+            if (button == nullptr)
+            {
+                return;
+            }
+            auto &messages = SolrinoMessages::instance();
+            button->setPixmap(solrinoMessagesIcon(
+                18, messages.unreadCount() + messages.requestCount() > 0));
+        };
+        drawIcon();
+        QObject::connect(&SolrinoMessages::instance(), &SolrinoMessages::changed,
+                         this->messagesButton_, drawIcon);
+    }
+
     auto *update = this->addTitleBarButton<PixmapButton>([] {});
     this->updateButton_ = update;
 
@@ -334,6 +356,10 @@ void Window::applyTitlebarLayout()
     if (!accountLeft)
     {
         order.push_back(this->userLabel_);
+    }
+    if (this->messagesButton_ != nullptr)
+    {
+        order.push_back(this->messagesButton_);
     }
     order.push_back(this->updateButton_);
     if (!gearLeft)

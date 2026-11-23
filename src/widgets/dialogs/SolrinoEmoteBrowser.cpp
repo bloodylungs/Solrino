@@ -253,15 +253,19 @@ SolrinoEmoteBrowser::SolrinoEmoteBrowser(QWidget *parent)
     this->botButton_->setToolTip(QStringLiteral(
         "Sends #add with the emote's 7TV link in this chat, for a bot like "
         "PotatBot to add it"));
-    QObject::connect(this->botButton_, &QPushButton::clicked, this, [this] {
+    // Both bot buttons send the emote's link, not its name: new emotes aren't
+    // searchable by name for a while, and many emotes share a name
+    auto sendBot = [this](bool force) {
         if (this->picked_ == nullptr)
         {
             return;
         }
-        // The emote's link, not its name: new emotes aren't searchable by
-        // name for a while, and many emotes share a name
-        const auto message = QStringLiteral("#add https://7tv.app/emotes/") +
-                             this->picked_->id();
+        auto message = QStringLiteral("#add https://7tv.app/emotes/") +
+                       this->picked_->id();
+        if (force)
+        {
+            message += QStringLiteral(" -f");
+        }
         if (this->sendToChat && this->sendToChat(message))
         {
             this->setStatus(QStringLiteral("Sent \"%1\" in chat.").arg(message));
@@ -272,11 +276,25 @@ SolrinoEmoteBrowser::SolrinoEmoteBrowser(QWidget *parent)
                                            "send the bot command."),
                             true);
         }
+    };
+    QObject::connect(this->botButton_, &QPushButton::clicked, this, [sendBot] {
+        sendBot(false);
     });
+    this->replaceButton_ = new QPushButton(QStringLiteral("Replace with bot"));
+    this->replaceButton_->setCursor(Qt::PointingHandCursor);
+    this->replaceButton_->setEnabled(false);
+    this->replaceButton_->setToolTip(QStringLiteral(
+        "Sends #add with the emote's 7TV link and -f, so the bot swaps out an "
+        "emote that already has the same name for this one"));
+    QObject::connect(this->replaceButton_, &QPushButton::clicked, this,
+                     [sendBot] {
+                         sendBot(true);
+                     });
     auto *buttons = new QVBoxLayout();
     buttons->setSpacing(4);
     buttons->addWidget(this->addButton_);
     buttons->addWidget(this->botButton_);
+    buttons->addWidget(this->replaceButton_);
     picked->addLayout(buttons);
     layout->addLayout(picked);
 
@@ -496,6 +514,7 @@ void SolrinoEmoteBrowser::showEmotes(const QVector<Emote> &emotes, bool append)
         this->pickedOwner_->clear();
         this->addButton_->setEnabled(false);
         this->botButton_->setEnabled(false);
+        this->replaceButton_->setEnabled(false);
         this->scroll_->verticalScrollBar()->setValue(0);
     }
     for (const auto &emote : emotes)
@@ -545,6 +564,7 @@ void SolrinoEmoteBrowser::select(SolrinoEmoteTile *tile)
     this->addButton_->setEnabled(true);
     this->addButton_->setText(QStringLiteral("Add to my channel"));
     this->botButton_->setEnabled(true);
+    this->replaceButton_->setEnabled(true);
 }
 
 void SolrinoEmoteBrowser::addSelected()

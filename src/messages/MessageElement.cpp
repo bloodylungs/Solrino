@@ -2769,7 +2769,8 @@ void addModerationActionToContainer(MessageElement &source,
     {
         // Timeouts are a little wider, to fit a stopwatch and "15m"
         auto iconSize = size;
-        if (action.getType() == ModerationAction::Type::Timeout)
+        if (action.getType() == ModerationAction::Type::Timeout &&
+            getSettings()->solrinoTimeoutStopwatch)
         {
             iconSize.setWidth(size.width() * 2.3);
         }
@@ -2898,9 +2899,13 @@ void TwitchModerationElement::addToContainer(MessageLayoutContainer &container,
         return;
     }
 
+    bool scaleOk = false;
+    const auto chosenScale =
+        settings->solrinoModButtonScale.getValue().toFloat(&scaleOk);
+    const auto modScale = scaleOk ? std::clamp(chosenScale, 1.f, 1.6f) : 1.f;
     QSizeF size{
-        container.getScale() * 16,
-        container.getScale() * 16,
+        container.getScale() * 16 * modScale,
+        container.getScale() * 16 * modScale,
     };
 
     bool hasVisiblePinAction = false;

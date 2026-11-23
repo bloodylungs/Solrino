@@ -61,6 +61,7 @@ private:
     QWidget *titleLogo_ = nullptr;
     QWidget *settingsButton_ = nullptr;
     QWidget *updateButton_ = nullptr;
+    PixmapButton *messagesButton_ = nullptr;
     std::shared_ptr<UpdateDialog> updateDialogHandle_;
 
     pajlada::Signals::SignalHolder signalHolder_;

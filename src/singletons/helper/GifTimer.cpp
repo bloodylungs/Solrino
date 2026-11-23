@@ -79,8 +79,30 @@ bool GIFTimer::shouldAnimate() const
         return false;
     }
 
+    if (this->openOverlayWindows_ != 0)
+    {
+        return true;
+    }
+
+    // Nothing to animate while every window is minimized or hidden in the
+    // tray, like while gaming. The animations pick up again on return.
+    bool anyShown = false;
+    for (auto *widget : QApplication::topLevelWidgets())
+    {
+        if (widget->isVisible() && !widget->isMinimized() &&
+            !widget->testAttribute(Qt::WA_TransparentForMouseEvents) &&
+            (widget->windowFlags() & Qt::WindowType_Mask) != Qt::ToolTip)
+        {
+            anyShown = true;
+            break;
+        }
+    }
+    if (!anyShown)
+    {
+        return false;
+    }
+
     return !getSettings()->animationsWhenFocused ||
-           this->openOverlayWindows_ != 0 ||
            QApplication::activeWindow() != nullptr;
 }
 

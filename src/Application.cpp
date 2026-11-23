@@ -87,6 +87,7 @@
 #include "singletons/Toasts.hpp"
 #include "singletons/SolrinoDiscordPresence.hpp"
 #include "widgets/dialogs/SolrinoBadgeGifts.hpp"
+#include "providers/moltorino/SolrinoMessages.hpp"
 #include "widgets/dialogs/SolrinoTools.hpp"
 #include "singletons/SolrinoUpdater.hpp"
 #include "singletons/Updates.hpp"
@@ -468,6 +469,7 @@ int Application::run()
     if (!this->args_.isFramelessEmbed)
     {
         solrino::startBadgeGifts();
+        SolrinoMessages::instance().start();
         solrino::startFirstWatcher();
         solrino::startUnbanRequestWatcher();
         startSolrinoNowPlayingOverlay();

@@ -2564,7 +2564,8 @@ void TextIconLayoutElement::paint(QPainter &painter,
 
     // Timeouts ("5" over "m") get a stopwatch icon drawn like the ban,
     // delete and pin icons, with the length on one line next to it
-    if (timeoutIconSeconds(this->line1, this->line2))
+    if (getSettings()->solrinoTimeoutStopwatch &&
+        timeoutIconSeconds(this->line1, this->line2))
     {
         painter.save();
         painter.setRenderHint(QPainter::Antialiasing);

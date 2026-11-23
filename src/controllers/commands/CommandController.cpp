@@ -543,6 +543,9 @@ CommandController::CommandController(const Paths &paths)
 
     this->registerCommand("/usercard", &commands::openUsercard);
     this->registerCommand("/vanity", &commands::vanity);
+    this->registerCommand("/dm", &commands::solrinoMessages);
+    this->registerCommand("/messages", &commands::solrinoMessages);
+    this->registerCommand("/gift", &commands::solrinoGift);
     this->registerCommand("/givebadge", &commands::giveBadge);
     this->registerCommand("/takebadge", &commands::takeBadge);
     this->registerCommand("/selfbot", &commands::selfbot);

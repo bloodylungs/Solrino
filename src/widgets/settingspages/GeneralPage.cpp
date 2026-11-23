@@ -188,6 +188,27 @@ void GeneralPage::initLayout(GeneralPageView &layout)
                              {"5 (widest)", "5"}})
         ->setTooltip("The gap between the mod buttons next to messages.")
         ->addTo(layout);
+    SettingWidget::checkbox("Stopwatch on timeout buttons",
+                            s.solrinoTimeoutStopwatch)
+        ->setTooltip("Show a little stopwatch next to the length on the "
+                     "timeout mod buttons. Turn it off for the plain look.")
+        ->addTo(layout);
+    SettingWidget::dropdown("Mod button size", s.solrinoModButtonScale,
+                            {{"Normal", ""},
+                             {"Large", "1.2"},
+                             {"Larger", "1.4"}})
+        ->setTooltip("How big the ban, timeout, delete and pin buttons next "
+                     "to messages are.")
+        ->addTo(layout);
+    SettingWidget::checkbox("Banner on user cards", s.solrinoUsercardBanner)
+        ->setTooltip("Show the person's Twitch banner at the top of their "
+                     "user card. Turn it off for a much shorter card.")
+        ->addTo(layout);
+    SettingWidget::checkbox("Keep tab groups closed when switching tabs",
+                            s.solrinoKeepGroupsCollapsed)
+        ->setTooltip("Switching to a tab inside a closed group leaves the "
+                     "group closed, instead of opening it.")
+        ->addTo(layout);
 
     SettingWidget::dropdown("Most badges to show", s.solrinoBadgeLimit,
                             {{"All", "0"},

@@ -221,6 +221,21 @@ std::shared_ptr<Paint> SeventvPaints::getPaint(const QString &userName,
     return paint == this->knownPaints_.end() ? nullptr : paint->second;
 }
 
+std::shared_ptr<Paint> SeventvPaints::getSeventvOnlyPaint(
+    const QString &userName, bool kick) const
+{
+    std::shared_lock lock(this->mutex_);
+    const auto &assignments =
+        kick ? this->kickPaintMap_ : this->twitchPaintMap_;
+    const auto assignment = assignments.find(userName.toLower());
+    if (assignment == assignments.end())
+    {
+        return nullptr;
+    }
+    const auto paint = this->knownPaints_.find(assignment->second);
+    return paint == this->knownPaints_.end() ? nullptr : paint->second;
+}
+
 std::shared_ptr<Paint> SeventvPaints::getPaintByID(const QString &paintID) const
 {
     if (paintID.startsWith(QLatin1String(SolrinoPaints::ID_PREFIX)))

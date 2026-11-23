@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: MIT
 
 #include "controllers/commands/builtin/Misc.hpp"
+#include "widgets/dialogs/SolrinoMessagesWindow.hpp"
+#include "widgets/dialogs/SolrinoGiftDialog.hpp"
 #include "widgets/dialogs/SolrinoBadgePanel.hpp"
 
 #include "Application.hpp"
@@ -1200,6 +1202,24 @@ QString user(const CommandContext &ctx)
     }
 
     openTwitchUsercard(channelName, userName);
+    return "";
+}
+
+QString solrinoMessages(const CommandContext &ctx)
+{
+    QString login;
+    if (ctx.words.size() > 1)
+    {
+        login = ctx.words.at(1);
+        login.remove(u'@');
+    }
+    openSolrinoMessages(login);
+    return "";
+}
+
+QString solrinoGift(const CommandContext &ctx)
+{
+    openSolrinoGiftDialog(ctx.words.size() > 1 ? ctx.words.at(1) : QString());
     return "";
 }
 

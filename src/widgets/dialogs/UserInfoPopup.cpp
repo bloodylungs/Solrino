@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "widgets/dialogs/UserInfoPopup.hpp"
+#include "widgets/dialogs/SolrinoMessagesWindow.hpp"
 
 #include "Application.hpp"
 #include "common/Channel.hpp"
@@ -2047,6 +2048,8 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
     // The user's banner, above everything else
     this->banner_ = new UsercardBanner(this);
     layout->addWidget(this->banner_);
+    // It can be turned off, which makes the card much shorter
+    this->banner_->setVisible(getSettings()->solrinoUsercardBanner);
 
     // first line
     auto head = layout.emplace<QHBoxLayout>().withoutMargin();
@@ -2151,6 +2154,22 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
             avatarBox.emplace<LabelButton>(QString{}, nullptr, QSize{2, 2})
                 .assign(&this->ui_.switchAvatars);
         switchAv->hide();
+
+        // Solrino messages: an end-to-end encrypted chat with this person
+        auto *messageButton = new QPushButton(QStringLiteral("Message"), this);
+        this->ui_.messageButton = messageButton;
+        messageButton->setAutoDefault(false);
+        messageButton->setDefault(false);
+        messageButton->setFlat(true);
+        messageButton->setFocusPolicy(Qt::TabFocus);
+        messageButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+        messageButton->setToolTip(
+            QStringLiteral("Send an end-to-end encrypted Solrino message"));
+        messageButton->hide();
+        avatarBox->addWidget(messageButton);
+        QObject::connect(messageButton, &QPushButton::clicked, this, [this] {
+            openSolrinoMessages(this->userName_);
+        });
         QObject::connect(
             switchAv.getElement(), &LabelButton::leftClicked, [this] {
                 if (getApp()->getStreamerMode()->isEnabled() &&
@@ -2393,6 +2412,24 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
                 .assign(&this->ui_.createdDateLabel);
             vbox.emplace<Label>("").assign(&this->ui_.lastLiveLabel);
             vbox->addWidget(paintButton);
+            // Wearing a Solrino paint doesn't take off a 7TV one, so both
+            // show: the Solrino paint above, the 7TV paint here
+            auto *seventvPaint = new UsercardPaintButton(this);
+            seventvPaint->hide();
+            this->ui_.identitySeventvPaint = seventvPaint;
+            QObject::connect(
+                seventvPaint, &Button::leftClicked, this, [seventvPaint] {
+                    const auto &paint = seventvPaint->paint();
+                    if (!paint || paint->id.isEmpty())
+                    {
+                        return;
+                    }
+                    QDesktopServices::openUrl(QUrl(
+                        QStringLiteral("https://7database.com/paint/") +
+                        QString::fromLatin1(
+                            QUrl::toPercentEncoding(paint->id))));
+                });
+            vbox->addWidget(seventvPaint);
             createUsercardColorRow(vbox, &this->ui_.userColorRow,
                                    &this->ui_.userColorSwatch,
                                    &this->ui_.userColorLabel);
@@ -2852,6 +2889,12 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
             auto *paint = static_cast<UsercardPaintButton *>(
                 this->ui_.identityPaint);
             paint->refreshAnimationFrame();
+            if (this->ui_.identitySeventvPaint->isVisible())
+            {
+                static_cast<UsercardPaintButton *>(
+                    this->ui_.identitySeventvPaint)
+                    ->refreshAnimationFrame();
+            }
         });
     this->signalHolder_.managedConnect(
         getApp()->getFonts()->fontChanged, [this] {
@@ -2894,6 +2937,9 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
         this->signalHolder_);
 
     static_cast<UsercardPaintButton *>(this->ui_.identityPaint)
+        ->setFont(getApp()->getFonts()->getFont(FontStyle::UiMedium,
+                                                this->scale()));
+    static_cast<UsercardPaintButton *>(this->ui_.identitySeventvPaint)
         ->setFont(getApp()->getFonts()->getFont(FontStyle::UiMedium,
                                                 this->scale()));
     this->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Policy::Ignored);
@@ -3626,6 +3672,10 @@ void UserInfoPopup::setData(const QString &name,
     this->followStatusRequestInFlight_ = false;
     this->followMutationInFlight_ = false;
     this->ui_.followButton->hide();
+    if (this->ui_.messageButton != nullptr)
+    {
+        this->ui_.messageButton->hide();
+    }
     this->identityUserColor_ = {};
     this->messageUserColor_ = {};
     this->apiUserColor_ = {};
@@ -4472,6 +4522,16 @@ void UserInfoPopup::updateUsercardMessagesVisibility()
     {
         this->applyPopupSize(this->sizeHint());
     }
+    // When the messages first appear, start on the newest one
+    if (hasMessages && !hadMessages)
+    {
+        QTimer::singleShot(0, this, [this] {
+            if (this->ui_.latestMessages != nullptr)
+            {
+                this->ui_.latestMessages->getScrollBar().scrollToBottom();
+            }
+        });
+    }
 }
 
 void UserInfoPopup::resetUsercardMessageLoader()
@@ -5238,8 +5298,9 @@ void UserInfoPopup::loadBanner(const QString &userId)
     const auto generation = ++this->bannerRequestGeneration_;
     this->banner_->setPixmap({});
     // Streamer mode hiding avatars hides banners too
-    if (userId.isEmpty() || (getApp()->getStreamerMode()->isEnabled() &&
-                             getSettings()->streamerModeHideUsercardAvatars))
+    if (userId.isEmpty() || !getSettings()->solrinoUsercardBanner ||
+        (getApp()->getStreamerMode()->isEnabled() &&
+         getSettings()->streamerModeHideUsercardAvatars))
     {
         return;
     }
@@ -7037,6 +7098,22 @@ void UserInfoPopup::refreshIdentityPaint()
     button->setUserColor(this->identityUserColor_);
     button->setVisible(visible);
     this->updateIdentityStripVisibility();
+
+    // Their real 7TV paint too, when the line above shows a Solrino paint
+    auto *seventv =
+        static_cast<UsercardPaintButton *>(this->ui_.identitySeventvPaint);
+    std::shared_ptr<Paint> extra;
+    if (visible && button->isSolrinoPaint() && !this->isYouTube_ &&
+        !this->isTikTok_)
+    {
+        extra = getApp()->getSeventvPaints()->getSeventvOnlyPaint(
+            this->userName_.toLower(), this->isKick_);
+    }
+    const bool showExtra =
+        extra && !extra->getName().isEmpty() && !extra->id.isEmpty();
+    seventv->setPaint(showExtra ? std::move(extra) : nullptr);
+    seventv->setUserColor(this->identityUserColor_);
+    seventv->setVisible(showExtra);
 }
 
 void UserInfoPopup::updateFollowButtonAppearance()
@@ -7081,6 +7158,26 @@ void UserInfoPopup::updateFollowButtonAppearance()
                  rgba(hoverColor, 32), hoverColor.name(QColor::HexRgb),
                  rgba(hoverColor, 52), rgba(hoverColor, 150),
                  this->theme->messages.disabled.name(QColor::HexRgb)));
+
+    // The Message button matches, in Solrino red
+    if (auto *message = this->ui_.messageButton)
+    {
+        const QColor red("#ff4d55");
+        message->setFixedWidth(button->width() > 1 ? button->width()
+                                                   : message->width());
+        message->setFixedHeight(button->height());
+        message->setFont(button->font());
+        message->setStyleSheet(
+            QStringLiteral(
+                "QPushButton { background-color: transparent; color: %1; "
+                "border: 1px solid transparent; padding: 0; }"
+                "QPushButton:hover { background-color: %2; color: %3; }"
+                "QPushButton:pressed { background-color: %4; }"
+                "QPushButton:focus { border-color: %5; }")
+                .arg(this->theme->window.text.name(QColor::HexRgb),
+                     rgba(red, 32), red.name(QColor::HexRgb), rgba(red, 52),
+                     rgba(red, 150)));
+    }
 }
 
 void UserInfoPopup::refreshFollowButton()
@@ -7089,6 +7186,16 @@ void UserInfoPopup::refreshFollowButton()
     if (button == nullptr)
     {
         return;
+    }
+
+    if (auto *message = this->ui_.messageButton)
+    {
+        const auto me = getApp()->getAccounts()->twitch.getCurrent();
+        message->setVisible(!this->isTikTok_ && !this->isYouTube_ &&
+                            !this->isKick_ && me && !me->isAnon() &&
+                            !this->userId_.isEmpty() &&
+                            !this->userName_.isEmpty() &&
+                            me->getUserId() != this->userId_);
     }
 
     if (this->isTikTok_ || this->isYouTube_)
@@ -7760,6 +7867,10 @@ void UserInfoPopup::setYouTubeData(const MessagePtr &message,
     this->followStatusRequestInFlight_ = false;
     this->followMutationInFlight_ = false;
     this->ui_.followButton->hide();
+    if (this->ui_.messageButton != nullptr)
+    {
+        this->ui_.messageButton->hide();
+    }
     this->channel_ = openingChannel ? openingChannel : contextChannel;
     this->underlyingChannel_ = std::move(contextChannel);
     this->userId_ = selectedAuthor.channelId;
@@ -7905,6 +8016,10 @@ void UserInfoPopup::setTikTokData(const TikTokAuthor &author,
     this->canChangeTargetBlock_ = false;
     this->targetBlocked_ = false;
     this->ui_.followButton->hide();
+    if (this->ui_.messageButton != nullptr)
+    {
+        this->ui_.messageButton->hide();
+    }
 
     this->underlyingChannel_ =
         contextChannel && contextChannel->getType() == Channel::Type::TikTok

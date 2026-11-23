@@ -504,7 +504,8 @@ void Notebook::select(QWidget *page, bool focusPage, bool recordInHistory)
         }
 
         if (auto *group = this->findTabGroup(item->tab->groupId());
-            group && group->collapsed)
+            group && group->collapsed &&
+            !getSettings()->solrinoKeepGroupsCollapsed)
         {
             group->collapsed = false;
         }

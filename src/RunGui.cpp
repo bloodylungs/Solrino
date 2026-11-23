@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "RunGui.hpp"
+#include "singletons/SolrinoInstance.hpp"
 
 #include "Application.hpp"
 #include "common/Args.hpp"
@@ -16,6 +17,7 @@
 #include "singletons/Settings.hpp"
 #include "singletons/Updates.hpp"
 #include "singletons/WindowManager.hpp"
+#include "widgets/Window.hpp"
 #include "util/CombinePath.hpp"
 #include "util/SelfCheck.hpp"
 #include "util/UnixSignalHandler.hpp"
@@ -101,20 +103,30 @@ void writeMigrationReadyMarker(const Args &args)
     }
 }
 
-void restoreGuiInstance()
+/// Another copy of Solrino is starting. If this one is hidden in the tray, it
+/// comes back and the new copy stops. If this one is already on screen, the
+/// new copy is told to open as a second Solrino.
+bool restoreGuiInstanceIfHidden()
 {
     if (isAppAboutToQuit())
     {
-        return;
+        return false;
     }
 
     auto *app = dynamic_cast<Application *>(tryGetApp());
     if (app == nullptr || app->getWindows() == nullptr)
     {
-        return;
+        return false;
+    }
+
+    auto &main = app->getWindows()->getMainWindow();
+    if (main.isVisible() && !main.isMinimized())
+    {
+        return false;
     }
 
     app->getWindows()->showMainWindow();
+    return true;
 }
 
 std::unique_ptr<QLocalServer> createGuiActivationServer(const Paths &paths)
@@ -149,9 +161,12 @@ std::unique_ptr<QLocalServer> createGuiActivationServer(const Paths &paths)
                      [server = server.get()] {
                          while (auto *socket = server->nextPendingConnection())
                          {
+                             const bool shown = restoreGuiInstanceIfHidden();
+                             socket->write(shown ? "shown\n" : "open\n");
+                             socket->flush();
+                             socket->disconnectFromServer();
                              socket->deleteLater();
                          }
-                         restoreGuiInstance();
                      });
     QObject::connect(qApp, &QApplication::aboutToQuit, server.get(),
                      &QLocalServer::close);
@@ -381,8 +396,16 @@ bool activateExistingGuiInstance(const Paths &paths)
     socket.write("activate\n");
     socket.flush();
     socket.waitForBytesWritten(150);
+    // The running copy answers "shown" if it brought itself back from the
+    // tray. Anything else (it was already on screen, or it's an older Solrino
+    // that doesn't answer) means this copy opens as a second Solrino.
+    QByteArray reply;
+    while (!reply.contains('\n') && socket.waitForReadyRead(1000))
+    {
+        reply += socket.readAll();
+    }
     socket.disconnectFromServer();
-    return true;
+    return reply.startsWith("shown");
 }
 
 void runGui(QApplication &a, const Modes &modes, const Paths &paths,
@@ -479,6 +502,8 @@ void runGui(QApplication &a, const Modes &modes, const Paths &paths,
     if (!args.isFramelessEmbed)
     {
         activationServer = createGuiActivationServer(paths);
+        // Another Solrino already answers for this settings folder
+        solrino::secondInstanceFlag() = activationServer == nullptr;
     }
 
     QTimer::singleShot(0, qApp, [&args] {

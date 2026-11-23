@@ -1,28 +1,27 @@
-# Changes since v1.0.44
+# Changes since v1.0.45
 
 Not released yet. Collect everything here, then use it for the release notes.
 
 ## App
 
-- **Song for OBS:** Solrino shares the song you're playing with the Solrino website's OBS overlay (on this PC only, at 127.0.0.1:47391, readable only by solrino's site). The overlay turns from "Chat by Solrino" into the song card, and Solrino hides its own song card while OBS shows it.
+- **Two Solrinos at once:** opening Solrino while it's already on screen now opens a second copy instead of just bringing the first one forward. If the first one is hidden in the tray, it still comes back instead. Automatic actions (raid shoutouts, auto-redeem, opening the browser when someone goes live) only run in the first copy, so they never happen twice. Both copies share the same settings, so whichever closes last saves its layout.
 
-- **Raid shoutouts are instant:** the automatic raid shoutout now goes out as soon as the raid comes in, and sends Twitch's own `/shoutout` too, in case the channel has no bot for `!so`.
-
-- **Tab group click style for all groups:** Settings > Solrino now has "Make all groups expand tabs" and "Make all groups open a tab list" buttons, so you can switch every existing folder back to the older tab-list style in one click.
-
-- **7TV Emotes tab in Vanity:** browse trending, most popular and newly uploaded 7TV emotes, or search them. Pick one and click **Add to my channel** to put it in your 7TV channel emote set (needs your 7TV account connected in the 7TV tab), or **Add with bot** to send `#add` with the emote's 7TV link in chat for a bot like PotatBot, so even brand-new emotes are found.
-- **Full usercard banners:** the banner at the top of a usercard now shows the whole image in its own shape instead of a cropped strip.
-
-- **30 new paints:** Sunny Side Up, Crispy Bacon, Kiwi Cut, Triple Scoop, Butter Popcorn, Sour Worm, Choco Peanut, Coconut Split, Gas Giant, Ice Giant, Fallout, Cloud Nine, Storm Front, Tiger Stripe, Dalmatian, Koi Pond, Firefly Meadow, Lobster, Malachite, Bismuth, Brushed Steel, Verdigris, Argyle Knit, Patchwork, Beehive, Darkroom, Pressed Flowers, Lucky Clover, Birthday Cake and Glass Marble.
-
-- **Prediction buttons:** mods and the streamer get a "Pay out <outcome>" button for each outcome and a "Refund" button right under an open prediction. Click twice to confirm, since paying out or refunding can't be undone.
-- **End poll button:** mods and the streamer get an "End poll" button right under a running poll in the poll banner. One click ends it, the same as typing `/endpoll`.
-- **Auto-open when live opens your browser:** when a channel you picked goes live, the stream also opens in your default browser (Chrome, Brave and so on). There's a checkbox for it in the go-live dialog, on by default.
-- Fixed the Now Playing overlay sometimes showing no album art, or the last song's art, when Spotify changed songs.
-- **New Early Supporter badge look:** still black, now glossy like polished volcanic glass, with moving reflections, a rainbow sheen sliding across, a bright silver edge and a glowing white S.
-- **Top Donor badge:** a new background behind the star, with dark silk flowing in folds of magenta, pink and gold.
-- **Developer badge:** a new background behind the star, with bright neon bands in lime, green, teal and yellow flowing like contour lines.
-- **New Founder badge look:** a crimson metal star with a gold edge, a glowing S and sparkles on its points.
+- **Solrino messages (end-to-end encrypted DMs):** a new Messages button in the title bar, or type `/dm @name` (`/messages` opens the inbox). Only the two people talking can read them: each PC makes its own keys, every message is sealed for each of the other person's devices and signed, and Solrino's server only passes on sealed envelopes without knowing who sent them, deleting them once delivered (or after 14 days). First messages from someone new go to Requests. Block, delete chat, and a Security code to compare with the other person. If someone's keys change, Solrino warns and won't send until you've checked. History stays on your PC, locked to your Windows user. Needs the badge server deploy.
+- **Message button on user cards:** right under Follow and Show Twitch, it opens an encrypted Solrino chat with that person. The Messages window has avatars, chat previews, search, real chat bubbles and a rounded send box.
+- **Gift a badge:** type `/gift @name` to buy a for-sale badge (supporter or top donor) for someone else, like a gifted sub. They get a "<you> gifted you a badge" popup with your note. Checkout isn't open yet, so the last step says "Checkout coming soon". The website's Purchase page has a matching "Gift it" button on every badge.
+- **Early Supporter badge redesign:** a glossy black star with a white S, now in a silver frame on black marble, with thin silver veins slowly drifting through it.
+- **Stopwatch on timeout buttons can be turned off:** Settings > General has a "Stopwatch on timeout buttons" box. Unticking it brings back the plain "5 over m" timeout buttons.
+- Fixed the reaction button sometimes covering the reply button. It now moves to the left of it.
+- Fixed user cards sometimes hiding the newest message. The card stays on screen when it grows, and opens scrolled to the newest message.
+- Fixed messages sometimes sending from your other account after switching accounts, when Chat spoofer was on. It now only uses a saved login for the account you're on, and otherwise sends normally from that account.
+- **Mod button size:** Settings > General has a "Mod button size" dropdown (Normal, Large, Larger) for the ban, timeout, delete and pin buttons next to messages.
+- **Turn off user card banners:** a "Banner on user cards" box in Settings > General. Unticking it removes the banner picture, so user cards are much shorter.
+- **Keep tab groups closed:** a "Keep tab groups closed when switching tabs" box in Settings > General. Switching to a tab inside a closed group no longer opens the group.
+- **Uses less CPU:** animated emotes, badges and paints now run at 30 frames a second instead of 50, and stop completely while every Solrino window is minimized or hidden in the tray (like while gaming), then pick up again when you come back.
+- **Replace with bot:** the 7TV Emotes tab in Vanity has a new button that sends `#add <emote link> -f`, so a bot like PotatBot swaps out an emote that already has the same name.
+- **Selfbot rules come with you:** importing from another fork during setup now also brings over your Chat automations (selfbot rules) and their counters. Setup's import screen says so. (Installer change: needs the installer rebuilt at release.)
+- Fixed it looking like a Solrino paint took off your 7TV paint. Your 7TV paint was never removed (other apps still show it), but user cards only listed the Solrino one. They now show both: "Solrino Paint" and "7TV Paint".
+- **Early Supporter (Classic):** anyone with Early Supporter can choose between the new framed marble look and the original black glass star. Pick "Early Supporter (Classic)" in /vanity. Needs the badge server deploy.
 
 ## Mac (not ready to announce)
 
@@ -32,8 +31,5 @@ Not released yet. Collect everything here, then use it for the release notes.
 - Windows-only parts (Now Playing, the installer) don't work on Mac yet.
 
 ## Website
-
-- **Live since 2026-11-17:** page loading animation; hero chat window leans toward the mouse; drag-to-spin 3D badge viewer; "Same chat. Better." before/after slider; live badge rarity tags; "The people of Solrino" section (streamers, supporters, credits; fill in `site/assets/people.json`); a **Paints** page to try every paint on your own name; interactive settings tour on Features; a 3D laptop you can turn; "Your own Solrino page" teaser; a **Streamer kit** page with the logo, an OBS overlay (`/overlay`) and a blurb.
-
 
 - **Mac downloads, hidden until the Mac release:** set `MAC_READY = true` in `site/nav.js` and change "Free for Windows" in `site/_build.py` to turn them on. separate downloads for Windows and Mac. Mac visitors get "Download for Mac" with Mac install steps; everyone sees a "Get the Mac/Windows version" link under the main button; the line under it says "Free for Windows and Mac". These are in `site/nav.js` and `site/_build.py` locally, so any website deploy before the Mac release would put them live. Deploy the badge server's `?platform=mac` download first, and attach `Solrino.dmg` to the GitHub release.

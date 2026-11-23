@@ -224,6 +224,8 @@ WindowManager::WindowManager(const Args &appArgs_, const Paths &paths,
     this->updateWordTypeMaskListener.add(settings.showPronounsInChat);
 
     this->forceLayoutChannelViewsListener.add(settings.solrinoModButtonGap);
+    this->forceLayoutChannelViewsListener.add(settings.solrinoTimeoutStopwatch);
+    this->forceLayoutChannelViewsListener.add(settings.solrinoModButtonScale);
     this->forceLayoutChannelViewsListener.add(
         settings.moderationActions.delayedItemsChanged);
     this->forceLayoutChannelViewsListener.add(

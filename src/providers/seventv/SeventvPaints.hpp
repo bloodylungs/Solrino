@@ -58,6 +58,9 @@ public:
                              std::span<const seventv::eventapi::User> users);
 
     std::shared_ptr<Paint> getPaint(const QString &userName, bool kick) const;
+    /// Their 7TV paint only, even when they also wear a Solrino paint
+    std::shared_ptr<Paint> getSeventvOnlyPaint(const QString &userName,
+                                               bool kick) const;
     std::shared_ptr<Paint> getPaintByID(const QString &paintID) const;
     SeventvPaintLoadStatus getPaintLoadStatus(const QString &paintID) const;
 

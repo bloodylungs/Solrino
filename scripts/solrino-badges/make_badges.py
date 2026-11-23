@@ -483,7 +483,59 @@ def contributor():
 
 
 def obsidian():
-    """Early Supporter: polished black volcanic glass. Deep reflections move
+    """Early Supporter: a glossy black star with a white S, in a silver frame
+    on black marble. Thin silver veins drift slowly through the marble, and a
+    soft shine sweeps across now and then."""
+    ring = fill(frame_ring())
+    star_d = sd_emblem(0.84, 0.0)
+    star = fill(star_d)
+    down, size, thickness = LETTER_FIT[SHAPE]
+    letter_d = sd_letter(0.84, down * 0.84, thickness * 0.84, size)
+    letter = fill(letter_d)
+    letter_glow = np.exp(-np.maximum(letter_d, 0) / 0.05) * (letter_d > -0.001)
+    star_rim = np.exp(-((star_d + 0.02) / 0.018) ** 2) * star
+    outline = fill(star_d - 0.04) * (1 - star)
+    # Keeps the veins softer right behind the star
+    clear = smooth(-0.02, 0.14, star_d)
+
+    frame_dark, frame_light = rgb("#454a58"), rgb("#e8ebf2")
+    stone_dark, stone_light = rgb("#050507"), rgb("#1b1c24")
+    vein = rgb("#e9eef8")
+    black, deep, glint = rgb("#15151c"), rgb("#020203"), rgb("#646a7e")
+    white = rgb("#ffffff")
+
+    def run(f):
+        phase = TAU * f
+        # Black marble: cloudy shades of near-black, with thin silver veins
+        cloud = 0.5 + 0.5 * np.sin(X * 1.7 + 1.4 * np.sin(Y * 2.3 + phase * 0.5) + phase * 0.5)
+        out = mix(stone_dark, stone_light, (cloud * 0.8)[..., None])
+        a = np.sin(X * 3.1 + 2.2 * np.sin(Y * 2.4 + phase) + 0.6 * np.sin(X * 5.0 - phase))
+        b = np.sin(Y * 3.6 - 1.8 * np.sin(X * 2.8 - phase) + phase)
+        veins = np.exp(-((a + b * 0.6) / 0.07) ** 2)
+        fine = np.exp(-(np.sin(X * 7.3 + Y * 4.1 + 1.5 * np.sin(Y * 5.2 + phase)) / 0.05) ** 2)
+        out = out + vein * ((veins * 0.55 + fine * 0.16) * (0.35 + 0.65 * clear))[..., None]
+        # A soft shine crossing the stone
+        out = out + white * (moving_shine(f, 0.3) * 0.06)[..., None]
+
+        # Silver frame with light running round it
+        out = over(out, two_tone(phase, frame_dark, frame_light, stretch=0.8), ring)
+
+        # A dark gap so the star stands off the veins
+        out = over(out, np.zeros(3, np.float32), outline * 0.85)
+
+        # Glossy black star with a silver edge and a white S
+        body = chrome(star_d, black, glint, deep, phase)
+        out = over(out, body, star)
+        out = over(out, two_tone(phase, frame_dark, frame_light, 1.3, stretch=1.2), star_rim)
+        out = out + white * (letter_glow * (1 - letter) * star * 0.3)[..., None]
+        out = over(out, white, letter)
+        return np.clip(out, 0, 1), PLATE_FILL
+
+    return run
+
+
+def obsidian_classic():
+    """Early Supporter (Classic), the original look: polished black volcanic glass. Deep reflections move
     across the black, a faint rainbow sheen slides over it like light on
     obsidian, with a bright silver edge and a glowing white S."""
     scale = FREE_SCALE * 0.94
@@ -2032,6 +2084,7 @@ BADGES = [
     ("special", special),
     ("top_donor_alt", top_donor_alt),
     ("obsidian", obsidian),
+    ("obsidian_classic", obsidian_classic),
     ("contributor", contributor),
     ("developer", developer),
     ("top_donor", top_donor),

@@ -68,6 +68,7 @@ private:
     QPushButton *addButton_{};
     /// Asks a chat bot to add it instead, with "#add <emote link>"
     QPushButton *botButton_{};
+    QPushButton *replaceButton_{};
     QVector<SolrinoEmoteTile *> tiles_;
     SolrinoEmoteTile *picked_{};
     QTimer animationTimer_;

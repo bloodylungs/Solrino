@@ -2162,7 +2162,7 @@ namespace SolrinoSetup
             {
                 DrawHeader(g, a);
                 DrawText(g, "Bring your settings over?", fontTitle, Fade(Theme.Text1, text), Gutter - 1, 80);
-                DrawText(g, "Import your settings and chat tabs from another fork such as Moltorino or Bluzyrino.",
+                DrawText(g, "Import your settings, chat tabs and selfbot rules from another fork such as Moltorino or Bluzyrino.",
                      fontBody, Fade(Theme.Text2, text), Gutter + 1, 118, CardW - Gutter * 2);
                 rowsX = Gutter; rowsW = CardW - Gutter * 2; top = 166;
             }
@@ -2174,7 +2174,7 @@ namespace SolrinoSetup
                 using (var format = new StringFormat())
                 {
                     format.Alignment = StringAlignment.Center;
-                    g.DrawString("Import your settings and chat tabs from another fork such as Moltorino or Bluzyrino.",
+                    g.DrawString("Import your settings, chat tabs and selfbot rules from another fork such as Moltorino or Bluzyrino.",
                         fontBody, brush, new RectangleF(60, 104, CardW - 120, 40), format);
                 }
                 rowsX = 70; rowsW = CardW - 140; top = 148;
@@ -2714,7 +2714,7 @@ namespace SolrinoSetup
             float y = FlowTop(f);
             DrawText(g, "Bring your settings over?", FlowTitleFont(f), Fade(Theme.Text1, text), f.Area.X - 1, y);
             y += FlowTitleHeight(f);
-            y += FlowParagraph(g, f, "Import your settings and chat tabs from another fork such as Moltorino or Bluzyrino.", text, y) + 10;
+            y += FlowParagraph(g, f, "Import your settings, chat tabs and selfbot rules from another fork such as Moltorino or Bluzyrino.", text, y) + 10;
             for (int i = 0; i < forks.Count; i++)
             {
                 DrawForkRow(g, new RectangleF(f.Area.X, y + i * 30, f.Area.Width, 26), i, controls);

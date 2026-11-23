@@ -454,6 +454,7 @@ int mainBadgeRank(const QString &badge)
         QStringLiteral("supporter_plus_plus_plus_alt"),
         QStringLiteral("supporter_plus_plus_plus"),
         QStringLiteral("obsidian"),
+        QStringLiteral("obsidian_classic"),
         QStringLiteral("supporter_plus_plus_alt"),
         QStringLiteral("supporter_plus_plus"),
         QStringLiteral("supporter_plus_alt"),

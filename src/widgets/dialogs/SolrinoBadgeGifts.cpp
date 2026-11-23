@@ -1,6 +1,9 @@
 #include "widgets/dialogs/SolrinoBadgeGifts.hpp"
 
 #include "Application.hpp"
+#include "common/network/NetworkRequest.hpp"
+#include "common/network/NetworkResult.hpp"
+#include "common/SolrinoVersion.hpp"
 #include "controllers/accounts/AccountController.hpp"
 #include "providers/moltorino/MoltorinoSupporterBadges.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
@@ -74,7 +77,8 @@ class BadgeGiftWindow : public QWidget
 {
 public:
     BadgeGiftWindow(const MoltorinoSupporterBadge &badge, QWidget *parent,
-                    bool givenByOwner = false)
+                    bool givenByOwner = false, const QString &giftFrom = {},
+                    const QString &giftNote = {})
         : QWidget(parent, Qt::Tool | Qt::FramelessWindowHint)
         , animate_(getSettings()->solrinoSmoothAnimations)
     {
@@ -84,7 +88,14 @@ public:
         {
             this->name_.remove(0, prefix.size());
         }
-        if (givenByOwner)
+        if (!giftFrom.isEmpty())
+        {
+            // Someone bought it for them, like a gifted sub
+            this->heading_ = QStringLiteral("%1 gifted you a badge").arg(giftFrom);
+            this->note_ = giftNote.isEmpty() ? QStringLiteral("Click to wear it.")
+                                             : QStringLiteral("\u201C%1\u201D").arg(giftNote);
+        }
+        else if (givenByOwner)
         {
             this->heading_ = QStringLiteral("%1 has given you a badge").arg(GIVER);
             this->note_ = QStringLiteral("Click to wear it.");
@@ -354,6 +365,8 @@ private:
 };
 
 QPointer<BadgeGiftWindow> openGift;
+// While asking the server who a gift is from
+bool fetchingGift = false;
 
 void checkForGift();
 
@@ -452,7 +465,36 @@ bool showGivenBadge(const QString &userId, MoltorinoSupporterBadges &provider,
     {
         return false;
     }
-    openGiftWindow(new BadgeGiftWindow(*fresh, parent, true));
+    // Ask whether someone gifted it, so the popup can say who
+    const auto badge = *fresh;
+    QPointer<QWidget> where(parent);
+    fetchingGift = true;
+    NetworkRequest(QString::fromLatin1(SOLRINO_BADGE_SERVER) +
+                   QStringLiteral("/v2/badges/me?userId=") + userId)
+        .timeout(8000)
+        .onSuccess([badge, where](const NetworkResult &result) {
+            fetchingGift = false;
+            if (where == nullptr)
+            {
+                return;
+            }
+            const auto gift = result.parseJson()
+                                  .value("gifts")
+                                  .toObject()
+                                  .value(badge.categoryId)
+                                  .toObject();
+            openGiftWindow(new BadgeGiftWindow(
+                badge, where, true, gift.value("from").toString().left(25),
+                gift.value("note").toString().left(120)));
+        })
+        .onError([badge, where](const NetworkResult &) {
+            fetchingGift = false;
+            if (where != nullptr)
+            {
+                openGiftWindow(new BadgeGiftWindow(badge, where, true));
+            }
+        })
+        .execute();
     return true;
 }
 
@@ -469,7 +511,7 @@ void showGift(const MoltorinoSupporterBadge &badge, QWidget *parent)
 
 void checkForGift()
 {
-    if (isAppAboutToQuit() || openGift != nullptr)
+    if (isAppAboutToQuit() || openGift != nullptr || fetchingGift)
     {
         return;
     }

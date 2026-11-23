@@ -1,4 +1,5 @@
 #include "widgets/helper/SolrinoPing.hpp"
+#include "singletons/SolrinoInstance.hpp"
 #include "widgets/dialogs/SolrinoTools.hpp"
 #include "widgets/dialogs/SolrinoWrappedDialog.hpp"
 
@@ -1263,7 +1264,8 @@ void shoutoutRaider(const ChannelPtr &channel, const QString &raiderLogin)
     // Only for a chat you're looking at, so it never speaks in a chat
     // you just have open in the background
     if (!getSettings()->solrinoAutoShoutoutRaids || channel == nullptr ||
-        !channel->hasModRights() || !isChatOnScreen(*channel))
+        !channel->hasModRights() || !isChatOnScreen(*channel) ||
+        isSecondInstance())
     {
         return;
     }
@@ -1506,7 +1508,7 @@ void autoRedeemFirst(const std::shared_ptr<TwitchChannel> &channel,
                      bool initialUpdate)
 {
     if (channel == nullptr || !getSettings()->solrinoAutoRedeemFirst ||
-        !canGiveBadges())
+        !canGiveBadges() || isSecondInstance())
     {
         return;
     }
@@ -1644,7 +1646,8 @@ void startFirstWatcher()
         const auto now = QDateTime::currentDateTimeUtc();
         // Still waiting on the last check, unless its reply got lost
         if ((asking > 0 && askedAt.secsTo(now) < 20) ||
-            !getSettings()->solrinoAutoRedeemFirst || !canGiveBadges())
+            !getSettings()->solrinoAutoRedeemFirst || !canGiveBadges() ||
+            isSecondInstance())
         {
             return;
         }

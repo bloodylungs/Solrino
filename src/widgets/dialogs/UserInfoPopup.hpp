@@ -363,6 +363,8 @@ private:
         QWidget *identityBadges = nullptr;
         QWidget *identityPaintRow = nullptr;
         QWidget *identityPaint = nullptr;
+        // Their 7TV paint, shown too when they also wear a Solrino paint
+        QWidget *identitySeventvPaint = nullptr;
         DrawnButton *userActions = nullptr;
 
         LiveIndicator *liveIndicator = nullptr;
@@ -392,6 +394,7 @@ private:
         LabelButton *crossBanActionLabel = nullptr;
         LabelButton *crossUnbanActionLabel = nullptr;
         QPushButton *followButton = nullptr;
+        QPushButton *messageButton = nullptr;
         LabelButton *switchAvatars = nullptr;
 
         TimeoutWidget *timeoutWidget = nullptr;

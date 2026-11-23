@@ -1201,6 +1201,14 @@ set(SOURCE_FILES
         widgets/settingspages/CustomizationPage.hpp
         widgets/dialogs/SolrinoBadgeGifts.cpp
         widgets/dialogs/SolrinoBadgeGifts.hpp
+        widgets/dialogs/SolrinoGiftDialog.cpp
+        widgets/dialogs/SolrinoGiftDialog.hpp
+        widgets/dialogs/SolrinoMessagesWindow.cpp
+        widgets/dialogs/SolrinoMessagesWindow.hpp
+        providers/moltorino/SolrinoCrypto.cpp
+        providers/moltorino/SolrinoCrypto.hpp
+        providers/moltorino/SolrinoMessages.cpp
+        providers/moltorino/SolrinoMessages.hpp
         widgets/settingspages/LayoutPage.cpp
         widgets/settingspages/LayoutPage.hpp
         widgets/settingspages/ExternalToolsPage.cpp

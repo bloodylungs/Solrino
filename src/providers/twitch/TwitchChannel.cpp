@@ -2165,8 +2165,14 @@ void TwitchChannel::sendMessage(const QString &message)
         !parsedMessage.startsWith('/') && !parsedMessage.startsWith('.') &&
         !this->roomId().isEmpty() && !shouldUseBotBadgeForSelectedAccount())
     {
-        const auto auth = MoltorinoAuth::resolveCurrentUserToken();
-        if (auth.hasToken())
+        // Only a saved login for the exact account that's selected. Falling
+        // back to another saved login sent messages from the wrong account
+        // after switching accounts.
+        const auto auth = MoltorinoAuth::resolveSelectedUserToken();
+        const auto current = getApp()->getAccounts()->twitch.getCurrent();
+        if (auth.hasToken() && current != nullptr && !current->isAnon() &&
+            (auth.userId.trimmed().isEmpty() ||
+             auth.userId.trimmed() == current->getUserId()))
         {
             this->lastSentMessage_ = parsedMessage;
             this->updateBttvActivity();

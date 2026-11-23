@@ -6165,9 +6165,32 @@ void ChannelView::drawMessages(QPainter &painter, const QRegion &area)
                 this->canReactTo(layout->getMessage()))
             {
                 const auto s = this->scale();
-                const QRect button(
-                    layout->getWidth() - int(40 * s), ctx.y + int(2 * s),
-                    int(28 * s), int(20 * s));
+                QRect button(layout->getWidth() - int(40 * s),
+                             ctx.y + int(2 * s), int(28 * s), int(20 * s));
+                // Never on top of the reply button: move left until clear
+                auto onReply = [&](const QRect &spot) {
+                    for (const double fx : {0.05, 0.5, 0.95})
+                    {
+                        for (const double fy : {0.2, 0.8})
+                        {
+                            const QPointF probe(
+                                spot.left() + spot.width() * fx,
+                                spot.top() - ctx.y + spot.height() * fy);
+                            const auto *element = layout->getElementAt(probe);
+                            if (element != nullptr &&
+                                element->getLink().type ==
+                                    Link::ReplyToMessage)
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                };
+                for (int tries = 0; tries < 4 && onReply(button); ++tries)
+                {
+                    button.translate(-int(30 * s), 0);
+                }
                 this->reactionButtonRect_ = button;
                 painter.save();
                 painter.setRenderHint(QPainter::Antialiasing);

@@ -1249,6 +1249,16 @@ public:
     QStringSetting solrinoTabAreaColor{"/solrino/tabArea/color", "#ff1a1214"};
     /// Gap between mod buttons, 0 to 5. Empty keeps the normal space.
     QStringSetting solrinoModButtonGap{"/solrino/modButtonGap", ""};
+    // Timeout mod buttons show a stopwatch with the length; off is the plain
+    // "5" over "m" look
+    BoolSetting solrinoTimeoutStopwatch{"/solrino/timeoutStopwatch", true};
+    // Mod buttons next to messages: 1 normal, then bigger
+    QStringSetting solrinoModButtonScale{"/solrino/modButtonScale", ""};
+    // Switching to a tab inside a collapsed group leaves the group collapsed
+    BoolSetting solrinoKeepGroupsCollapsed{"/solrino/keepGroupsCollapsed",
+                                           false};
+    // The banner picture at the top of user cards
+    BoolSetting solrinoUsercardBanner{"/solrino/usercardBanner", true};
     /// Stream titles you've saved, newest first, as "channel<TAB>title"
     ChatterinoSetting<QStringList> solrinoRecentTitles = {"/solrino/recentTitles", {}};
     /// Experimental: send chat messages the way the Twitch website does

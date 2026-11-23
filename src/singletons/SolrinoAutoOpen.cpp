@@ -1,4 +1,5 @@
 #include "singletons/SolrinoAutoOpen.hpp"
+#include "singletons/SolrinoInstance.hpp"
 
 #include "Application.hpp"
 #include "common/Channel.hpp"
@@ -120,7 +121,8 @@ void check()
                 {
                     openTab(login);
                 }
-                if (getSettings()->solrinoAutoOpenBrowser && checkedOnce())
+                if (getSettings()->solrinoAutoOpenBrowser && checkedOnce() &&
+                    !solrino::isSecondInstance())
                 {
                     // The system's default browser, whatever it is
                     QDesktopServices::openUrl(

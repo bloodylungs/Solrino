@@ -220,6 +220,36 @@ void DraggablePopup::applyPopupSize(QSize suggestedSize)
     {
         this->setFixedSize(wanted.expandedTo(QSize(1, 1)));
     }
+
+    // Growing can push the bottom off the screen, hiding the newest messages
+    // on a user card. Slide it back up so all of it stays visible.
+    if (auto *screen = this->screen(); screen != nullptr && this->isVisible())
+    {
+        const auto area = screen->availableGeometry().adjusted(8, 8, -8, -8);
+        auto frame = this->frameGeometry();
+        int dx = 0;
+        int dy = 0;
+        if (frame.bottom() > area.bottom())
+        {
+            dy = area.bottom() - frame.bottom();
+        }
+        if (frame.top() + dy < area.top())
+        {
+            dy = area.top() - frame.top();
+        }
+        if (frame.right() > area.right())
+        {
+            dx = area.right() - frame.right();
+        }
+        if (frame.left() + dx < area.left())
+        {
+            dx = area.left() - frame.left();
+        }
+        if (dx != 0 || dy != 0)
+        {
+            this->move(this->pos() + QPoint(dx, dy));
+        }
+    }
 }
 
 void DraggablePopup::positionSizeGrip()

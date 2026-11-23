@@ -29,6 +29,12 @@ QString sayTranslate(const CommandContext &ctx);
 QString uptime(const CommandContext &ctx);
 QString user(const CommandContext &ctx);
 QString vanity(const CommandContext &ctx);
+
+/// /dm @user opens an encrypted Solrino message with them; /messages opens the inbox
+QString solrinoMessages(const CommandContext &ctx);
+
+/// /gift @user opens the window for buying someone a Solrino badge
+QString solrinoGift(const CommandContext &ctx);
 QString selfbot(const CommandContext &ctx);
 QString rewardRequests(const CommandContext &ctx);
 QString unbanRequests(const CommandContext &ctx);
