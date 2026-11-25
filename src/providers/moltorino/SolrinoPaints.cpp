@@ -2480,6 +2480,37 @@ std::vector<std::shared_ptr<SolrinoPaint>> buildCatalog()
         .shadows = {shade(20, 30, 60)},
         .radial = true,
     });
+    // A 1:1 copy of 7TV's Hellfire paint: the same stops, bottom to top,
+    // and the same two glows
+    styles.push_back({
+        .id = u"hellfire"_s,
+        .name = u"Hellfire"_s,
+        .description = u"Pale flame at the bottom burning up into deep red."_s,
+        .angle = 270,
+        .color =
+            [](qreal x, qreal /*t*/) {
+                static const std::vector<std::pair<qreal, QColor>> stops{
+                    {0.25, QColor("#fff1a8")}, {0.35, QColor("#fae529")},
+                    {0.55, QColor("#fd9723")}, {0.70, QColor("#f25620")},
+                    {1.00, QColor("#e31616")}};
+                if (x <= stops.front().first)
+                {
+                    return stops.front().second;
+                }
+                for (size_t i = 1; i < stops.size(); ++i)
+                {
+                    if (x <= stops[i].first)
+                    {
+                        const auto &[a, ca] = stops[i - 1];
+                        const auto &[b, cb] = stops[i];
+                        return mix(ca, cb, (x - a) / (b - a));
+                    }
+                }
+                return stops.back().second;
+            },
+        .shadows = {PaintDropShadow(0, 0, 0.1F, QColor("#dd2251")),
+                    PaintDropShadow(0, 0, 4, QColor("#e31616"))},
+    });
 
     std::vector<std::shared_ptr<SolrinoPaint>> catalog;
     for (auto &style : styles)

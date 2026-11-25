@@ -1259,6 +1259,11 @@ public:
                                            false};
     // The banner picture at the top of user cards
     BoolSetting solrinoUsercardBanner{"/solrino/usercardBanner", true};
+    /// "", "rainbow" or "random": new Twitch name color on every message
+    QStringSetting solrinoNameColorEveryMessage{
+        "/solrino/nameColorEveryMessage", ""};
+    BoolSetting solrinoRandomBadgeEveryMessage{
+        "/solrino/randomBadgeEveryMessage", false};
     /// Stream titles you've saved, newest first, as "channel<TAB>title"
     ChatterinoSetting<QStringList> solrinoRecentTitles = {"/solrino/recentTitles", {}};
     /// Experimental: send chat messages the way the Twitch website does

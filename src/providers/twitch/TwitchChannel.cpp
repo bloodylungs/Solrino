@@ -74,6 +74,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <QColor>
+#include <QRandomGenerator>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -411,6 +413,120 @@ BotBadgeSendConfig getBotBadgeSendConfig()
         settings.botBadgeClientID.getValue().trimmed(),
         settings.botBadgeUserID.getValue().trimmed(),
     };
+}
+
+/// Chat automation extras: a new name color and/or a random global badge
+/// each time you send a chat message
+void solrinoAfterOwnMessage(TwitchChannel *channel)
+{
+    const auto mode = getSettings()->solrinoNameColorEveryMessage.getValue();
+    const bool badge = getSettings()->solrinoRandomBadgeEveryMessage.getValue();
+    if (mode.isEmpty() && !badge)
+    {
+        return;
+    }
+    const auto current = getApp()->getAccounts()->twitch.getCurrent();
+    if (current == nullptr || current->isAnon())
+    {
+        return;
+    }
+    const auto userId = current->getUserId();
+
+    if (!mode.isEmpty())
+    {
+        // Any hex color needs Turbo or Prime. Without it, Twitch's named
+        // colors are used instead (remembered after the first refusal).
+        static const QStringList named{
+            "red",        "orange_red",   "golden_rod", "yellow_green",
+            "green",      "spring_green", "sea_green",  "cadet_blue",
+            "dodger_blue", "blue",        "blue_violet", "hot_pink",
+            "coral",      "chocolate",    "firebrick"};
+        static bool namedOnly = false;
+        static int step = 0;
+        static double hue = 0;
+        QString color;
+        if (namedOnly)
+        {
+            const int count = mode == QStringLiteral("rainbow") ? 12 : 15;
+            color = mode == QStringLiteral("rainbow")
+                        ? named[step++ % count]
+                        : named[QRandomGenerator::global()->bounded(count)];
+        }
+        else
+        {
+            if (mode == QStringLiteral("rainbow"))
+            {
+                hue = std::fmod(hue + 0.07, 1.0);
+            }
+            else
+            {
+                hue = QRandomGenerator::global()->generateDouble();
+            }
+            color = QColor::fromHslF(float(hue), 0.9F, 0.6F)
+                        .name(QColor::HexRgb)
+                        .toUpper();
+        }
+        getHelix()->updateUserChatColor(
+            userId, color, [] {},
+            [](auto error, const QString &) {
+                if (error == HelixUpdateUserChatColorError::InvalidColor)
+                {
+                    namedOnly = true;
+                }
+            });
+    }
+
+    if (badge && !channel->roomId().isEmpty())
+    {
+        const auto token = MoltorinoAuth::resolveSelectedUserToken();
+        if (!token.hasToken() ||
+            (!token.userId.trimmed().isEmpty() &&
+             token.userId.trimmed() != userId))
+        {
+            return;
+        }
+        const TwitchGqlAuth auth{token.token, token.clientId};
+        // The badge list is fetched once per account, then reused
+        static QString badgesFor;
+        static QVector<GqlVanityBadge> badges;
+        static QString last;
+        auto pick = [auth] {
+            if (badges.isEmpty())
+            {
+                return;
+            }
+            int index = QRandomGenerator::global()->bounded(
+                int(badges.size()));
+            if (badges[index].setId == last && badges.size() > 1)
+            {
+                index = (index + 1) % int(badges.size());
+            }
+            last = badges[index].setId;
+            TwitchGql::selectGlobalBadge(badges[index].setId,
+                                         badges[index].version, auth, [] {},
+                                         [](const QString &) {});
+        };
+        if (badgesFor == userId)
+        {
+            pick();
+            return;
+        }
+        badgesFor = userId;
+        TwitchGql::getVanityState(
+            channel->getName(), channel->roomId(), auth,
+            [userId, pick](GqlVanityState state) {
+                if (state.currentUserId != userId)
+                {
+                    badgesFor.clear();
+                    return;
+                }
+                badges = state.globalBadges;
+                pick();
+            },
+            [](const QString &) {
+                badgesFor.clear();
+            });
+    }
 }
 
 bool shouldUseBotBadgeForSelectedAccount()
@@ -2145,6 +2261,11 @@ void TwitchChannel::sendMessage(const QString &message)
         return;
     }
 
+    if (!parsedMessage.startsWith('/') && !parsedMessage.startsWith('.'))
+    {
+        solrinoAfterOwnMessage(this);
+    }
+
     auto sendNormally = [this, &parsedMessage] {
         bool messageSent = false;
         this->sendMessageSignal.invoke(parsedMessage, messageSent);
@@ -2380,6 +2501,11 @@ void TwitchChannel::sendReply(const QString &message, const QString &replyId)
         this->addSystemMessage(QString("%1 is not a known command.")
                                    .arg(parsedMessage.split(' ').first()));
         return;
+    }
+
+    if (!parsedMessage.startsWith('/') && !parsedMessage.startsWith('.'))
+    {
+        solrinoAfterOwnMessage(this);
     }
 
     auto sendNormally = [this, &parsedMessage, &replyId] {

@@ -8,7 +8,9 @@
 
 #include <QFontMetrics>
 #include <QHBoxLayout>
+#include <QContextMenuEvent>
 #include <QHash>
+#include <QMenu>
 #include <QPointer>
 #include <QPushButton>
 #include <QTimer>
@@ -23,6 +25,8 @@ namespace {
 constexpr int SENT_MS = 900;
 constexpr int MAX_BOX_WIDTH = 150;
 const QChar USAGE_SEPARATOR('\t');
+// Per-chat counts are saved as "channel<this>game"
+const QChar CHANNEL_SEPARATOR(0x1F);
 const char *GAME_NAME_PROPERTY = "solrinoGameName";
 
 QHash<QString, int> readUsage()
@@ -44,20 +48,38 @@ QHash<QString, int> readUsage()
 
 namespace solrino {
 
-QStringList mostUsedGames()
+QStringList mostUsedGames(const QString &channel)
 {
     QStringList games = getSettings()->gameSelectorGames.getValue();
     const auto usage = readUsage();
-    std::ranges::stable_sort(games, [&usage](const auto &a, const auto &b) {
-        return usage.value(a.toLower()) > usage.value(b.toLower());
+    const bool perChat = !channel.isEmpty();
+    const auto prefix = channel.toLower() + CHANNEL_SEPARATOR;
+    std::ranges::stable_sort(games, [&](const auto &a, const auto &b) {
+        const auto ka = a.toLower();
+        const auto kb = b.toLower();
+        if (perChat)
+        {
+            const int ca = usage.value(prefix + ka);
+            const int cb = usage.value(prefix + kb);
+            if (ca != cb)
+            {
+                return ca > cb;
+            }
+        }
+        return usage.value(ka) > usage.value(kb);
     });
     return games;
 }
 
-void noteGameUsed(const QString &name)
+void noteGameUsed(const QString &name, const QString &channel)
 {
     auto usage = readUsage();
-    usage[name.simplified().toLower()] += 1;
+    const auto key = name.simplified().toLower();
+    usage[key] += 1;
+    if (!channel.isEmpty())
+    {
+        usage[channel.toLower() + CHANNEL_SEPARATOR + key] += 1;
+    }
 
     QStringList entries;
     for (auto it = usage.cbegin(); it != usage.cend(); ++it)
@@ -138,7 +160,7 @@ SolrinoQuickGames::SolrinoQuickGames(Split *split, QWidget *parent)
         },
         this->connections_, false);
     this->connections_.managedConnect(this->split_->channelChanged, [this] {
-        this->updateTooltips();
+        this->rebuild();
     });
 
     this->rebuild();
@@ -167,6 +189,16 @@ void SolrinoQuickGames::leaveEvent(QEvent *event)
         this->rebuildOnLeave_ = false;
         this->rebuild();
     }
+}
+
+void SolrinoQuickGames::contextMenuEvent(QContextMenuEvent *event)
+{
+    QMenu menu(this);
+    menu.addAction("Turn off quick game bar", [] {
+        getSettings()->solrinoGameBar = false;
+    });
+    menu.addAction("Turn it back on in Settings > General")->setEnabled(false);
+    menu.exec(event->globalPos());
 }
 
 void SolrinoQuickGames::scaleChangedEvent(float /*newScale*/)
@@ -234,7 +266,9 @@ void SolrinoQuickGames::rebuild()
     }
 
     const auto style = this->boxStyle(false);
-    const auto games = solrino::mostUsedGames();
+    const auto current = this->split_->getSelectedChannel();
+    const auto games = solrino::mostUsedGames(
+        current != nullptr ? current->getName() : QString{});
     for (const auto &name : games)
     {
         if (int(this->boxes_.size()) >= limit)
@@ -302,8 +336,9 @@ void SolrinoQuickGames::send(QPushButton *box, const QString &name)
     box->setEnabled(false);
     box->setStyleSheet(this->boxStyle(true));
     QPointer<QPushButton> sent(box);
-    QTimer::singleShot(SENT_MS, this, [this, sent, name] {
-        solrino::noteGameUsed(name);
+    QTimer::singleShot(SENT_MS, this,
+                       [this, sent, name, where = channel->getName()] {
+        solrino::noteGameUsed(name, where);
         if (sent)
         {
             sent->setEnabled(true);

@@ -68,6 +68,11 @@ public:
 
     void loadPaintsByID(const QStringList &paintIDs, bool retry = false);
 
+    /// "Reload 7TV paints": tries every paint that didn't load again, asks
+    /// 7TV which paint each of these Twitch users wears now, then redraws.
+    /// `users` are (Twitch user ID, login) pairs.
+    void reload(const std::vector<std::pair<QString, QString>> &users);
+
     static QString normalizePaintID(QString paintID);
     static bool isValidPaintID(const QString &paintID);
 
@@ -108,6 +113,8 @@ private:
                          SeventvPaintLoadStatus status);
     void notifyPaintChanged(std::vector<std::pair<QString, bool>> users,
                             bool repaint = false);
+    /// Sets (or with an empty ID, clears) one Twitch user's 7TV paint
+    void setTwitchUserPaint(const QString &login, const QString &paintID);
 
     mutable std::shared_mutex mutex_;
 

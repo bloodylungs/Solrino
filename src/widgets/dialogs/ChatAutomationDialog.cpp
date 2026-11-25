@@ -939,15 +939,51 @@ ChatAutomationDialog::ChatAutomationDialog(QString initialChannel,
     globalGrid->addWidget(this->maxRuns_, 2, 1, Qt::AlignLeft);
     globalGrid->setColumnStretch(0, 1);
 
+    auto *colorLabel = new QLabel(
+        QStringLiteral("New name color on every message"), globalSettings);
+    auto *colorMode = new QComboBox(globalSettings);
+    colorMode->addItem(QStringLiteral("Off"), QString());
+    colorMode->addItem(QStringLiteral("Rainbow"), QStringLiteral("rainbow"));
+    colorMode->addItem(QStringLiteral("Random"), QStringLiteral("random"));
+    colorMode->setCurrentIndex(std::max(
+        0, colorMode->findData(getSettings()->solrinoNameColorEveryMessage
+                                   .getValue())));
+    colorMode->setToolTip(QStringLiteral(
+        "Changes your Twitch name color each time you send a message. Any "
+        "color needs Turbo or Prime; otherwise Twitch's basic colors are "
+        "used."));
+    QObject::connect(colorMode, &QComboBox::currentIndexChanged, colorMode,
+                     [colorMode] {
+                         getSettings()->solrinoNameColorEveryMessage =
+                             colorMode->currentData().toString();
+                     });
+    colorLabel->setBuddy(colorMode);
+    globalGrid->addWidget(colorLabel, 3, 0);
+    globalGrid->addWidget(colorMode, 3, 1, Qt::AlignLeft);
+
+    auto *randomBadge = new QCheckBox(
+        QStringLiteral("Random Twitch badge on every message"),
+        globalSettings);
+    randomBadge->setChecked(
+        getSettings()->solrinoRandomBadgeEveryMessage.getValue());
+    randomBadge->setToolTip(QStringLiteral(
+        "Wears a different one of your global Twitch badges each time you "
+        "send a message."));
+    QObject::connect(randomBadge, &QCheckBox::toggled, randomBadge,
+                     [](bool on) {
+                         getSettings()->solrinoRandomBadgeEveryMessage = on;
+                     });
+    globalGrid->addWidget(randomBadge, 4, 0, 1, 2);
+
     this->runStatus_ = new QLabel(globalSettings);
     this->runStatus_->setObjectName(QStringLiteral("runStatus"));
     this->runStatus_->setWordWrap(true);
-    globalGrid->addWidget(this->runStatus_, 3, 0, 1, 2);
+    globalGrid->addWidget(this->runStatus_, 5, 0, 1, 2);
 
     auto *done = new QPushButton(QStringLiteral("Done"), globalSettings);
     QObject::connect(done, &QPushButton::clicked, globalSettings,
                      &QDialog::accept);
-    globalGrid->addWidget(done, 4, 0, 1, 2, Qt::AlignRight);
+    globalGrid->addWidget(done, 6, 0, 1, 2, Qt::AlignRight);
 
     QObject::connect(
         settingsButton, &QPushButton::clicked, this,
@@ -1106,8 +1142,17 @@ ChatAutomationDialog::ChatAutomationDialog(QString initialChannel,
     this->caseSensitive_ =
         new QCheckBox(QStringLiteral("Match case"), triggerSection);
     this->caseSensitive_->setObjectName(QStringLiteral("caseSensitive"));
+    this->includeCaught_ = new QCheckBox(
+        QStringLiteral("Also messages caught by AutoMod or blocked terms"),
+        triggerSection);
+    this->includeCaught_->setObjectName(QStringLiteral("includeCaught"));
+    this->includeCaught_->setToolTip(
+        QStringLiteral("Run this rule on messages Twitch held back. You only "
+                       "see these in channels you moderate."));
     triggerGrid->addWidget(
-        controlRow(triggerSection, {this->match_, this->caseSensitive_}), 0, 1,
+        controlRow(triggerSection, {this->match_, this->caseSensitive_,
+                                    this->includeCaught_}),
+        0, 1,
         Qt::AlignLeft);
 
     this->triggerLabel_ =
@@ -1875,7 +1920,8 @@ ChatAutomationDialog::ChatAutomationDialog(QString initialChannel,
                      editChanged);
 
     for (auto *check :
-         {this->ruleEnabled_, this->caseSensitive_, this->useBotBadge_})
+         {this->ruleEnabled_, this->caseSensitive_, this->includeCaught_,
+          this->useBotBadge_})
     {
         QObject::connect(check, &QCheckBox::toggled, this, editChanged);
     }
@@ -2347,6 +2393,7 @@ void ChatAutomationDialog::loadRule(int index)
         this->trigger_->setText(rule.trigger);
         this->aliases_->setText(rule.aliases.join(QStringLiteral(", ")));
         this->caseSensitive_->setChecked(rule.caseSensitive);
+        this->includeCaught_->setChecked(rule.includeCaught);
         this->argumentMode_->setCurrentIndex(static_cast<int>(rule.arguments));
         this->stream_->setCurrentIndex(static_cast<int>(rule.stream));
         this->channelRole_->setCurrentIndex(static_cast<int>(rule.channelRole));
@@ -2442,6 +2489,7 @@ void ChatAutomationDialog::storeCurrentRule()
         alias = alias.trimmed();
     }
     rule.caseSensitive = this->caseSensitive_->isChecked();
+    rule.includeCaught = this->includeCaught_->isChecked();
     rule.timeFormat =
         selectedFormat(this->timeFormat_, this->customTimeFormat_);
     rule.dateFormat =

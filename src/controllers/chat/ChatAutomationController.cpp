@@ -382,6 +382,7 @@ chatterino::ChatAutomation Deserialize<chatterino::ChatAutomation>::get(
     rj::getSafe(value, "onlySelf", rule.onlySelf);
     rj::getSafe(value, "useBotBadge", rule.useBotBadge);
     rj::getSafe(value, "caseSensitive", rule.caseSensitive);
+    rj::getSafe(value, "includeCaught", rule.includeCaught);
     rj::getSafe(value, "randomResponse", rule.randomResponse);
     rj::getSafe(value, "use12HourTime", rule.use12HourTime);
     rj::getSafe(value, "timeFormat", rule.timeFormat);
@@ -1404,8 +1405,6 @@ void ChatAutomationController::handleMessage(
                                    MessageFlag::Disabled,
                                    MessageFlag::Subscription,
                                    MessageFlag::Whisper,
-                                   MessageFlag::AutoMod,
-                                   MessageFlag::AutoModOffendingMessage,
                                    MessageFlag::AutoModOffendingMessageHeader,
                                    MessageFlag::ModerationAction,
                                    MessageFlag::RecentMessage,
@@ -1415,6 +1414,11 @@ void ChatAutomationController::handleMessage(
     {
         return;
     }
+    // Messages held by AutoMod or blocked terms only count for rules that
+    // ask for them
+    constexpr MessageFlags caught{MessageFlag::AutoMod,
+                                  MessageFlag::AutoModOffendingMessage};
+    const bool isCaught = message->flags.hasAny(caught);
 
     const auto account = getApp()->getAccounts()->twitch.getCurrent();
     if (!account || account->isAnon())
@@ -1444,6 +1448,10 @@ void ChatAutomationController::handleMessage(
     auto &ruleLastRun = this->ruleLastRunByChannel_[key];
     for (const auto &rule : this->rules_)
     {
+        if (isCaught && !rule.includeCaught)
+        {
+            continue;
+        }
         if (!rule.enabled ||
             (rule.trigger.isEmpty() &&
              rule.match != ChatAutomationMatch::AnyMessage) ||

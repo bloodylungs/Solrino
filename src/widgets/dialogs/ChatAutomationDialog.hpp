@@ -87,6 +87,7 @@ private:
     QLineEdit *aliases_{};
     QLabel *aliasesLabel_{};
     QCheckBox *caseSensitive_{};
+    QCheckBox *includeCaught_{};
     QComboBox *match_{};
     QComboBox *action_{};
     QPlainTextEdit *response_{};

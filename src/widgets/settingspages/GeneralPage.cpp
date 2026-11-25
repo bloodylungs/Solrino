@@ -249,7 +249,9 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     });
 
     SettingWidget::checkbox("Quick game bar", s.solrinoGameBar)
-        ->setTooltip("Small boxes by the chat box with your most used games, "
+        ->setTooltip("Small boxes by the chat box with the games you use "
+                     "most in that channel. Right-click the bar to turn it "
+                     "off. "
                      "for moderators and the broadcaster. Clicking one sends "
                      "\"!game <category>\" to the channel, or the command you "
                      "set for that channel in the game popup. A bot in the "

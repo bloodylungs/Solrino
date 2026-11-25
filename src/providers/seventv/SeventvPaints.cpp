@@ -8,6 +8,7 @@
 #include "common/QLogging.hpp"
 #include "messages/Image.hpp"
 #include "providers/seventv/eventapi/Dispatch.hpp"
+#include "providers/seventv/SeventvAPI.hpp"
 #include "providers/seventv/paints/LinearGradientPaint.hpp"
 #include "providers/seventv/paints/PaintDropShadow.hpp"
 #include "providers/seventv/paints/RadialGradientPaint.hpp"
@@ -921,6 +922,115 @@ void SeventvPaints::assignPaintToUsers(
         QTimer::singleShot(0, &this->lifetimeGuard_, [this, normalizedPaintID] {
             this->loadPaintByID(normalizedPaintID);
         });
+    }
+}
+
+void SeventvPaints::setTwitchUserPaint(const QString &login,
+                                       const QString &paintID)
+{
+    const auto user = login.toLower();
+    const auto normalized = normalizePaintID(paintID);
+    if (user.isEmpty())
+    {
+        return;
+    }
+    bool changed = false;
+    {
+        std::unique_lock lock(this->mutex_);
+        auto it = this->twitchPaintMap_.find(user);
+        if (!isValidPaintID(normalized))
+        {
+            if (it != this->twitchPaintMap_.end())
+            {
+                this->twitchPaintMap_.erase(it);
+                changed = true;
+            }
+        }
+        else if (it == this->twitchPaintMap_.end())
+        {
+            this->twitchPaintMap_.emplace(user, normalized);
+            changed = true;
+        }
+        else if (it->second != normalized)
+        {
+            it->second = normalized;
+            changed = true;
+        }
+    }
+    if (isValidPaintID(normalized) && !this->getPaintByID(normalized))
+    {
+        this->loadPaintByID(normalized, true);
+    }
+    if (changed)
+    {
+        this->notifyPaintChanged({{user, false}}, true);
+    }
+}
+
+void SeventvPaints::reload(
+    const std::vector<std::pair<QString, QString>> &users)
+{
+    // Paints that failed, weren't found or got stuck are asked for again
+    QStringList again;
+    std::vector<std::pair<QString, bool>> everyone;
+    {
+        std::shared_lock lock(this->mutex_);
+        for (const auto &[id, state] : this->paintLoadStates_)
+        {
+            if (state.status != SeventvPaintLoadStatus::Ready)
+            {
+                again.append(id);
+            }
+        }
+        for (const auto &[login, id] : this->twitchPaintMap_)
+        {
+            if (!this->knownPaints_.contains(id))
+            {
+                again.append(id);
+            }
+            everyone.emplace_back(login, false);
+        }
+    }
+    {
+        std::unique_lock lock(this->mutex_);
+        for (const auto &id : again)
+        {
+            auto &state = this->paintLoadStates_[id];
+            state.status = SeventvPaintLoadStatus::Unknown;
+            state.requestID = 0;
+        }
+    }
+    if (!again.isEmpty())
+    {
+        this->loadPaintsByID(again, true);
+    }
+    this->notifyPaintChanged(std::move(everyone), true);
+
+    // Ask 7TV what the people in this chat wear now, a few at a time
+    int delay = 0;
+    for (const auto &[userId, login] : users)
+    {
+        QTimer::singleShot(delay, &this->lifetimeGuard_,
+                           [this, userId, login] {
+            auto *app = tryGetApp();
+            if (app == nullptr)
+            {
+                return;
+            }
+            app->getSeventvAPI()->getUserByTwitchID(
+                userId,
+                [this, login](const QJsonObject &json, const QByteArray &) {
+                    const auto paint = json.value("user")
+                                           .toObject()
+                                           .value("style")
+                                           .toObject()
+                                           .value("paint_id")
+                                           .toString();
+                    this->setTwitchUserPaint(login, paint);
+                },
+                [](const auto &...) {});
+        });
+        delay += 120;
     }
 }
 

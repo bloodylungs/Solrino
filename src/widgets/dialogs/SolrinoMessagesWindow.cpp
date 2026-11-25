@@ -2,6 +2,27 @@
 
 #include "providers/moltorino/SolrinoMessages.hpp"
 
+#include "Application.hpp"
+#include "common/network/NetworkRequest.hpp"
+#include "common/network/NetworkResult.hpp"
+#include "messages/Emote.hpp"
+#include "messages/Image.hpp"
+#include "messages/ImageSet.hpp"
+#include "providers/seventv/SeventvEmotes.hpp"
+#include "providers/twitch/api/Helix.hpp"
+#include "singletons/WindowManager.hpp"
+
+#include <pajlada/signals/scoped-connection.hpp>
+#include <QClipboard>
+#include <QDesktopServices>
+#include <QDir>
+#include <QFileDialog>
+#include <QJsonArray>
+#include <QMenu>
+#include <QRegularExpression>
+#include <QStandardPaths>
+#include <QUrl>
+
 #include <QApplication>
 #include <QButtonGroup>
 #include <QDialog>
@@ -77,7 +98,15 @@ QPushButton#round:hover { background: #f02a33; }
 QPushButton#round:disabled { background: #3a2a2c; color: #8a787c; }
 QPlainTextEdit { background: #1c1316; border: 1px solid #2c2024; border-radius: 19px; padding: 8px 12px; color: #f2e7e3; }
 QPlainTextEdit:focus { border-color: #e3101c; }
-QScrollArea { background: transparent; border: none; }
+QScrollArea { background: #0f0a0c; border: none; }
+QWidget#page { background: #0f0a0c; }
+QWidget#fileMine { background: #c8101a; border-radius: 14px; }
+QWidget#fileTheirs { background: #261b1e; border-radius: 14px; }
+QWidget#fileMine QPushButton, QWidget#fileTheirs QPushButton { padding: 4px 10px; }
+QWidget#picker { background: #170f12; border: 1px solid #33262a; border-radius: 12px; }
+QLabel#receipt { color: #9d8b8f; font-size: 11px; }
+QPushButton#tool { background: transparent; border: none; border-radius: 17px; color: #b3a1a5; font-size: 17px; padding: 0; }
+QPushButton#tool:hover { background: #241a1d; color: #f2e7e3; }
 QScrollBar:vertical { background: transparent; width: 8px; margin: 2px; }
 QScrollBar::handle:vertical { background: #3a2c30; border-radius: 4px; min-height: 30px; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
@@ -222,6 +251,671 @@ protected:
     }
 };
 
+/// Runs something when a widget is clicked
+class ClickFilter : public QObject
+{
+public:
+    ClickFilter(QObject *parent, std::function<void()> action)
+        : QObject(parent)
+        , action_(std::move(action))
+    {
+    }
+
+protected:
+    bool eventFilter(QObject * /*watched*/, QEvent *event) override
+    {
+        if (event->type() == QEvent::MouseButtonRelease)
+        {
+            this->action_();
+            return true;
+        }
+        return false;
+    }
+
+private:
+    std::function<void()> action_;
+};
+
+// ---------------------------------------------------------------- Pictures
+
+/// Twitch profile pictures, fetched once per person and kept round
+class Avatars
+{
+public:
+    static Avatars &instance()
+    {
+        static Avatars avatars;
+        return avatars;
+    }
+
+    std::function<void()> onLoaded;
+
+    /// Their picture if it's here, otherwise their letter while it loads
+    QPixmap get(const QString &userId, const QString &name, int size)
+    {
+        const auto found = this->pictures_.constFind(userId);
+        if (found != this->pictures_.constEnd() && !found->isNull())
+        {
+            return round(*found, size);
+        }
+        this->fetch(userId);
+        return avatar(name, size);
+    }
+
+private:
+    void fetch(const QString &userId)
+    {
+        if (userId.isEmpty() || this->asked_.contains(userId))
+        {
+            return;
+        }
+        this->asked_.insert(userId);
+        getHelix()->getUserById(
+            userId,
+            [this, userId](const HelixUser &user) {
+                if (user.profileImageUrl.isEmpty())
+                {
+                    return;
+                }
+                NetworkRequest(user.profileImageUrl)
+                    .timeout(15000)
+                    .maximumResponseSize(2 * 1024 * 1024)
+                    .onSuccess([this, userId](const NetworkResult &result) {
+                        QImage image;
+                        if (!image.loadFromData(result.getData()))
+                        {
+                            return;
+                        }
+                        this->pictures_.insert(userId,
+                                               QPixmap::fromImage(image));
+                        if (this->onLoaded)
+                        {
+                            this->onLoaded();
+                        }
+                    })
+                    .execute();
+            },
+            [] {});
+    }
+
+    static QPixmap round(const QPixmap &source, int size)
+    {
+        const qreal ratio = qApp->devicePixelRatio();
+        QPixmap out(QSize(size, size) * ratio);
+        out.setDevicePixelRatio(ratio);
+        out.fill(Qt::transparent);
+        QPainter p(&out);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setRenderHint(QPainter::SmoothPixmapTransform);
+        QPainterPath clip;
+        clip.addEllipse(QRectF(0, 0, size, size));
+        p.setClipPath(clip);
+        p.drawPixmap(QRectF(0, 0, size, size), source, source.rect());
+        return out;
+    }
+
+    QHash<QString, QPixmap> pictures_;
+    QSet<QString> asked_;
+};
+
+// ---------------------------------------------------------------- 7TV emotes
+
+/// 7TV's global emotes plus each person's channel emotes, so both people's
+/// emotes work in their chat
+class Emotes
+{
+public:
+    static Emotes &instance()
+    {
+        static Emotes emotes;
+        return emotes;
+    }
+
+    std::function<void()> onLoaded;
+
+    void want(const QString &userId)
+    {
+        if (userId.isEmpty() || this->asked_.contains(userId))
+        {
+            return;
+        }
+        this->asked_.insert(userId);
+        NetworkRequest(QStringLiteral("https://7tv.io/v3/users/twitch/") + userId)
+            .timeout(15000)
+            .maximumResponseSize(8 * 1024 * 1024)
+            .onSuccess([this, userId](const NetworkResult &result) {
+                const auto emotes = result.parseJson()
+                                        .value("emote_set")
+                                        .toObject()
+                                        .value("emotes")
+                                        .toArray();
+                this->sets_.insert(
+                    userId, std::make_shared<const EmoteMap>(
+                                seventv::detail::parseEmotes(
+                                    emotes, SeventvEmoteSetKind::Channel)));
+                if (this->onLoaded)
+                {
+                    this->onLoaded();
+                }
+            })
+            .execute();
+    }
+
+    /// The emote with this name for a chat between these people
+    EmotePtr find(const QString &word, const QStringList &people) const
+    {
+        const EmoteName name{word};
+        for (const auto &id : people)
+        {
+            const auto set = this->sets_.value(id);
+            if (set != nullptr)
+            {
+                const auto found = set->find(name);
+                if (found != set->end())
+                {
+                    return found->second;
+                }
+            }
+        }
+        if (auto global = getApp()->getSeventvEmotes()->globalEmote(name))
+        {
+            return *global;
+        }
+        return nullptr;
+    }
+
+    /// Everything that can be used in this chat, people's own first
+    std::vector<std::pair<QString, EmotePtr>> all(const QStringList &people) const
+    {
+        std::vector<std::pair<QString, EmotePtr>> out;
+        QSet<QString> seen;
+        auto add = [&](const std::shared_ptr<const EmoteMap> &set,
+                       const QString &group) {
+            if (set == nullptr)
+            {
+                return;
+            }
+            std::vector<EmotePtr> sorted;
+            for (const auto &[name, emote] : *set)
+            {
+                sorted.push_back(emote);
+            }
+            std::sort(sorted.begin(), sorted.end(), [](auto &a, auto &b) {
+                return a->name.string.compare(b->name.string,
+                                              Qt::CaseInsensitive) < 0;
+            });
+            for (const auto &emote : sorted)
+            {
+                if (!seen.contains(emote->name.string))
+                {
+                    seen.insert(emote->name.string);
+                    out.emplace_back(group, emote);
+                }
+            }
+        };
+        for (const auto &id : people)
+        {
+            add(this->sets_.value(id), id);
+        }
+        add(getApp()->getSeventvEmotes()->globalEmotes(), QStringLiteral("global"));
+        return out;
+    }
+
+private:
+    QHash<QString, std::shared_ptr<const EmoteMap>> sets_;
+    QSet<QString> asked_;
+};
+
+// ---------------------------------------------------------------- Bubbles
+
+constexpr int EMOTE_HEIGHT = 28;
+
+/// A message bubble that draws 7TV emotes in the text, animated
+class TextBubble : public QWidget
+{
+public:
+    TextBubble(const QString &text, bool mine, const QStringList &people,
+               int maxWidth)
+        : mine_(mine)
+        , text_(text)
+        , maxWidth_(maxWidth)
+    {
+        this->setContextMenuPolicy(Qt::CustomContextMenu);
+        QObject::connect(this, &QWidget::customContextMenuRequested, this,
+                         [this](const QPoint &at) {
+                             QMenu menu;
+                             menu.addAction(QStringLiteral("Copy text"), [this] {
+                                 QApplication::clipboard()->setText(this->text_);
+                             });
+                             menu.exec(this->mapToGlobal(at));
+                         });
+        for (const auto &line : text.split(u'\n'))
+        {
+            const auto words = line.split(u' ');
+            for (int i = 0; i < words.size(); i++)
+            {
+                Piece piece;
+                piece.text = words[i];
+                piece.emote = Emotes::instance().find(words[i], people);
+                if (piece.emote)
+                {
+                    this->animated_ = true;
+                }
+                this->pieces_.push_back(piece);
+            }
+            Piece breakLine;
+            breakLine.lineBreak = true;
+            this->pieces_.push_back(breakLine);
+        }
+        if (!this->pieces_.empty())
+        {
+            this->pieces_.pop_back();
+        }
+        this->relayout();
+        if (this->animated_)
+        {
+            this->repaint_ = std::make_unique<pajlada::Signals::ScopedConnection>(
+                getApp()->getWindows()->gifRepaintRequested.connect([this] {
+                    if (this->isVisible())
+                    {
+                        this->checkSizes();
+                        this->update();
+                    }
+                }));
+        }
+    }
+
+protected:
+    void paintEvent(QPaintEvent * /*event*/) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setRenderHint(QPainter::SmoothPixmapTransform);
+        p.setPen(Qt::NoPen);
+        p.setBrush(this->mine_ ? QColor("#c8101a") : QColor("#261b1e"));
+        p.drawRoundedRect(QRectF(this->rect()), 16, 16);
+        p.setPen(this->mine_ ? QColor(Qt::white) : QColor("#f2e7e3"));
+        p.setFont(this->font());
+        const QFontMetrics fm(this->font());
+        for (const auto &placed : this->placed_)
+        {
+            const auto &piece = this->pieces_[placed.index];
+            if (piece.emote)
+            {
+                if (auto pix = piece.emote->images.getImage2()->pixmapOrLoad())
+                {
+                    p.drawPixmap(placed.rect, *pix, pix->rect());
+                }
+            }
+            else
+            {
+                p.drawText(placed.rect, Qt::AlignLeft | Qt::AlignVCenter,
+                           piece.text);
+            }
+        }
+    }
+
+private:
+    struct Piece {
+        QString text;
+        EmotePtr emote;
+        bool lineBreak = false;
+    };
+    struct Placed {
+        int index;
+        QRectF rect;
+    };
+
+    QSizeF emoteSize(const Piece &piece) const
+    {
+        const auto &image = piece.emote->images.getImage2();
+        const qreal w = image->width();
+        const qreal h = image->height();
+        const qreal width = (w > 0 && h > 0) ? EMOTE_HEIGHT * w / h : EMOTE_HEIGHT;
+        return {width, qreal(EMOTE_HEIGHT)};
+    }
+
+    // Emotes that just loaded may be wider than guessed
+    void checkSizes()
+    {
+        for (size_t i = 0; i < this->pieces_.size(); i++)
+        {
+            const auto &piece = this->pieces_[i];
+            if (piece.emote && this->guessed_.value(int(i)) !=
+                                   this->emoteSize(piece).width())
+            {
+                this->relayout();
+                return;
+            }
+        }
+    }
+
+    void relayout()
+    {
+        const QFontMetrics fm(this->font());
+        const int padX = 13;
+        const int padY = 9;
+        const int inner = this->maxWidth_ - padX * 2;
+        const qreal space = fm.horizontalAdvance(u' ');
+        const qreal textHeight = fm.height();
+        const bool hasEmote = this->animated_;
+        const qreal lineHeight = hasEmote ? std::max<qreal>(textHeight, EMOTE_HEIGHT)
+                                          : textHeight;
+        this->placed_.clear();
+        this->guessed_.clear();
+        qreal x = 0;
+        qreal y = 0;
+        qreal widest = 0;
+        for (size_t i = 0; i < this->pieces_.size(); i++)
+        {
+            const auto &piece = this->pieces_[i];
+            if (piece.lineBreak)
+            {
+                widest = std::max(widest, x);
+                x = 0;
+                y += lineHeight + 2;
+                continue;
+            }
+            QSizeF size;
+            if (piece.emote)
+            {
+                size = this->emoteSize(piece);
+                this->guessed_.insert(int(i), size.width());
+            }
+            else
+            {
+                size = QSizeF(std::min<qreal>(fm.horizontalAdvance(piece.text),
+                                              inner),
+                              textHeight);
+            }
+            if (x > 0 && x + size.width() > inner)
+            {
+                widest = std::max(widest, x - space);
+                x = 0;
+                y += lineHeight + 2;
+            }
+            const qreal top = y + (lineHeight - size.height()) / 2;
+            this->placed_.push_back(
+                {int(i), QRectF(padX + x, padY + top, size.width(), size.height())});
+            x += size.width() + space;
+        }
+        widest = std::max(widest, x > 0 ? x - space : 0);
+        const int width = int(std::ceil(widest)) + padX * 2;
+        const int height = int(std::ceil(y + lineHeight)) + padY * 2;
+        this->setFixedSize(std::max(width, 36), height);
+        this->update();
+    }
+
+    bool mine_;
+    QString text_;
+    int maxWidth_;
+    bool animated_ = false;
+    std::vector<Piece> pieces_;
+    std::vector<Placed> placed_;
+    QHash<int, qreal> guessed_;
+    std::unique_ptr<pajlada::Signals::ScopedConnection> repaint_;
+};
+
+QString readableSize(qint64 bytes)
+{
+    if (bytes < 1024)
+    {
+        return QStringLiteral("%1 B").arg(bytes);
+    }
+    if (bytes < 1024 * 1024)
+    {
+        return QStringLiteral("%1 KB").arg(bytes / 1024);
+    }
+    return QStringLiteral("%1 MB").arg(double(bytes) / (1024 * 1024), 0, 'f', 1);
+}
+
+/// Writes an opened file somewhere temporary and opens it with the PC's app
+void openWithSystem(const Messages::File &file, const QByteArray &data)
+{
+    const auto folder =
+        QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
+        QStringLiteral("/Solrino");
+    QDir().mkpath(folder);
+    auto name = file.name;
+    name.replace(QRegularExpression(QStringLiteral(R"([\\/:*?"<>|])")),
+                 QStringLiteral("_"));
+    const auto path = folder + u'/' + file.id.left(8) + u'-' + name;
+    QFile out(path);
+    if (out.open(QIODevice::WriteOnly))
+    {
+        out.write(data);
+        out.close();
+        QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+    }
+}
+
+/// A photo shows as a picture; anything else as a card with Open and Save
+QWidget *fileBubble(const Messages::Message &m, int maxWidth, QWidget *owner)
+{
+    const auto file = *m.file;
+    auto *box = new QWidget;
+    box->setObjectName(m.mine ? QStringLiteral("fileMine")
+                              : QStringLiteral("fileTheirs"));
+    box->setAttribute(Qt::WA_StyledBackground);
+    auto *layout = new QVBoxLayout(box);
+    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(6);
+    QPointer<QWidget> guard(box);
+
+    if (file.mime.startsWith(QStringLiteral("image/")))
+    {
+        auto *picture = new QLabel(QStringLiteral("Loading photo..."));
+        picture->setObjectName(QStringLiteral("muted"));
+        picture->setMinimumSize(160, 100);
+        picture->setAlignment(Qt::AlignCenter);
+        picture->setCursor(Qt::PointingHandCursor);
+        picture->setToolTip(QStringLiteral("Click to open"));
+        layout->addWidget(picture);
+        auto data = std::make_shared<QByteArray>();
+        Messages::instance().loadFile(
+            file, [guard, picture, data, maxWidth](QByteArray bytes,
+                                                   QString error) {
+                if (guard == nullptr)
+                {
+                    return;
+                }
+                QImage image;
+                if (!error.isEmpty() || !image.loadFromData(bytes))
+                {
+                    picture->setText(error.isEmpty()
+                                         ? QStringLiteral("Couldn't show it")
+                                         : error);
+                    return;
+                }
+                *data = bytes;
+                const int side = std::min(maxWidth - 16, 320);
+                picture->setPixmap(QPixmap::fromImage(image.scaled(
+                    side, side, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
+                picture->setMinimumSize(0, 0);
+            });
+        picture->installEventFilter(new ClickFilter(picture, [file, data] {
+            if (!data->isEmpty())
+            {
+                openWithSystem(file, *data);
+            }
+        }));
+    }
+    else
+    {
+        const bool video = file.mime.startsWith(QStringLiteral("video/"));
+        auto *name = new QLabel(QStringLiteral("<b>%1</b><br><span style='color:#b3a1a5'>%2 · %3</span>")
+                                    .arg(file.name.toHtmlEscaped(),
+                                         video ? QStringLiteral("Video")
+                                               : QStringLiteral("File"),
+                                         readableSize(file.size)));
+        name->setTextFormat(Qt::RichText);
+        name->setWordWrap(true);
+        name->setMaximumWidth(maxWidth - 16);
+        layout->addWidget(name);
+        auto *buttons = new QHBoxLayout;
+        auto *openButton = new QPushButton(video ? QStringLiteral("Play")
+                                                 : QStringLiteral("Open"));
+        auto *saveButton = new QPushButton(QStringLiteral("Save"));
+        buttons->addWidget(openButton);
+        buttons->addWidget(saveButton);
+        buttons->addStretch();
+        layout->addLayout(buttons);
+        auto status = [guard, name, file](const QString &why) {
+            if (guard != nullptr)
+            {
+                name->setText(QStringLiteral("<b>%1</b><br><span style='color:#ff7b72'>%2</span>")
+                                  .arg(file.name.toHtmlEscaped(), why.toHtmlEscaped()));
+            }
+        };
+        QObject::connect(openButton, &QPushButton::clicked, box, [file, status] {
+            Messages::instance().loadFile(file, [file, status](QByteArray bytes,
+                                                              QString error) {
+                if (!error.isEmpty())
+                {
+                    status(error);
+                    return;
+                }
+                openWithSystem(file, bytes);
+            });
+        });
+        QObject::connect(saveButton, &QPushButton::clicked, box, [file, status,
+                                                                owner] {
+            const auto path = QFileDialog::getSaveFileName(
+                owner, QStringLiteral("Save file"),
+                QStandardPaths::writableLocation(
+                    QStandardPaths::DownloadLocation) +
+                    u'/' + file.name);
+            if (path.isEmpty())
+            {
+                return;
+            }
+            Messages::instance().loadFile(file, [path, status](QByteArray bytes,
+                                                              QString error) {
+                if (!error.isEmpty())
+                {
+                    status(error);
+                    return;
+                }
+                QFile out(path);
+                if (out.open(QIODevice::WriteOnly))
+                {
+                    out.write(bytes);
+                }
+            });
+        });
+    }
+    if (!m.text.isEmpty())
+    {
+        auto *caption = new QLabel(m.text);
+        caption->setWordWrap(true);
+        caption->setMaximumWidth(maxWidth - 16);
+        layout->addWidget(caption);
+    }
+    return box;
+}
+
+// ---------------------------------------------------------------- Emote picker
+
+/// A small searchable grid of the 7TV emotes this chat can use
+class EmotePicker : public QWidget
+{
+public:
+    std::function<void(QString)> picked;
+
+    EmotePicker(QWidget *parent, const QStringList &people)
+        : QWidget(parent, Qt::Popup)
+    {
+        this->setObjectName(QStringLiteral("picker"));
+        this->setAttribute(Qt::WA_StyledBackground);
+        this->setAttribute(Qt::WA_DeleteOnClose);
+        this->resize(360, 380);
+        auto *layout = new QVBoxLayout(this);
+        layout->setContentsMargins(10, 10, 10, 10);
+        auto *search = new QLineEdit;
+        search->setObjectName(QStringLiteral("search"));
+        search->setPlaceholderText(QStringLiteral("Search 7TV emotes"));
+        layout->addWidget(search);
+        this->grid_ = new QListWidget;
+        this->grid_->setViewMode(QListView::IconMode);
+        this->grid_->setIconSize(QSize(32, 32));
+        this->grid_->setGridSize(QSize(48, 48));
+        this->grid_->setResizeMode(QListView::Adjust);
+        this->grid_->setMovement(QListView::Static);
+        this->grid_->setUniformItemSizes(true);
+        layout->addWidget(this->grid_, 1);
+        auto *hint = new QLabel(QStringLiteral(
+            "Your emotes, their emotes, and 7TV's global emotes"));
+        hint->setObjectName(QStringLiteral("muted"));
+        layout->addWidget(hint);
+
+        this->emotes_ = Emotes::instance().all(people);
+        QObject::connect(search, &QLineEdit::textChanged, this,
+                         [this](const QString &text) {
+                             this->fill(text);
+                         });
+        QObject::connect(this->grid_, &QListWidget::itemClicked, this,
+                         [this](QListWidgetItem *item) {
+                             if (this->picked)
+                             {
+                                 this->picked(item->toolTip());
+                             }
+                             this->close();
+                         });
+        // Pictures arrive as they load
+        this->timer_.setInterval(300);
+        QObject::connect(&this->timer_, &QTimer::timeout, this, [this] {
+            this->loadIcons();
+        });
+        this->timer_.start();
+        this->fill({});
+        search->setFocus();
+    }
+
+private:
+    void fill(const QString &filter)
+    {
+        this->grid_->clear();
+        this->shown_.clear();
+        int count = 0;
+        for (const auto &[group, emote] : this->emotes_)
+        {
+            if (!filter.isEmpty() &&
+                !emote->name.string.contains(filter, Qt::CaseInsensitive))
+            {
+                continue;
+            }
+            auto *item = new QListWidgetItem;
+            item->setToolTip(emote->name.string);
+            this->grid_->addItem(item);
+            this->shown_.push_back({item, emote});
+            if (++count >= 400)
+            {
+                break;
+            }
+        }
+        this->loadIcons();
+    }
+
+    void loadIcons()
+    {
+        for (auto &[item, emote] : this->shown_)
+        {
+            if (item->icon().isNull())
+            {
+                if (auto pix = emote->images.getImage1()->pixmapOrLoad())
+                {
+                    item->setIcon(QIcon(*pix));
+                }
+            }
+        }
+    }
+
+    QListWidget *grid_;
+    QTimer timer_;
+    std::vector<std::pair<QString, EmotePtr>> emotes_;
+    std::vector<std::pair<QListWidgetItem *, EmotePtr>> shown_;
+};
+
 /// One row in the chat list
 QWidget *chatRow(const Messages::Conversation &c)
 {
@@ -232,7 +926,7 @@ QWidget *chatRow(const Messages::Conversation &c)
     layout->setSpacing(10);
     const auto name = c.login.isEmpty() ? c.userId : c.login;
     auto *pic = new QLabel;
-    pic->setPixmap(avatar(name, 38));
+    pic->setPixmap(Avatars::instance().get(c.userId, name, 38));
     pic->setFixedSize(38, 38);
     layout->addWidget(pic);
 
@@ -319,6 +1013,18 @@ public:
                          [this] {
                              this->refresh();
                          });
+        this->later_.setSingleShot(true);
+        this->later_.setInterval(150);
+        QObject::connect(&this->later_, &QTimer::timeout, this, [this] {
+            this->refresh();
+        });
+        Avatars::instance().onLoaded = [self = QPointer<MessagesWindow>(this)] {
+            if (self != nullptr)
+            {
+                self->later_.start();
+            }
+        };
+        Emotes::instance().onLoaded = Avatars::instance().onLoaded;
         this->refresh();
     }
 
@@ -542,7 +1248,12 @@ private:
         this->scroll_ = new QScrollArea;
         this->scroll_->setWidgetResizable(true);
         this->scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        this->scroll_->viewport()->setAutoFillBackground(false);
+        this->scroll_->viewport()->setAutoFillBackground(true);
+        {
+            auto palette = this->scroll_->viewport()->palette();
+            palette.setColor(QPalette::Window, QColor("#0f0a0c"));
+            this->scroll_->viewport()->setPalette(palette);
+        }
         layout->addWidget(this->scroll_, 1);
 
         // ---- Empty state
@@ -588,8 +1299,27 @@ private:
         this->sendButton_->setObjectName(QStringLiteral("round"));
         this->sendButton_->setFixedSize(38, 38);
         this->sendButton_->setToolTip(QStringLiteral("Send (Enter)"));
+        this->attachButton_ = new QPushButton(QStringLiteral("+"));
+        this->attachButton_->setObjectName(QStringLiteral("tool"));
+        this->attachButton_->setFixedSize(34, 34);
+        this->attachButton_->setToolTip(
+            QStringLiteral("Send a photo, video or file (up to 25 MB)"));
+        this->emoteButton_ = new QPushButton(QStringLiteral("\u263A"));
+        this->emoteButton_->setObjectName(QStringLiteral("tool"));
+        this->emoteButton_->setFixedSize(34, 34);
+        this->emoteButton_->setToolTip(QStringLiteral("7TV emotes"));
+        bottom->addWidget(this->attachButton_);
         bottom->addWidget(this->composer_, 1);
+        bottom->addWidget(this->emoteButton_);
         bottom->addWidget(this->sendButton_);
+        QObject::connect(this->attachButton_, &QPushButton::clicked, this,
+                         [this] {
+                             this->attachFile();
+                         });
+        QObject::connect(this->emoteButton_, &QPushButton::clicked, this,
+                         [this] {
+                             this->openPicker();
+                         });
         layout->addWidget(this->composerBar_);
 
         // ---- Wiring
@@ -788,28 +1518,46 @@ private:
         this->drawConversation();
     }
 
-    QWidget *bubble(const Messages::Message &m)
+    QStringList people() const
+    {
+        return {Messages::instance().myUserId(), this->current_};
+    }
+
+    int bubbleWidth() const
+    {
+        return std::max(260, int(this->scroll_->viewport()->width() * 0.68));
+    }
+
+    QWidget *bubble(const Messages::Message &m, const QString &receipt)
     {
         auto *row = new QWidget;
         auto *layout = new QVBoxLayout(row);
         layout->setContentsMargins(0, 2, 0, 2);
         layout->setSpacing(2);
-        auto *text = new QLabel(m.text);
-        text->setObjectName(m.mine ? QStringLiteral("bubbleMine")
-                                   : QStringLiteral("bubbleTheirs"));
-        text->setWordWrap(true);
-        text->setTextInteractionFlags(Qt::TextSelectableByMouse);
-        text->setTextFormat(Qt::PlainText);
-        text->setMaximumWidth(qMax(260, int(this->scroll_->width() * 0.68)));
+        QWidget *body = nullptr;
+        if (m.file)
+        {
+            body = fileBubble(m, this->bubbleWidth(), this);
+        }
+        else
+        {
+            body = new TextBubble(m.text, m.mine, this->people(),
+                                  this->bubbleWidth());
+        }
         QString note =
             QLocale().toString(m.at.toLocalTime().time(), QLocale::ShortFormat);
         if (m.status == Messages::Status::Sending)
         {
-            note += QStringLiteral(" · Sending...");
+            note += m.file ? QStringLiteral(" \u00B7 Uploading...")
+                           : QStringLiteral(" \u00B7 Sending...");
         }
         else if (m.status == Messages::Status::Failed)
         {
-            note += QStringLiteral(" · Didn't send");
+            note += QStringLiteral(" \u00B7 Didn't send");
+        }
+        else if (!receipt.isEmpty())
+        {
+            note += QStringLiteral(" \u00B7 ") + receipt;
         }
         auto *time = new QLabel(note);
         time->setObjectName(QStringLiteral("time"));
@@ -818,9 +1566,62 @@ private:
             time->setStyleSheet(QStringLiteral("color:#ff7b72;"));
         }
         const auto align = m.mine ? Qt::AlignRight : Qt::AlignLeft;
-        layout->addWidget(text, 0, align);
+        layout->addWidget(body, 0, align);
         layout->addWidget(time, 0, align);
         return row;
+    }
+
+    void attachFile()
+    {
+        if (this->current_.isEmpty() || !this->sendButton_->isEnabled())
+        {
+            return;
+        }
+        const auto path = QFileDialog::getOpenFileName(
+            this, QStringLiteral("Send a photo, video or file"), {},
+            QStringLiteral("Photos and videos (*.png *.jpg *.jpeg *.gif *.webp "
+                           "*.bmp *.mp4 *.webm *.mov *.mkv);;All files (*)"));
+        if (path.isEmpty())
+        {
+            return;
+        }
+        const auto *c = Messages::instance().conversation(this->current_);
+        const auto login =
+            c != nullptr && !c->login.isEmpty() ? c->login : this->pendingLogin_;
+        QPointer<MessagesWindow> self(this);
+        Messages::instance().sendFile(this->current_, login, path,
+                                      [self](QString error) {
+                                          if (self != nullptr &&
+                                              !error.isEmpty())
+                                          {
+                                              self->status_->setText(error);
+                                              self->status_->show();
+                                          }
+                                      });
+    }
+
+    void openPicker()
+    {
+        auto *picker = new EmotePicker(this, this->people());
+        picker->picked = [this](const QString &name) {
+            auto cursor = this->composer_->textCursor();
+            const auto before = this->composer_->toPlainText();
+            const bool needsSpace = cursor.position() > 0 &&
+                                    !before.at(cursor.position() - 1).isSpace();
+            cursor.insertText((needsSpace ? QStringLiteral(" ") : QString()) +
+                              name + u' ');
+            this->composer_->setFocus();
+        };
+        const auto at = this->emoteButton_->mapToGlobal(QPoint(0, 0));
+        picker->move(at.x() - picker->width() + this->emoteButton_->width(),
+                     at.y() - picker->height() - 6);
+        picker->show();
+    }
+
+    void resizeEvent(QResizeEvent *event) override
+    {
+        QWidget::resizeEvent(event);
+        this->later_.start();
     }
 
     void drawConversation()
@@ -843,7 +1644,8 @@ private:
                                ? c->login
                                : this->pendingLogin_;
         this->peer_->setText(login);
-        this->peerPic_->setPixmap(avatar(login, 40));
+        this->peerPic_->setPixmap(
+            Avatars::instance().get(this->current_, login, 40));
         this->blockButton_->setText(c != nullptr && c->blocked
                                         ? QStringLiteral("Unblock")
                                         : QStringLiteral("Block"));
@@ -851,6 +1653,10 @@ private:
                              (c == nullptr || (!c->blocked && !c->keysChanged));
         this->sendButton_->setEnabled(canSend);
         this->composer_->setEnabled(canSend);
+        this->attachButton_->setEnabled(canSend);
+        this->emoteButton_->setEnabled(canSend);
+        Emotes::instance().want(Messages::instance().myUserId());
+        Emotes::instance().want(this->current_);
         this->composer_->setPlaceholderText(
             c != nullptr && c->blocked
                 ? QStringLiteral("Unblock them to send a message")
@@ -858,8 +1664,8 @@ private:
 
         // The messages, with a date between days
         auto *page = new QWidget;
-        page->setAutoFillBackground(false);
-        page->setAttribute(Qt::WA_TranslucentBackground);
+        page->setObjectName(QStringLiteral("page"));
+        page->setAttribute(Qt::WA_StyledBackground);
         auto *list = new QVBoxLayout(page);
         list->setContentsMargins(18, 14, 18, 14);
         list->setSpacing(4);
@@ -877,6 +1683,15 @@ private:
         }
         else
         {
+            // "Sent" or "Seen" goes under my newest message only
+            const Messages::Message *lastMine = nullptr;
+            for (const auto &m : c->messages)
+            {
+                if (m.mine)
+                {
+                    lastMine = &m;
+                }
+            }
             QDate lastDay;
             for (const auto &m : c->messages)
             {
@@ -893,7 +1708,14 @@ private:
                     list->addWidget(label, 0, Qt::AlignHCenter);
                     list->addSpacing(4);
                 }
-                list->addWidget(this->bubble(m));
+                QString receipt;
+                if (&m == lastMine && m.status == Messages::Status::Sent)
+                {
+                    receipt = c->theirSeenAt.isValid() && c->theirSeenAt >= m.at
+                                  ? QStringLiteral("Seen")
+                                  : QStringLiteral("Sent");
+                }
+                list->addWidget(this->bubble(m, receipt));
             }
         }
         this->scroll_->setWidget(page);
@@ -947,6 +1769,9 @@ private:
     QWidget *composerBar_{};
     Composer *composer_{};
     QPushButton *sendButton_{};
+    QPushButton *attachButton_{};
+    QPushButton *emoteButton_{};
+    QTimer later_;
 
     bool showRequests_ = false;
     QString current_;

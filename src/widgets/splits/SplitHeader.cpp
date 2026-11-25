@@ -6,6 +6,7 @@
 #include "widgets/splits/SplitHeader.hpp"
 
 #include "Application.hpp"
+#include "providers/seventv/SeventvPaints.hpp"
 #include "common/network/NetworkCommon.hpp"
 #include "common/network/NetworkRequest.hpp"
 #include "common/network/NetworkResult.hpp"
@@ -1093,6 +1094,30 @@ std::unique_ptr<QMenu> SplitHeader::createMainMenu()
             menu->addAction("Reload subscriber emotes",
                             subSeq.isEmpty() ? bothSeq : subSeq, this,
                             &SplitHeader::reloadSubscriberEmotes);
+            menu->addAction("Reload 7TV paints", this, [this] {
+                const auto channel = this->split_->getChannel();
+                // The people who talked most recently, newest first
+                std::vector<std::pair<QString, QString>> users;
+                QSet<QString> seen;
+                const auto messages = channel->getMessageSnapshot();
+                for (auto it = messages.rbegin();
+                     it != messages.rend() && users.size() < 80; ++it)
+                {
+                    const auto &m = *it;
+                    if (m->userID.isEmpty() || m->loginName.isEmpty() ||
+                        seen.contains(m->userID))
+                    {
+                        continue;
+                    }
+                    seen.insert(m->userID);
+                    users.emplace_back(m->userID, m->loginName);
+                }
+                getApp()->getSeventvPaints()->reload(users);
+                channel->addSystemMessage(
+                    QStringLiteral("Reloading 7TV paints for %1 people in "
+                                   "this chat...")
+                        .arg(users.size()));
+            });
         }
     }
 

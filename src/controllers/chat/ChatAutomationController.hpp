@@ -116,6 +116,7 @@ struct ChatAutomation {
     bool onlySelf = false;
     bool useBotBadge = false;
     bool caseSensitive = false;
+    bool includeCaught = false;
     bool randomResponse = false;
     bool use12HourTime = false;
 };
@@ -318,6 +319,7 @@ struct Serialize<chatterino::ChatAutomation> {
         chatterino::rj::set(object, "onlySelf", value.onlySelf, a);
         chatterino::rj::set(object, "useBotBadge", value.useBotBadge, a);
         chatterino::rj::set(object, "caseSensitive", value.caseSensitive, a);
+        chatterino::rj::set(object, "includeCaught", value.includeCaught, a);
         chatterino::rj::set(object, "randomResponse", value.randomResponse, a);
         chatterino::rj::set(object, "use12HourTime", value.use12HourTime, a);
         return object;

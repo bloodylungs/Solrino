@@ -20,6 +20,8 @@
 #include <QPointer>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QFileInfo>
+#include <QMimeDatabase>
 
 #include <algorithm>
 
@@ -367,6 +369,12 @@ bool SolrinoMessages::loadHistory()
         c.blocked = object.value("blocked").toBool();
         c.keysChanged = object.value("keysChanged").toBool();
         c.unread = object.value("unread").toInt();
+        if (object.contains("seenAt"))
+        {
+            c.theirSeenAt = QDateTime::fromMSecsSinceEpoch(
+                static_cast<qint64>(object.value("seenAt").toDouble()),
+                QTimeZone::UTC);
+        }
         for (const auto &k : object.value("pinned").toArray())
         {
             c.pinned.append(k.toString());
@@ -384,6 +392,19 @@ bool SolrinoMessages::loadHistory()
             message.status = mo.value("status").toString() == "sent"
                                  ? Status::Sent
                                  : Status::Failed;
+            if (mo.contains("file"))
+            {
+                const auto fo = mo.value("file").toObject();
+                File file;
+                file.id = fo.value("id").toString();
+                file.key = unb64(fo.value("key"));
+                file.nonce = unb64(fo.value("nonce"));
+                file.name = fo.value("name").toString();
+                file.size = static_cast<qint64>(fo.value("size").toDouble());
+                file.mime = fo.value("mime").toString();
+                file.pieces = fo.value("pieces").toInt();
+                message.file = file;
+            }
             c.messages.push_back(message);
         }
         this->conversations_.insert(c.userId, c);
@@ -403,13 +424,26 @@ void SolrinoMessages::saveHistory()
         QJsonArray messages;
         for (const auto &m : c.messages)
         {
-            messages.append(QJsonObject{
+            QJsonObject saved{
                 {"id", m.id},
                 {"mine", m.mine},
                 {"text", m.text},
                 {"at", static_cast<double>(m.at.toMSecsSinceEpoch())},
                 {"status", m.status == Status::Sent ? "sent" : "failed"},
-            });
+            };
+            if (m.file)
+            {
+                saved.insert("file", QJsonObject{
+                                         {"id", m.file->id},
+                                         {"key", b64(m.file->key)},
+                                         {"nonce", b64(m.file->nonce)},
+                                         {"name", m.file->name},
+                                         {"size", double(m.file->size)},
+                                         {"mime", m.file->mime},
+                                         {"pieces", m.file->pieces},
+                                     });
+            }
+            messages.append(saved);
         }
         list.append(QJsonObject{
             {"userId", c.userId},
@@ -418,6 +452,9 @@ void SolrinoMessages::saveHistory()
             {"blocked", c.blocked},
             {"keysChanged", c.keysChanged},
             {"unread", c.unread},
+            {"seenAt", c.theirSeenAt.isValid()
+                           ? static_cast<double>(c.theirSeenAt.toMSecsSinceEpoch())
+                           : 0.0},
             {"pinned", QJsonArray::fromStringList(c.pinned)},
             {"messages", messages},
         });
@@ -650,8 +687,32 @@ void SolrinoMessages::handleOpened(const QString & /*envelopeId*/,
     const auto id = payload.value("id").toString().left(64);
     const auto at = QDateTime::fromMSecsSinceEpoch(
         static_cast<qint64>(payload.value("at").toDouble()), QTimeZone::UTC);
+    const auto kind = payload.value("k").toString(QStringLiteral("msg"));
+    std::optional<File> file;
+    if (payload.contains("file"))
+    {
+        const auto fo = payload.value("file").toObject();
+        File f;
+        f.id = fo.value("id").toString();
+        f.key = unb64(fo.value("key"));
+        f.nonce = unb64(fo.value("nonce"));
+        f.name = fo.value("name").toString().left(200);
+        f.size = static_cast<qint64>(fo.value("size").toDouble());
+        f.mime = fo.value("mime").toString().left(100);
+        f.pieces = fo.value("pieces").toInt();
+        if (QRegularExpression(QStringLiteral("^[0-9a-f]{32}$"))
+                .match(f.id)
+                .hasMatch() &&
+            f.key.size() == 32 && f.nonce.size() == 12 && f.pieces >= 1 &&
+            f.pieces <= 30)
+        {
+            file = f;
+        }
+    }
+    const bool isSeen = kind == QStringLiteral("seen");
     if (payload.value("v").toInt() != 1 || fromUser.isEmpty() ||
-        to.isEmpty() || id.isEmpty() || text.isEmpty())
+        to.isEmpty() || id.isEmpty() ||
+        (!isSeen && text.isEmpty() && !file))
     {
         QTimer::singleShot(0, this, next);
         return;
@@ -667,7 +728,8 @@ void SolrinoMessages::handleOpened(const QString & /*envelopeId*/,
     const auto peer = mine ? to : fromUser;
 
     auto check = [this, payloadBytes, signature, fromUser, fromDevice, peer,
-                  mine, text, id, at, next](const Directory *directory) {
+                  mine, text, id, at, next, isSeen,
+                  file](const Directory *directory) {
         bool trusted = false;
         QString login;
         if (directory != nullptr)
@@ -702,6 +764,21 @@ void SolrinoMessages::handleOpened(const QString & /*envelopeId*/,
             next();
             return;
         }
+        if (isSeen)
+        {
+            // They saw everything I sent up to then. From our own other
+            // device, it means we read theirs there.
+            if (mine)
+            {
+                c.unread = 0;
+            }
+            else if (!c.theirSeenAt.isValid() || at > c.theirSeenAt)
+            {
+                c.theirSeenAt = at;
+            }
+            next();
+            return;
+        }
         for (const auto &m : c.messages)
         {
             if (m.id == id)
@@ -716,6 +793,7 @@ void SolrinoMessages::handleOpened(const QString & /*envelopeId*/,
         message.text = text;
         message.at = at.isValid() ? at : QDateTime::currentDateTimeUtc();
         message.status = Status::Sent;
+        message.file = file;
         c.messages.push_back(message);
         std::stable_sort(c.messages.begin(), c.messages.end(),
                          [](const Message &a, const Message &b) {
@@ -735,12 +813,15 @@ void SolrinoMessages::handleOpened(const QString & /*envelopeId*/,
         else
         {
             c.unread++;
-            Q_EMIT this->arrived(peer, text);
+            const auto shown =
+                text.isEmpty() && file ? QStringLiteral("Sent a file: ") + file->name
+                                       : text;
+            Q_EMIT this->arrived(peer, shown);
             // Only people you've accepted get a ping card
             if (c.accepted)
             {
                 showSolrinoPing(c.login.isEmpty() ? peer : c.login,
-                                QStringLiteral("Solrino messages"), text, true,
+                                QStringLiteral("Solrino messages"), shown, true,
                                 c.login);
             }
         }
@@ -954,113 +1035,374 @@ void SolrinoMessages::sendSealed(const QString &to,
         .execute();
 }
 
-void SolrinoMessages::send(const QString &userId, const QString &login,
-                           const QString &rawText)
+void SolrinoMessages::addMine(const QString &userId, const QString &login,
+                              Message message)
 {
-    const auto text = rawText.trimmed().left(MAX_TEXT);
-    if (!this->ready() || text.isEmpty() || userId == this->userId_)
-    {
-        return;
-    }
     auto &c = this->conversations_[userId];
     c.userId = userId;
     if (!login.isEmpty())
     {
         c.login = login;
     }
-    if (c.keysChanged || c.blocked)
+    // Sending to someone accepts them
+    c.accepted = true;
+    c.messages.push_back(std::move(message));
+    Q_EMIT this->changed();
+}
+
+void SolrinoMessages::sendPayload(const QString &userId,
+                                  const QJsonObject &fields,
+                                  std::function<void(bool)> done)
+{
+    // Signed by this device, so they know it's really from us
+    QJsonObject body = fields;
+    body.insert("v", 1);
+    body.insert("from", QJsonObject{{"u", this->userId_},
+                                    {"l", this->login_},
+                                    {"d", this->keys_->device}});
+    body.insert("to", userId);
+    if (!body.contains("at"))
+    {
+        body.insert("at", static_cast<double>(
+                              QDateTime::currentDateTimeUtc().toMSecsSinceEpoch()));
+    }
+    const auto payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
+    auto signature = crypto::sign(this->keys_->signPrivate, payload);
+    if (!signature)
+    {
+        done(false);
+        return;
+    }
+    const auto inner = QJsonDocument(QJsonObject{{"p", b64(payload)},
+                                                 {"s", b64(*signature)}})
+                           .toJson(QJsonDocument::Compact);
+    const auto me = this->userId_;
+    this->lookUpKeys(userId, true, [this, me, userId, inner,
+                                    done](const Directory *directory) {
+        if (me != this->userId_)
+        {
+            return;
+        }
+        const auto *c = this->conversation(userId);
+        if (directory == nullptr || directory->devices.empty() ||
+            (c != nullptr && c->keysChanged))
+        {
+            done(false);
+            return;
+        }
+        this->sendSealed(
+            userId, directory->devices, inner,
+            [this, me, inner, done](bool ok, const QString &) {
+                if (me != this->userId_)
+                {
+                    return;
+                }
+                done(ok);
+                if (!ok)
+                {
+                    return;
+                }
+                // A copy for our own other devices, so they see it too
+                this->lookUpKeys(me, false, [this, me,
+                                             inner](const Directory *mine) {
+                    if (mine == nullptr || me != this->userId_)
+                    {
+                        return;
+                    }
+                    std::vector<Device> others;
+                    for (const auto &d : mine->devices)
+                    {
+                        if (d.id != this->keys_->device)
+                        {
+                            others.push_back(d);
+                        }
+                    }
+                    this->sendSealed(me, others, inner,
+                                     [](bool, const QString &) {});
+                });
+            });
+    });
+}
+
+void SolrinoMessages::send(const QString &userId, const QString &login,
+                           const QString &rawText)
+{
+    const auto text = rawText.trimmed().left(MAX_TEXT);
+    const auto *existing = this->conversation(userId);
+    if (!this->ready() || text.isEmpty() || userId == this->userId_ ||
+        (existing != nullptr && (existing->keysChanged || existing->blocked)))
     {
         return;
     }
-    // Sending to someone accepts them
-    c.accepted = true;
-
     Message message;
     message.id = QString::fromLatin1(crypto::randomBytes(12).toHex());
     message.mine = true;
     message.text = text;
     message.at = QDateTime::currentDateTimeUtc();
     message.status = Status::Sending;
-    c.messages.push_back(message);
-    Q_EMIT this->changed();
+    const auto id = message.id;
+    const auto at = message.at;
+    this->addMine(userId, login, message);
+    this->sendPayload(
+        userId,
+        QJsonObject{{"k", "msg"},
+                    {"id", id},
+                    {"text", text},
+                    {"at", static_cast<double>(at.toMSecsSinceEpoch())}},
+        [this, userId, id](bool ok) {
+            this->setStatus(userId, id, ok ? Status::Sent : Status::Failed);
+        });
+}
 
-    // Signed by this device, so they know it's really from us
-    const auto payload =
-        QJsonDocument(
-            QJsonObject{
-                {"v", 1},
-                {"id", message.id},
-                {"from", QJsonObject{{"u", this->userId_},
-                                     {"l", this->login_},
-                                     {"d", this->keys_->device}}},
-                {"to", userId},
-                {"at", static_cast<double>(message.at.toMSecsSinceEpoch())},
-                {"text", text},
-            })
-            .toJson(QJsonDocument::Compact);
-    auto signature = crypto::sign(this->keys_->signPrivate, payload);
-    if (!signature)
+void SolrinoMessages::sendSeen(const QString &userId)
+{
+    if (!this->ready())
     {
-        this->setStatus(userId, message.id, Status::Failed);
         return;
     }
-    const auto inner = QJsonDocument(QJsonObject{{"p", b64(payload)},
-                                                 {"s", b64(*signature)}})
-                           .toJson(QJsonDocument::Compact);
+    this->sendPayload(
+        userId,
+        QJsonObject{{"k", "seen"},
+                    {"id", QString::fromLatin1(crypto::randomBytes(12).toHex())}},
+        [](bool) {});
+}
+
+QString SolrinoMessages::filePath(const QString &id) const
+{
+    return this->folder() + QStringLiteral("/files/") + id + QStringLiteral(".dat");
+}
+
+namespace {
+
+QByteArray pieceNonce(const QByteArray &base, int piece)
+{
+    // Every piece gets its own nonce: the last four bytes count up
+    QByteArray nonce = base;
+    const quint32 n = static_cast<quint32>(piece);
+    for (int i = 0; i < 4; i++)
+    {
+        nonce[8 + i] = static_cast<char>(nonce[8 + i] ^ ((n >> (8 * i)) & 0xff));
+    }
+    return nonce;
+}
+
+constexpr qint64 PIECE_BYTES = 1024 * 1024;
+constexpr qint64 MAX_FILE_BYTES = 25 * 1024 * 1024;
+
+}  // namespace
+
+void SolrinoMessages::sendFile(const QString &userId, const QString &login,
+                               const QString &path,
+                               std::function<void(QString)> done)
+{
+    const auto *existing = this->conversation(userId);
+    if (!this->ready() ||
+        (existing != nullptr && (existing->keysChanged || existing->blocked)))
+    {
+        done(QStringLiteral("Messages aren't ready."));
+        return;
+    }
+    QFile source(path);
+    if (!source.open(QIODevice::ReadOnly))
+    {
+        done(QStringLiteral("Couldn't open that file."));
+        return;
+    }
+    if (source.size() > MAX_FILE_BYTES || source.size() == 0)
+    {
+        done(QStringLiteral("Files can be up to 25 MB."));
+        return;
+    }
+    const auto data = source.readAll();
+    const QFileInfo info(path);
+
+    File file;
+    file.key = crypto::randomBytes(32);
+    file.nonce = crypto::randomBytes(12);
+    file.name = info.fileName().left(200);
+    file.size = data.size();
+    file.mime = QMimeDatabase().mimeTypeForFile(info).name();
+    file.pieces = int((data.size() + PIECE_BYTES - 1) / PIECE_BYTES);
+
+    // Seal every piece on this PC before anything leaves it
+    auto pieces = std::make_shared<std::vector<QByteArray>>();
+    for (int i = 0; i < file.pieces; i++)
+    {
+        auto sealed = crypto::seal(file.key, pieceNonce(file.nonce, i),
+                                   QByteArray::number(i),
+                                   data.mid(i * PIECE_BYTES, PIECE_BYTES));
+        if (!sealed)
+        {
+            done(QStringLiteral("Couldn't encrypt the file."));
+            return;
+        }
+        pieces->push_back(*sealed);
+    }
+
+    Message message;
+    message.id = QString::fromLatin1(crypto::randomBytes(12).toHex());
+    message.mine = true;
+    message.at = QDateTime::currentDateTimeUtc();
+    message.status = Status::Sending;
+    message.file = file;
+    const auto messageId = message.id;
+    this->addMine(userId, login, message);
 
     const auto me = this->userId_;
-    const auto messageId = message.id;
-    this->lookUpKeys(userId, true, [this, me, userId, messageId,
-                                    inner](const Directory *directory) {
-        if (me != this->userId_)
-        {
-            return;
-        }
-        auto *c = &this->conversations_[userId];
-        if (directory == nullptr || directory->devices.empty())
-        {
-            this->setStatus(userId, messageId, Status::Failed);
-            return;
-        }
-        if (c->keysChanged)
-        {
-            // Their keys changed while sending: checked before it goes out
-            this->setStatus(userId, messageId, Status::Failed);
-            return;
-        }
-        this->sendSealed(
-            userId, directory->devices, inner,
-            [this, me, userId, messageId, inner](bool ok, const QString &) {
+    const auto fail = [this, userId, messageId, done](const QString &why) {
+        this->setStatus(userId, messageId, Status::Failed);
+        done(why);
+    };
+    NetworkRequest(server() + QStringLiteral("/v2/dm/blob"),
+                   NetworkRequestType::Post)
+        .header("Authorization", this->authHeader())
+        .json(QJsonObject{{"pieces", file.pieces}})
+        .timeout(15000)
+        .onSuccess([this, me, userId, messageId, file, pieces, data, fail,
+                    done](const NetworkResult &result) {
+            if (me != this->userId_)
+            {
+                return;
+            }
+            auto sent = file;
+            sent.id = result.parseJson().value("id").toString();
+            // Keep our own copy, so it shows straight away
+            QDir().mkpath(this->folder() + QStringLiteral("/files"));
+            QSaveFile cache(this->filePath(sent.id));
+            if (cache.open(QIODevice::WriteOnly))
+            {
+                cache.write(crypto::protectForThisUser(data));
+                cache.commit();
+            }
+            auto upload = std::make_shared<std::function<void(int)>>();
+            *upload = [this, me, userId, messageId, sent, pieces, fail, done,
+                       upload](int n) {
                 if (me != this->userId_)
                 {
                     return;
                 }
-                this->setStatus(userId, messageId,
-                                ok ? Status::Sent : Status::Failed);
-                if (!ok)
+                if (n >= int(pieces->size()))
                 {
+                    // Every piece is up: now the message with its key
+                    auto *c = &this->conversations_[userId];
+                    for (auto &m : c->messages)
+                    {
+                        if (m.id == messageId)
+                        {
+                            m.file = sent;
+                        }
+                    }
+                    this->sendPayload(
+                        userId,
+                        QJsonObject{
+                            {"k", "msg"},
+                            {"id", messageId},
+                            {"text", ""},
+                            {"file", QJsonObject{{"id", sent.id},
+                                                 {"key", b64(sent.key)},
+                                                 {"nonce", b64(sent.nonce)},
+                                                 {"name", sent.name},
+                                                 {"size", double(sent.size)},
+                                                 {"mime", sent.mime},
+                                                 {"pieces", sent.pieces}}}},
+                        [this, userId, messageId, done](bool ok) {
+                            this->setStatus(userId, messageId,
+                                            ok ? Status::Sent : Status::Failed);
+                            done(ok ? QString()
+                                    : QStringLiteral("Couldn't send it."));
+                        });
                     return;
                 }
-                // A copy for our own other devices, so they see it too
-                this->lookUpKeys(
-                    me, false, [this, me, inner](const Directory *mine) {
-                        if (mine == nullptr || me != this->userId_)
-                        {
-                            return;
-                        }
-                        std::vector<Device> others;
-                        for (const auto &d : mine->devices)
-                        {
-                            if (d.id != this->keys_->device)
-                            {
-                                others.push_back(d);
-                            }
-                        }
-                        this->sendSealed(me, others, inner,
-                                         [](bool, const QString &) {});
-                    });
-            });
-    });
+                NetworkRequest(server() + QStringLiteral("/v2/dm/blob/%1/%2")
+                                              .arg(sent.id)
+                                              .arg(n),
+                               NetworkRequestType::Put)
+                    .header("Authorization", this->authHeader())
+                    .header("Content-Type", "application/octet-stream")
+                    .payload((*pieces)[n])
+                    .timeout(60000)
+                    .onSuccess([upload, n](const NetworkResult &) {
+                        (*upload)(n + 1);
+                    })
+                    .onError([fail](const NetworkResult &) {
+                        fail(QStringLiteral("Couldn't upload the file."));
+                    })
+                    .execute();
+            };
+            (*upload)(0);
+        })
+        .onError([fail](const NetworkResult &result) {
+            fail(result.parseJson()
+                     .value("error")
+                     .toObject()
+                     .value("message")
+                     .toString(QStringLiteral("Couldn't upload the file.")));
+        })
+        .execute();
+}
+
+void SolrinoMessages::loadFile(const File &file,
+                               std::function<void(QByteArray, QString)> done)
+{
+    // Already here: opened from this PC's locked copy
+    QFile cached(this->filePath(file.id));
+    if (cached.open(QIODevice::ReadOnly))
+    {
+        if (auto data = crypto::unprotectForThisUser(cached.readAll()))
+        {
+            done(*data, {});
+            return;
+        }
+    }
+    if (!this->ready())
+    {
+        done({}, QStringLiteral("Messages aren't ready."));
+        return;
+    }
+    const auto me = this->userId_;
+    auto got = std::make_shared<QByteArray>();
+    auto fetch = std::make_shared<std::function<void(int)>>();
+    *fetch = [this, me, file, got, done, fetch](int n) {
+        if (me != this->userId_)
+        {
+            return;
+        }
+        if (n >= file.pieces)
+        {
+            QDir().mkpath(this->folder() + QStringLiteral("/files"));
+            QSaveFile cache(this->filePath(file.id));
+            if (cache.open(QIODevice::WriteOnly))
+            {
+                cache.write(crypto::protectForThisUser(*got));
+                cache.commit();
+            }
+            done(*got, {});
+            return;
+        }
+        NetworkRequest(server() + QStringLiteral("/v2/dm/blob/%1/%2")
+                                      .arg(file.id)
+                                      .arg(n))
+            .header("Authorization", this->authHeader())
+            .timeout(60000)
+            .maximumResponseSize(PIECE_BYTES + 1024)
+            .onSuccess([file, got, done, fetch, n](const NetworkResult &result) {
+                auto plain = crypto::open(file.key, pieceNonce(file.nonce, n),
+                                          QByteArray::number(n),
+                                          result.getData());
+                if (!plain)
+                {
+                    done({}, QStringLiteral("That file was changed or broken."));
+                    return;
+                }
+                got->append(*plain);
+                (*fetch)(n + 1);
+            })
+            .onError([done](const NetworkResult &) {
+                done({}, QStringLiteral("That file isn't available anymore."));
+            })
+            .execute();
+    };
+    (*fetch)(0);
 }
 
 void SolrinoMessages::setStatus(const QString &userId,
@@ -1181,6 +1523,10 @@ void SolrinoMessages::markRead(const QString &userId)
     found->unread = 0;
     this->saveHistory();
     Q_EMIT this->changed();
+    if (found->accepted && !found->blocked)
+    {
+        this->sendSeen(userId);
+    }
 }
 
 void SolrinoMessages::securityCode(const QString &userId,

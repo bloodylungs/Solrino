@@ -547,7 +547,7 @@ void GameSelectorDialog::sendGame(const QString &name)
 
     this->sinceLastSend_.start();
     this->channel_->sendMessage(message);
-    solrino::noteGameUsed(name);
+    solrino::noteGameUsed(name, this->channel_->getName());
 
     if (this->isPinned())
     {

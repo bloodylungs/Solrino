@@ -18,10 +18,13 @@ class Split;
 namespace solrino {
 
 /// Saved games, most used first. Games used equally keep their saved order.
-QStringList mostUsedGames();
+/// With "per chat" on, the order follows what's used in that channel, and
+/// falls back to the overall count for games not used there yet.
+QStringList mostUsedGames(const QString &channel = {});
 
-/// Counts a game change, so the games used most move to the front.
-void noteGameUsed(const QString &name);
+/// Counts a game change, overall and for the channel, so the games used most
+/// move to the front.
+void noteGameUsed(const QString &name, const QString &channel = {});
 
 /// The command a channel uses to change game. Empty until one has been set for
 /// that channel, which means !game.
@@ -46,6 +49,7 @@ public:
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
     void leaveEvent(QEvent *event) override;
     void scaleChangedEvent(float newScale) override;
     void themeChangedEvent() override;
