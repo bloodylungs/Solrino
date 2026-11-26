@@ -3,6 +3,7 @@
 #include "Application.hpp"
 #include "common/Channel.hpp"
 #include "controllers/accounts/AccountController.hpp"
+#include "controllers/chat/ChatAutomationController.hpp"
 #include "controllers/highlights/HighlightController.hpp"
 #include "debug/AssertInGuiThread.hpp"
 #include "messages/Message.hpp"
@@ -280,6 +281,16 @@ void AutoModReviewController::ingestHold(
     item.userName = std::move(data.userName);
     item.messageID = std::move(data.messageID);
     item.messageText = std::move(data.messageText);
+    // Chat automations can act on held messages too (it's opt-in per rule)
+    if (sourceChannel != nullptr)
+    {
+        if (auto *automations = getApp()->getChatAutomations())
+        {
+            automations->handleCaughtMessage(sourceChannel, item.userID,
+                                             item.userLogin, item.userName,
+                                             item.messageText);
+        }
+    }
     item.receivedAt = data.receivedAt;
     item.updatedAt = data.receivedAt;
     item.blockedTerm = data.blockedTerm;

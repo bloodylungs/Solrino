@@ -67,6 +67,8 @@ public:
         QDateTime at;
         Status status = Status::Sent;
         std::optional<File> file;
+        /// The ID of the message this one replies to
+        QString replyTo;
     };
 
     struct Conversation {
@@ -107,7 +109,7 @@ public:
                       done);
 
     void send(const QString &userId, const QString &login,
-              const QString &text);
+              const QString &text, const QString &replyTo = {});
     /// Seals a file from this PC and sends it. Up to 25 MB.
     void sendFile(const QString &userId, const QString &login,
                   const QString &path, std::function<void(QString error)> done);

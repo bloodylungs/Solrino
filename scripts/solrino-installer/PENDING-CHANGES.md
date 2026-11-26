@@ -1,18 +1,14 @@
-# Changes since v1.0.46
+# Changes since v1.0.47
 
 Not released yet. Collect everything here, then use it for the release notes.
 
 ## App
-
-- **Photos, videos and files in messages:** the + button next to the message box sends anything from your PC up to 25 MB. Photos show in the chat; videos and other files get Play/Open and Save buttons. Files are encrypted on your PC before upload, so Solrino's server can't open them, and they're deleted after 14 days. Needs the badge server deploy.
-- **7TV emotes in messages:** your 7TV emotes, the other person's and 7TV's global emotes show right in messages, animated. The smiley button opens a searchable emote picker.
-- **Sent and Seen:** your newest message shows "Sent", then "Seen" once they've opened the chat.
-- **Real profile pictures in messages:** chats show each person's Twitch profile picture.
-- Fixed the messages window drawing old messages and "No chat open" on top of the chat, which made messages look doubled.
-- New: Chat automations can change your Twitch name color on every message you send (Rainbow or Random)
-- New: Chat automations can wear a random one of your Twitch badges on every message
-- New: Chat automation rules can also run on messages caught by AutoMod or blocked terms
-- New: The quick game bar shows the games you use most in each chat, and right-clicking it turns it off
+- New: Now Playing works with Spotify in your browser (open.spotify.com in Chrome, Edge, Firefox, Brave, Opera or Vivaldi), so the Spotify app doesn't need to be open. On by default: "Spotify in a browser".
+- New: Reply to messages. Hover a message and click the reply arrow (or right-click, Reply); the reply shows which message it answers. Esc cancels.
+- New: Hover a 7TV emote in messages to see its name, like in chat.
+- Changed: The send button in messages is a proper paper-plane icon.
+- Fixed: Chat automation rules with "Also messages caught by AutoMod or blocked terms" now actually run on held messages (they were skipped before).
+- Fixed: YouTube chats said "YouTube chat is not configured in this build". Solrino now finds the live stream and reads its chat straight from YouTube, with no relay server.
 
 ## Mac (not ready to announce)
 

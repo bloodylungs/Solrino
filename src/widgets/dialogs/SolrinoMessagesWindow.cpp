@@ -42,6 +42,7 @@
 #include <QScrollBar>
 #include <QTimer>
 #include <QToolButton>
+#include <QToolTip>
 #include <QVBoxLayout>
 
 #ifdef Q_OS_WIN
@@ -93,9 +94,17 @@ QPushButton#ghost { background: transparent; border-color: transparent; color: #
 QPushButton#ghost:hover { background: #1f1619; color: #f2e7e3; }
 QPushButton#danger { background: transparent; border-color: transparent; color: #ff7b72; }
 QPushButton#danger:hover { background: #2a1416; }
-QPushButton#round { background: #e3101c; border: none; border-radius: 19px; color: #fff; font-size: 16px; font-weight: 800; }
-QPushButton#round:hover { background: #f02a33; }
-QPushButton#round:disabled { background: #3a2a2c; color: #8a787c; }
+QPushButton#round { background: #e3101c; border: none; border-radius: 19px; padding: 0; }
+QPushButton#round:hover { background: #f5303a; }
+QPushButton#round:pressed { background: #b80c16; }
+QPushButton#round:disabled { background: #2a1f22; }
+QPushButton#replyButton { background: #1f1619; border: 1px solid #33262a; border-radius: 12px; padding: 0; color: #b3a1a5; font-size: 13px; }
+QPushButton#replyButton:hover { background: #2d2125; color: #f2e7e3; }
+QLabel#replyQuote { color: #b3a1a5; font-size: 11px; border-left: 2px solid #5a3a40; padding: 1px 0 1px 7px; }
+QWidget#replyBar { background: #1a1114; border-top: 1px solid #241a1d; }
+QLabel#replyBarText { color: #c9b8bb; font-size: 12px; }
+QPushButton#replyClose { background: transparent; border: none; color: #9d8b8f; font-size: 15px; padding: 0 4px; }
+QPushButton#replyClose:hover { color: #f2e7e3; }
 QPlainTextEdit { background: #1c1316; border: 1px solid #2c2024; border-radius: 19px; padding: 8px 12px; color: #f2e7e3; }
 QPlainTextEdit:focus { border-color: #e3101c; }
 QScrollArea { background: #0f0a0c; border: none; }
@@ -234,10 +243,16 @@ class Composer : public QPlainTextEdit
 {
 public:
     std::function<void()> onSend;
+    std::function<void()> onEscape;
 
 protected:
     void keyPressEvent(QKeyEvent *event) override
     {
+        if (event->key() == Qt::Key_Escape && this->onEscape)
+        {
+            this->onEscape();
+            return;
+        }
         if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) &&
             !(event->modifiers() & Qt::ShiftModifier))
         {
@@ -248,6 +263,61 @@ protected:
             return;
         }
         QPlainTextEdit::keyPressEvent(event);
+    }
+};
+
+/// The send button's paper plane, white when it can send, grey when not
+QIcon sendIcon()
+{
+    auto plane = [](const QColor &color) {
+        const qreal ratio = qApp->devicePixelRatio();
+        QPixmap pix(int(20 * ratio), int(20 * ratio));
+        pix.setDevicePixelRatio(ratio);
+        pix.fill(Qt::transparent);
+        QPainter p(&pix);
+        p.setRenderHint(QPainter::Antialiasing);
+        QPainterPath path;
+        path.moveTo(2.5, 9.0);
+        path.lineTo(17.5, 2.5);
+        path.lineTo(11.0, 17.5);
+        path.lineTo(9.0, 11.0);
+        path.closeSubpath();
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        p.drawPath(path);
+        // The fold down the middle
+        p.setPen(QPen(QColor(0, 0, 0, 60), 1.2, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(9.0, 11.0), QPointF(17.5, 2.5));
+        return pix;
+    };
+    QIcon icon;
+    icon.addPixmap(plane(Qt::white), QIcon::Normal);
+    icon.addPixmap(plane(QColor("#6e5c60")), QIcon::Disabled);
+    return icon;
+}
+
+/// A message row that shows its Reply button while the mouse is over it
+class HoverRow : public QWidget
+{
+public:
+    QWidget *reveal = nullptr;
+
+protected:
+    void enterEvent(QEnterEvent *event) override
+    {
+        QWidget::enterEvent(event);
+        if (this->reveal != nullptr)
+        {
+            this->reveal->setVisible(true);
+        }
+    }
+    void leaveEvent(QEvent *event) override
+    {
+        QWidget::leaveEvent(event);
+        if (this->reveal != nullptr)
+        {
+            this->reveal->setVisible(false);
+        }
     }
 };
 
@@ -474,6 +544,8 @@ constexpr int EMOTE_HEIGHT = 28;
 class TextBubble : public QWidget
 {
 public:
+    std::function<void()> onReply;
+
     TextBubble(const QString &text, bool mine, const QStringList &people,
                int maxWidth)
         : mine_(mine)
@@ -484,6 +556,13 @@ public:
         QObject::connect(this, &QWidget::customContextMenuRequested, this,
                          [this](const QPoint &at) {
                              QMenu menu;
+                             if (this->onReply)
+                             {
+                                 menu.addAction(QStringLiteral("Reply"),
+                                                [this] {
+                                                    this->onReply();
+                                                });
+                             }
                              menu.addAction(QStringLiteral("Copy text"), [this] {
                                  QApplication::clipboard()->setText(this->text_);
                              });
@@ -512,6 +591,7 @@ public:
             this->pieces_.pop_back();
         }
         this->relayout();
+        this->setMouseTracking(true);
         if (this->animated_)
         {
             this->repaint_ = std::make_unique<pajlada::Signals::ScopedConnection>(
@@ -526,6 +606,49 @@ public:
     }
 
 protected:
+    // Like chat: hovering an emote shows its name and where it's from
+    bool event(QEvent *event) override
+    {
+        if (event->type() == QEvent::ToolTip)
+        {
+            const auto *help = static_cast<QHelpEvent *>(event);
+            for (const auto &placed : this->placed_)
+            {
+                const auto &piece = this->pieces_[placed.index];
+                if (piece.emote && placed.rect.contains(help->pos()))
+                {
+                    auto tip = piece.emote->tooltip.string;
+                    if (tip.isEmpty())
+                    {
+                        tip = piece.emote->name.string;
+                    }
+                    QToolTip::showText(help->globalPos(), tip, this,
+                                       placed.rect.toRect());
+                    return true;
+                }
+            }
+            QToolTip::hideText();
+            event->ignore();
+            return true;
+        }
+        return QWidget::event(event);
+    }
+
+    void mouseMoveEvent(QMouseEvent *event) override
+    {
+        bool overEmote = false;
+        for (const auto &placed : this->placed_)
+        {
+            if (this->pieces_[placed.index].emote &&
+                placed.rect.contains(event->position()))
+            {
+                overEmote = true;
+            }
+        }
+        this->setCursor(overEmote ? Qt::PointingHandCursor : Qt::ArrowCursor);
+        QWidget::mouseMoveEvent(event);
+    }
+
     void paintEvent(QPaintEvent * /*event*/) override
     {
         QPainter p(this);
@@ -1285,6 +1408,29 @@ private:
         emptyLayout->addWidget(start, 0, Qt::AlignHCenter);
         layout->addWidget(this->empty_, 1);
 
+        // ---- Replying to...
+        this->replyBar_ = new QWidget;
+        this->replyBar_->setObjectName(QStringLiteral("replyBar"));
+        this->replyBar_->setAttribute(Qt::WA_StyledBackground);
+        {
+            auto *row = new QHBoxLayout(this->replyBar_);
+            row->setContentsMargins(18, 6, 12, 6);
+            this->replyText_ = new QLabel;
+            this->replyText_->setObjectName(QStringLiteral("replyBarText"));
+            this->replyText_->setTextFormat(Qt::PlainText);
+            auto *close = new QPushButton(QStringLiteral("\u2715"));
+            close->setObjectName(QStringLiteral("replyClose"));
+            close->setToolTip(QStringLiteral("Cancel reply (Esc)"));
+            close->setCursor(Qt::PointingHandCursor);
+            row->addWidget(this->replyText_, 1);
+            row->addWidget(close);
+            QObject::connect(close, &QPushButton::clicked, this, [this] {
+                this->cancelReply();
+            });
+        }
+        this->replyBar_->hide();
+        layout->addWidget(this->replyBar_);
+
         // ---- Composer
         this->composerBar_ = new QWidget;
         this->composerBar_->setObjectName(QStringLiteral("composerBar"));
@@ -1295,9 +1441,12 @@ private:
         this->composer_ = new Composer;
         this->composer_->setFixedHeight(44);
         this->composer_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        this->sendButton_ = new QPushButton(QStringLiteral("↑"));
+        this->sendButton_ = new QPushButton;
         this->sendButton_->setObjectName(QStringLiteral("round"));
         this->sendButton_->setFixedSize(38, 38);
+        this->sendButton_->setIcon(sendIcon());
+        this->sendButton_->setIconSize(QSize(18, 18));
+        this->sendButton_->setCursor(Qt::PointingHandCursor);
         this->sendButton_->setToolTip(QStringLiteral("Send (Enter)"));
         this->attachButton_ = new QPushButton(QStringLiteral("+"));
         this->attachButton_->setObjectName(QStringLiteral("tool"));
@@ -1336,6 +1485,9 @@ private:
         });
         this->composer_->onSend = [this] {
             this->sendNow();
+        };
+        this->composer_->onEscape = [this] {
+            this->cancelReply();
         };
         QObject::connect(this->sendButton_, &QPushButton::clicked, this,
                          [this] {
@@ -1403,8 +1555,64 @@ private:
         const auto *c = Messages::instance().conversation(this->current_);
         const auto login =
             c != nullptr && !c->login.isEmpty() ? c->login : this->pendingLogin_;
-        Messages::instance().send(this->current_, login, text);
+        Messages::instance().send(this->current_, login, text, this->replyTo_);
         this->composer_->clear();
+        this->cancelReply();
+    }
+
+    /// A short line about a message, for reply quotes
+    QString describe(const Messages::Message &m) const
+    {
+        const auto *c = Messages::instance().conversation(this->current_);
+        const auto who = m.mine ? QStringLiteral("you")
+                                : (c != nullptr && !c->login.isEmpty()
+                                       ? c->login
+                                       : QStringLiteral("them"));
+        auto what = m.file ? m.file->name : m.text;
+        what = what.simplified();
+        if (what.size() > 70)
+        {
+            what = what.left(70) + QStringLiteral("...");
+        }
+        return who + QStringLiteral(": ") + what;
+    }
+
+    const Messages::Message *findMessage(const QString &id) const
+    {
+        const auto *c = Messages::instance().conversation(this->current_);
+        if (c == nullptr || id.isEmpty())
+        {
+            return nullptr;
+        }
+        for (const auto &m : c->messages)
+        {
+            if (m.id == id)
+            {
+                return &m;
+            }
+        }
+        return nullptr;
+    }
+
+    void startReply(const Messages::Message &m)
+    {
+        if (!this->sendButton_->isEnabled())
+        {
+            return;
+        }
+        this->replyTo_ = m.id;
+        this->replyFor_ = this->current_;
+        this->replyText_->setText(QStringLiteral("Replying to ") +
+                                  this->describe(m));
+        this->replyBar_->show();
+        this->composer_->setFocus();
+    }
+
+    void cancelReply()
+    {
+        this->replyTo_.clear();
+        this->replyFor_.clear();
+        this->replyBar_->hide();
     }
 
     void showCode()
@@ -1444,6 +1652,10 @@ private:
 
     void refresh()
     {
+        if (!this->replyFor_.isEmpty() && this->replyFor_ != this->current_)
+        {
+            this->cancelReply();
+        }
         auto &messages = Messages::instance();
         const int requests = messages.requestCount();
         this->requestsTab_->setText(
@@ -1530,10 +1742,31 @@ private:
 
     QWidget *bubble(const Messages::Message &m, const QString &receipt)
     {
-        auto *row = new QWidget;
+        auto *row = new HoverRow;
         auto *layout = new QVBoxLayout(row);
         layout->setContentsMargins(0, 2, 0, 2);
         layout->setSpacing(2);
+        const auto align = m.mine ? Qt::AlignRight : Qt::AlignLeft;
+        if (!m.replyTo.isEmpty())
+        {
+            const auto *original = this->findMessage(m.replyTo);
+            auto *quote = new QLabel(
+                QStringLiteral("\u21AA ") +
+                (original != nullptr ? this->describe(*original)
+                                     : QStringLiteral("an older message")));
+            quote->setObjectName(QStringLiteral("replyQuote"));
+            quote->setTextFormat(Qt::PlainText);
+            quote->setMaximumWidth(this->bubbleWidth());
+            layout->addWidget(quote, 0, align);
+        }
+        const auto message = m;
+        QPointer<MessagesWindow> self(this);
+        auto reply = [self, message] {
+            if (self != nullptr)
+            {
+                self->startReply(message);
+            }
+        };
         QWidget *body = nullptr;
         if (m.file)
         {
@@ -1541,8 +1774,42 @@ private:
         }
         else
         {
-            body = new TextBubble(m.text, m.mine, this->people(),
-                                  this->bubbleWidth());
+            auto *text = new TextBubble(m.text, m.mine, this->people(),
+                                        this->bubbleWidth());
+            text->onReply = reply;
+            body = text;
+        }
+        if (m.status == Messages::Status::Sent)
+        {
+            // The bubble with a small Reply button beside it, shown on hover
+            auto *line = new QWidget;
+            auto *lineLayout = new QHBoxLayout(line);
+            lineLayout->setContentsMargins(0, 0, 0, 0);
+            lineLayout->setSpacing(6);
+            auto *replyButton = new QPushButton(QStringLiteral("\u21A9"));
+            replyButton->setObjectName(QStringLiteral("replyButton"));
+            replyButton->setFixedSize(24, 24);
+            replyButton->setToolTip(QStringLiteral("Reply"));
+            replyButton->setCursor(Qt::PointingHandCursor);
+            // Keeps its space while hidden, so the bubble doesn't jump
+            auto policy = replyButton->sizePolicy();
+            policy.setRetainSizeWhenHidden(true);
+            replyButton->setSizePolicy(policy);
+            replyButton->hide();
+            QObject::connect(replyButton, &QPushButton::clicked, replyButton,
+                             reply);
+            if (m.mine)
+            {
+                lineLayout->addWidget(replyButton, 0, Qt::AlignVCenter);
+                lineLayout->addWidget(body);
+            }
+            else
+            {
+                lineLayout->addWidget(body);
+                lineLayout->addWidget(replyButton, 0, Qt::AlignVCenter);
+            }
+            row->reveal = replyButton;
+            body = line;
         }
         QString note =
             QLocale().toString(m.at.toLocalTime().time(), QLocale::ShortFormat);
@@ -1565,7 +1832,6 @@ private:
         {
             time->setStyleSheet(QStringLiteral("color:#ff7b72;"));
         }
-        const auto align = m.mine ? Qt::AlignRight : Qt::AlignLeft;
         layout->addWidget(body, 0, align);
         layout->addWidget(time, 0, align);
         return row;
@@ -1769,6 +2035,10 @@ private:
     QWidget *composerBar_{};
     Composer *composer_{};
     QPushButton *sendButton_{};
+    QWidget *replyBar_{};
+    QLabel *replyText_{};
+    QString replyTo_;
+    QString replyFor_;
     QPushButton *attachButton_{};
     QPushButton *emoteButton_{};
     QTimer later_;

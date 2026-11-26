@@ -1285,6 +1285,8 @@ public:
     BoolSetting solrinoNowPlayingHideWhenPaused{"/solrino/nowPlaying/hideWhenPaused", false};
     /// Follow any player Windows knows about, not only Spotify
     BoolSetting solrinoNowPlayingAnyPlayer{"/solrino/nowPlaying/anyPlayer", false};
+    /// Spotify playing in a browser (open.spotify.com) counts too
+    BoolSetting solrinoNowPlayingBrowser{"/solrino/nowPlaying/browser", true};
     BoolSetting solrinoNowPlayingLocked{"/solrino/nowPlaying/locked", false};
     /// Where it is: "screen;x;y", with x and y from 0 to 1
     QStringSetting solrinoNowPlayingPlace{"/solrino/nowPlaying/place", ""};

@@ -908,6 +908,21 @@ void YouTubeChatServer::sessionState(const QString &liveChatID,
                 return;
             }
             current->second.innertubeSession.reset();
+            if (!YouTubeApi::hasRelay())
+            {
+                // Nothing to fall back to: try YouTube again shortly
+                QTimer::singleShot(15000, this, [this, liveChatID] {
+                    auto again = this->sessions_.find(liveChatID);
+                    if (again != this->sessions_.end() &&
+                        !again->second.innertubeSession &&
+                        !again->second.videoID.isEmpty())
+                    {
+                        this->startInnertubeSession(again->second.videoID,
+                                                    liveChatID, again->second);
+                    }
+                });
+                return;
+            }
             current->second.readTransport = YouTubeReadTransport::Relay;
             current->second.relayFallback = true;
             this->startRelaySession(liveChatID, current->second.readTicket,

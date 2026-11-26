@@ -48,6 +48,7 @@ struct SolrinoNowPlaying::Worker {
     std::optional<Command> command;
     std::atomic<bool> running{true};
     std::atomic<bool> anyPlayer{false};
+    std::atomic<bool> browser{true};
 };
 
 namespace {
@@ -112,6 +113,49 @@ void run(std::shared_ptr<SolrinoNowPlaying::Worker> worker)
                 {
                     chosen = session;
                     break;
+                }
+            }
+            // Spotify's web player in a browser. Windows only says which
+            // browser is playing, not which site, so this looks for a song
+            // with an artist and an album, which Spotify always gives and
+            // videos and streams don't.
+            if (!chosen && worker->browser)
+            {
+                static const QStringList browsers{
+                    "chrome", "msedge", "firefox", "308046b0af4a39cb",
+                    "brave", "opera", "vivaldi", "arc"};
+                GlobalSystemMediaTransportControlsSession paused{nullptr};
+                for (const auto &session : manager.GetSessions())
+                {
+                    const auto app =
+                        text(session.SourceAppUserModelId()).toLower();
+                    if (std::ranges::none_of(browsers, [&](const auto &b) {
+                            return app.contains(b);
+                        }))
+                    {
+                        continue;
+                    }
+                    const auto props = session.TryGetMediaPropertiesAsync().get();
+                    if (text(props.Artist()).isEmpty() ||
+                        text(props.AlbumTitle()).isEmpty())
+                    {
+                        continue;
+                    }
+                    if (session.GetPlaybackInfo().PlaybackStatus() ==
+                        GlobalSystemMediaTransportControlsSessionPlaybackStatus::
+                            Playing)
+                    {
+                        chosen = session;
+                        break;
+                    }
+                    if (!paused)
+                    {
+                        paused = session;
+                    }
+                }
+                if (!chosen)
+                {
+                    chosen = paused;
                 }
             }
             if (!chosen && worker->anyPlayer)
@@ -319,7 +363,12 @@ AppAudio &findAppAudio(const QString &app)
     audio = {};
     audio.app = app;
     audio.foundAt = now;
-    const auto wanted = app.toLower();
+    auto wanted = app.toLower();
+    // Firefox calls itself by this code instead of its name
+    if (wanted.contains(QStringLiteral("308046b0af4a39cb")))
+    {
+        wanted += QStringLiteral(" firefox");
+    }
     if (wanted.isEmpty())
     {
         return audio;
@@ -455,6 +504,8 @@ void SolrinoNowPlaying::setActive(bool active)
         {
             this->worker_->anyPlayer =
                 getSettings()->solrinoNowPlayingAnyPlayer.getValue();
+            this->worker_->browser =
+                getSettings()->solrinoNowPlayingBrowser.getValue();
         }
         return;
     }
@@ -470,6 +521,7 @@ void SolrinoNowPlaying::setActive(bool active)
     this->worker_ = std::make_shared<Worker>();
     this->worker_->anyPlayer =
         getSettings()->solrinoNowPlayingAnyPlayer.getValue();
+    this->worker_->browser = getSettings()->solrinoNowPlayingBrowser.getValue();
     std::thread(run, this->worker_).detach();
 #else
     (void)active;

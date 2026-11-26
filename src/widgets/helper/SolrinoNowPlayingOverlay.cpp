@@ -1147,7 +1147,8 @@ void startSolrinoNowPlayingOverlay()
           &s->solrinoNowPlayingPrevious, &s->solrinoNowPlayingPlayPause,
           &s->solrinoNowPlayingNext, &s->solrinoNowPlayingShuffle,
           &s->solrinoNowPlayingRepeat, &s->solrinoNowPlayingHideWhenPaused,
-          &s->solrinoNowPlayingAnyPlayer, &s->solrinoNowPlayingTimes,
+          &s->solrinoNowPlayingAnyPlayer, &s->solrinoNowPlayingBrowser,
+          &s->solrinoNowPlayingTimes,
           &s->solrinoNowPlayingScroll, &s->solrinoNowPlayingVisualiser,
           &s->solrinoNowPlayingSlideIn, &s->solrinoNowPlayingVolumeScroll})
     {

@@ -41,6 +41,9 @@ namespace youtube::detail {
 
 struct PublicLivePageState {
     QString videoID;
+    QString channelID;
+    QString author;
+    QString title;
     bool valid = false;
     bool isLiveNow = false;
     bool hasLiveContent = false;
@@ -105,6 +108,9 @@ public:
         std::function<void(Expected<T, YouTubeApiError>)>;
 
     static bool isConfigured();
+    /// A relay server was set when building. Without one, chat is found
+    /// from YouTube's own pages and read directly.
+    static bool hasRelay();
     static bool isOAuthConfigured();
     static QString normalizeSource(const QString &source);
 

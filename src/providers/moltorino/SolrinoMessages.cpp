@@ -386,6 +386,7 @@ bool SolrinoMessages::loadHistory()
             message.id = mo.value("id").toString();
             message.mine = mo.value("mine").toBool();
             message.text = mo.value("text").toString();
+            message.replyTo = mo.value("re").toString();
             message.at = QDateTime::fromMSecsSinceEpoch(
                 static_cast<qint64>(mo.value("at").toDouble()), QTimeZone::UTC);
             // Anything still sending when Solrino closed didn't make it
@@ -431,6 +432,10 @@ void SolrinoMessages::saveHistory()
                 {"at", static_cast<double>(m.at.toMSecsSinceEpoch())},
                 {"status", m.status == Status::Sent ? "sent" : "failed"},
             };
+            if (!m.replyTo.isEmpty())
+            {
+                saved.insert("re", m.replyTo);
+            }
             if (m.file)
             {
                 saved.insert("file", QJsonObject{
@@ -688,6 +693,7 @@ void SolrinoMessages::handleOpened(const QString & /*envelopeId*/,
     const auto at = QDateTime::fromMSecsSinceEpoch(
         static_cast<qint64>(payload.value("at").toDouble()), QTimeZone::UTC);
     const auto kind = payload.value("k").toString(QStringLiteral("msg"));
+    const auto replyTo = payload.value("re").toString().left(64);
     std::optional<File> file;
     if (payload.contains("file"))
     {
@@ -728,8 +734,8 @@ void SolrinoMessages::handleOpened(const QString & /*envelopeId*/,
     const auto peer = mine ? to : fromUser;
 
     auto check = [this, payloadBytes, signature, fromUser, fromDevice, peer,
-                  mine, text, id, at, next, isSeen,
-                  file](const Directory *directory) {
+                  mine, text, id, at, next, isSeen, file,
+                  replyTo](const Directory *directory) {
         bool trusted = false;
         QString login;
         if (directory != nullptr)
@@ -794,6 +800,7 @@ void SolrinoMessages::handleOpened(const QString & /*envelopeId*/,
         message.at = at.isValid() ? at : QDateTime::currentDateTimeUtc();
         message.status = Status::Sent;
         message.file = file;
+        message.replyTo = replyTo;
         c.messages.push_back(message);
         std::stable_sort(c.messages.begin(), c.messages.end(),
                          [](const Message &a, const Message &b) {
@@ -1125,7 +1132,7 @@ void SolrinoMessages::sendPayload(const QString &userId,
 }
 
 void SolrinoMessages::send(const QString &userId, const QString &login,
-                           const QString &rawText)
+                           const QString &rawText, const QString &replyTo)
 {
     const auto text = rawText.trimmed().left(MAX_TEXT);
     const auto *existing = this->conversation(userId);
@@ -1140,15 +1147,20 @@ void SolrinoMessages::send(const QString &userId, const QString &login,
     message.text = text;
     message.at = QDateTime::currentDateTimeUtc();
     message.status = Status::Sending;
+    message.replyTo = replyTo.left(64);
     const auto id = message.id;
     const auto at = message.at;
     this->addMine(userId, login, message);
+    QJsonObject payload{{"k", "msg"},
+                        {"id", id},
+                        {"text", text},
+                        {"at", static_cast<double>(at.toMSecsSinceEpoch())}};
+    if (!message.replyTo.isEmpty())
+    {
+        payload.insert("re", message.replyTo);
+    }
     this->sendPayload(
-        userId,
-        QJsonObject{{"k", "msg"},
-                    {"id", id},
-                    {"text", text},
-                    {"at", static_cast<double>(at.toMSecsSinceEpoch())}},
+        userId, payload,
         [this, userId, id](bool ok) {
             this->setStatus(userId, id, ok ? Status::Sent : Status::Failed);
         });

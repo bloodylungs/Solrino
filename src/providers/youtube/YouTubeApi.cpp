@@ -262,6 +262,42 @@ QString videoIDAfter(QByteArrayView page, QByteArrayView marker)
     return isVideoID(value) ? QString::fromLatin1(value) : QString{};
 }
 
+/// The JSON string right after `marker`, searching from `from`
+QString jsonStringAfter(QByteArrayView page, QByteArrayView marker,
+                        qsizetype from = 0)
+{
+    const auto offset = page.indexOf(marker, from);
+    if (offset < 0)
+    {
+        return {};
+    }
+    const auto start = offset + marker.size();
+    qsizetype end = start;
+    while (end < page.size() && end - start < 400)
+    {
+        if (page[end] == '\\')
+        {
+            end += 2;
+            continue;
+        }
+        if (page[end] == '"')
+        {
+            break;
+        }
+        ++end;
+    }
+    if (end >= page.size() || page[end] != '"')
+    {
+        return {};
+    }
+    // Let the JSON reader undo escapes like \u0026
+    QByteArray wrapped = "[\"";
+    wrapped.append(page.sliced(start, end - start).toByteArray());
+    wrapped.append("\"]");
+    const auto doc = QJsonDocument::fromJson(wrapped);
+    return doc.isArray() ? doc.array().at(0).toString() : QString{};
+}
+
 QUrl publicLiveUrl(const ParsedSource &source)
 {
     switch (source.kind)
@@ -448,6 +484,72 @@ ExpectedStr<YouTubeResolvedChannel> parseResolvedChannel(
     return resolved;
 }
 
+YouTubeResolvedChannel directResolved(
+    const youtube::detail::PublicLivePageState &page, bool live)
+{
+    return {
+        .channelID = page.channelID,
+        .displayName = page.author,
+        .videoID = page.videoID,
+        // Without a relay there's no chat ID from YouTube's API, so the
+        // video stands in for it. Chat is read from YouTube directly.
+        .liveChatID = live ? u"direct:"_s + page.videoID : QString{},
+        .streamTitle = live ? page.title : QString{},
+        .readTransport = YouTubeReadTransport::Innertube,
+        .isLive = live,
+    };
+}
+
+/// Finds a live stream from YouTube's public pages, with no relay
+void resolveDirect(const ParsedSource &parsed, ResolveCallback callback)
+{
+    requestPublicLivePage(
+        publicLiveUrl(parsed),
+        [parsed, callback = std::move(callback)](
+            ExpectedStr<youtube::detail::PublicLivePageState> result) mutable {
+            if (!result)
+            {
+                callback(makeUnexpected(result.error()));
+                return;
+            }
+            if (result->isLiveNow)
+            {
+                callback(directResolved(*result, true));
+                return;
+            }
+            if (parsed.kind == SourceKind::Video || !result->hasLiveContent ||
+                result->videoID.isEmpty())
+            {
+                callback(directResolved(*result, false));
+                return;
+            }
+            // A channel's /live page can point at a stream that isn't live
+            // yet; the video page says for sure
+            const auto first = *result;
+            requestPublicLivePage(
+                publicLiveUrl({SourceKind::Video, first.videoID}),
+                [first, callback = std::move(callback)](
+                    ExpectedStr<youtube::detail::PublicLivePageState>
+                        video) mutable {
+                    if (!video)
+                    {
+                        callback(directResolved(first, false));
+                        return;
+                    }
+                    auto merged = *video;
+                    if (merged.channelID.isEmpty())
+                    {
+                        merged.channelID = first.channelID;
+                    }
+                    if (merged.author.isEmpty())
+                    {
+                        merged.author = first.author;
+                    }
+                    callback(directResolved(merged, merged.isLiveNow));
+                });
+        });
+}
+
 void resolveRelaySource(const QString &stableSource, ResolveCallback callback)
 {
     auto url = relayUrl(u"resolve"_s);
@@ -549,12 +651,35 @@ youtube::detail::PublicLivePageState youtube::detail::parsePublicLivePage(
 
     state.isLiveNow =
         !state.videoID.isEmpty() && page.contains("\"isLiveNow\":true");
+
+    // Who it is and what's on, for reading chat without a relay
+    const auto details = page.indexOf("\"videoDetails\":{");
+    if (details >= 0)
+    {
+        state.channelID = jsonStringAfter(page, "\"channelId\":\"", details);
+        state.author = jsonStringAfter(page, "\"author\":\"", details);
+        state.title = jsonStringAfter(page, "\"title\":\"", details);
+    }
+    if (state.channelID.isEmpty())
+    {
+        state.channelID = jsonStringAfter(page, "\"externalId\":\"");
+    }
+    if (state.author.isEmpty())
+    {
+        state.author = jsonStringAfter(
+            page, "\"channelMetadataRenderer\":{\"title\":\"");
+    }
     state.hasLiveContent =
         !state.videoID.isEmpty() && page.contains("\"isLiveContent\":true");
     return state;
 }
 
 bool YouTubeApi::isConfigured()
+{
+    return hasRelay() || youtube::credentials::directReadEnabled();
+}
+
+bool YouTubeApi::hasRelay()
 {
     const QUrl url(youtube::credentials::readRoot().trimmed());
     const bool localTest =
@@ -603,6 +728,11 @@ void YouTubeApi::resolveSource(const QString &source,
     {
         callback(makeUnexpected(
             u"Enter a YouTube handle, channel URL, video URL, or video:<ID>."_s));
+        return;
+    }
+    if (!hasRelay())
+    {
+        resolveDirect(parsed, std::move(callback));
         return;
     }
     const auto stable = normalizeSource(source);

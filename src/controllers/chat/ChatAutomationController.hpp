@@ -146,6 +146,12 @@ public:
         delete;
 
     [[nodiscard]] bool enabled() const;
+    /// A message AutoMod or blocked terms held back in a channel you
+    /// moderate. Only rules with "Also messages caught by AutoMod or blocked
+    /// terms" act on it.
+    void handleCaughtMessage(const std::shared_ptr<TwitchChannel> &channel,
+                             const QString &userID, const QString &login,
+                             const QString &displayName, const QString &text);
     void setEnabled(bool enabled);
 
     [[nodiscard]] const std::vector<ChatAutomation> &rules() const;

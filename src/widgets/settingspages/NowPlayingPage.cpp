@@ -198,8 +198,9 @@ NowPlayingPage::NowPlayingPage()
     auto *s = getSettings();
     auto &holder = this->connections_;
     auto *intro = new QLabel(
-        "Shows the song playing in Spotify on top of your screen, even over "
-        "games. It reads it from Windows, so no Spotify login is needed.");
+        "Shows the song playing in Spotify (the app or open.spotify.com in "
+        "your browser) on top of your screen, even over games. It reads it "
+        "from Windows, so no Spotify login is needed.");
     intro->setWordWrap(true);
     layout->addWidget(intro);
 
@@ -318,6 +319,11 @@ NowPlayingPage::NowPlayingPage()
              "Changes only the music app's volume, not your whole PC's.");
     addCheck(layout, "Hide when paused", s->solrinoNowPlayingHideWhenPaused,
              preview, holder);
+    addCheck(layout, "Spotify in a browser", s->solrinoNowPlayingBrowser,
+             preview, holder,
+             "Works with Spotify's web player (open.spotify.com) in Chrome, "
+             "Edge, Firefox, Brave, Opera or Vivaldi, so you don't need the "
+             "Spotify app open. The app is used first when both are playing.");
     addCheck(layout, "Any music player, not just Spotify",
              s->solrinoNowPlayingAnyPlayer, preview, holder,
              "Also show songs from other apps, like YouTube in your browser.");

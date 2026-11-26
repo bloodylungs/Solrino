@@ -1380,6 +1380,26 @@ ChatAutomationPreview ChatAutomationController::preview(
     return result;
 }
 
+void ChatAutomationController::handleCaughtMessage(
+    const std::shared_ptr<TwitchChannel> &channel, const QString &userID,
+    const QString &login, const QString &displayName, const QString &text)
+{
+    if (!channel || login.isEmpty() || text.trimmed().isEmpty())
+    {
+        return;
+    }
+    auto message = std::make_shared<Message>();
+    message->flags.set(MessageFlag::AutoModOffendingMessage);
+    message->loginName = login;
+    message->displayName = displayName.isEmpty() ? login : displayName;
+    message->userID = userID;
+    message->messageText = text;
+    message->searchText = message->displayName + QStringLiteral(": ") + text;
+    message->channelName = channel->getName();
+    message->serverReceivedTime = QDateTime::currentDateTime();
+    this->handleMessage(channelKey(channel->getName()), channel, message);
+}
+
 void ChatAutomationController::handleMessage(
     const QString &key, const std::shared_ptr<TwitchChannel> &channel,
     const std::shared_ptr<const Message> &message)
@@ -1400,6 +1420,10 @@ void ChatAutomationController::handleMessage(
         return;
     }
 
+    // What AutoMod or blocked terms held back. It's marked as a moderation
+    // action, so it's let through here and checked against each rule below.
+    const bool isCaught =
+        message->flags.has(MessageFlag::AutoModOffendingMessage);
     constexpr MessageFlags ignored{MessageFlag::System,
                                    MessageFlag::Timeout,
                                    MessageFlag::Disabled,
@@ -1410,15 +1434,17 @@ void ChatAutomationController::handleMessage(
                                    MessageFlag::RecentMessage,
                                    MessageFlag::SharedMessage,
                                    MessageFlag::EventSub};
-    if (message->flags.hasAny(ignored))
+    auto skip = message->flags;
+    if (isCaught)
+    {
+        skip.unset(MessageFlag::ModerationAction);
+        skip.unset(MessageFlag::AutoMod);
+    }
+    if (skip.hasAny(ignored) ||
+        (!isCaught && message->flags.has(MessageFlag::AutoMod)))
     {
         return;
     }
-    // Messages held by AutoMod or blocked terms only count for rules that
-    // ask for them
-    constexpr MessageFlags caught{MessageFlag::AutoMod,
-                                  MessageFlag::AutoModOffendingMessage};
-    const bool isCaught = message->flags.hasAny(caught);
 
     const auto account = getApp()->getAccounts()->twitch.getCurrent();
     if (!account || account->isAnon())
